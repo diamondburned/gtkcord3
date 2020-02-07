@@ -3,6 +3,8 @@ package gtkcord
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
+	"runtime"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -52,12 +54,6 @@ type GuildFolder struct {
 }
 
 func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
-	// Prefetch guilds:
-	_, err := s.Guilds()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get guilds")
-	}
-
 	tv, err := gtk.TreeViewNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create the guild tree")
@@ -73,13 +69,13 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 		return nil, errors.Wrap(err, "Failed to create tree column")
 	}
 
-	tv.AppendColumn(cl)
+	must(tv.AppendColumn, cl)
 
 	ts, err := gtk.TreeStoreNew(glib.TYPE_OBJECT)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create guild tree store")
 	}
-	tv.SetModel(ts)
+	must(tv.SetModel, ts)
 
 	var folders = s.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
@@ -95,7 +91,9 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 					errors.Wrap(err, "Failed to get guild in folder "+f.Name)
 			}
 
-			r, err := a.newGuildRow(ts, nil, *g)
+			log.Println("!!!", f.GuildIDs[0], g.ID, g.Name)
+
+			r, err := a.newGuildRow(ts, nil, g)
 			if err != nil {
 				return nil,
 					errors.Wrap(err, "Failed to load guild "+g.Name)
@@ -114,7 +112,7 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 		}
 	}
 
-	tv.ShowAll()
+	must(tv.ShowAll)
 
 	return &Guilds{
 		TreeView: tv,
@@ -157,7 +155,8 @@ func (a *Application) newGuildFolder(
 	}
 
 	f := &Guild{
-		Iter: store.Append(nil),
+		Iter:  store.Append(nil),
+		Store: store,
 		Folder: &GuildFolder{
 			Guilds: make([]*Guild, 0, len(folder.GuildIDs)),
 		},
@@ -174,7 +173,7 @@ func (a *Application) newGuildFolder(
 			return nil, errors.Wrap(err, "Failed to get guild ID"+id.String())
 		}
 
-		r, err := a.newGuildRow(store, f.Iter, *g)
+		r, err := a.newGuildRow(store, f.Iter, g)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
 		}
@@ -187,7 +186,7 @@ func (a *Application) newGuildFolder(
 
 func (a *Application) newGuildRow(
 	store *gtk.TreeStore,
-	parent *gtk.TreeIter, guild discord.Guild) (*Guild, error) {
+	parent *gtk.TreeIter, guild *discord.Guild) (*Guild, error) {
 
 	/*
 		// Set paddings:
@@ -243,7 +242,7 @@ func (a *Application) newGuildRow(
 			return
 		}
 
-		if animated {
+		if !animated {
 			p, err := NewPixbuf(b, PbSize(IconSize, IconSize))
 			if err != nil {
 				logWrap(err, "Failed to get the pixbuf guild icon")
@@ -267,14 +266,17 @@ func (a *Application) newGuildRow(
 }
 
 func (g *Guild) UpdateStore() {
+	_, file, line, _ := runtime.Caller(1)
+	log.Println("UpdateStore @", file+":", line)
+
 	switch {
 	case g.Pixbuf != nil:
-		must(func(pb gdk.Pixbuf) {
-			g.Store.SetValue(g.Iter, 0, pb)
-		}, *g.Pixbuf)
+		must(func(g *Guild) {
+			g.Store.SetValue(g.Iter, 0, g.Pixbuf)
+		}, g)
 	case g.Animation != nil:
-		must(func(pb gdk.PixbufAnimation) {
-			g.Store.SetValue(g.Iter, 0, pb)
-		}, *g.Animation)
+		must(func(g *Guild) {
+			g.Store.SetValue(g.Iter, 0, *g.Animation)
+		}, g)
 	}
 }
