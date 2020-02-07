@@ -7,6 +7,8 @@ github.com/diamondburned/arikawa v0.1.1-0.20200207005129-330020b6f2b1 h1:gmsQP/X
 github.com/diamondburned/arikawa v0.1.1-0.20200207005129-330020b6f2b1/go.mod h1:iAD2YlBP/MEZzgdeSWX0CML+7MdtCD9trL/5Dqg9Xss=
 github.com/diamondburned/arikawa v0.1.1-0.20200207043759-0761dfabee89 h1:QeQHRjYkEApcUS8lK4DbbobG3lVW4l5ClnLYJVVC0RQ=
 github.com/diamondburned/arikawa v0.1.1-0.20200207043759-0761dfabee89/go.mod h1:iAD2YlBP/MEZzgdeSWX0CML+7MdtCD9trL/5Dqg9Xss=
+github.com/diamondburned/arikawa v0.1.1-0.20200207082241-5acf01d9840b h1:THMyv1RtNJ0YiS0C1b944T5g1f6+MFwbrlzlLWAa/1Y=
+github.com/diamondburned/arikawa v0.1.1-0.20200207082241-5acf01d9840b/go.mod h1:iAD2YlBP/MEZzgdeSWX0CML+7MdtCD9trL/5Dqg9Xss=
 github.com/gobwas/httphead v0.0.0-20180130184737-2c6c146eadee h1:s+21KNqlpePfkah2I+gwHF8xmJWRjooY+5248k6m4A0=
 github.com/gobwas/httphead v0.0.0-20180130184737-2c6c146eadee/go.mod h1:L0fX3K22YWvt/FAX9NnzrNzcI4wNYi9Yku4O0LKYflo=
 github.com/gobwas/pool v0.2.0 h1:QEmUOlnSjWtnpRGHF3SauEiOsy82Cup83Vf2LcMlnc8=

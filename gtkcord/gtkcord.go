@@ -23,6 +23,7 @@ type Application struct {
 	// nil after finalize()
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
+	css       *gtk.CssProvider
 }
 
 func New() (*Application, error) {
