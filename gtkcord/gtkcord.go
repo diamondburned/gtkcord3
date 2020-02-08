@@ -18,6 +18,7 @@ var (
 type Application struct {
 	State  *state.State
 	Window *gtk.Window
+	Header *Header
 	Grid   *gtk.Grid
 
 	// Dynamic sidebars and main pages
@@ -43,6 +44,10 @@ func New() (*Application, error) {
 
 func (a *Application) UseState(s *state.State) error {
 	a.State = s
+
+	if err := a.Header.Hamburger.Refresh(s); err != nil {
+		return errors.Wrap(err, "Failed to refresh hamburger")
+	}
 
 	{
 		gw, err := gtk.ScrolledWindowNew(nil, nil)
@@ -78,6 +83,10 @@ func (a *Application) UseState(s *state.State) error {
 func (a *Application) init() error {
 	gtk.Init(nil)
 
+	if err := a.loadCSS(); err != nil {
+		return errors.Wrap(err, "Failed to load CSS")
+	}
+
 	w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create window")
@@ -88,6 +97,13 @@ func (a *Application) init() error {
 	})
 	w.SetDefaultSize(1000, 750)
 	a.Window = w
+
+	h, err := newHeader()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create header")
+	}
+	w.SetTitlebar(h)
+	a.Header = h
 
 	i, err := gtk.IconThemeGetDefault()
 	if err != nil {
@@ -111,6 +127,7 @@ func (a *Application) init() error {
 	s.Start()
 	a.spinner = s
 	w.Add(a.spinner)
+
 	w.ShowAll()
 
 	return nil

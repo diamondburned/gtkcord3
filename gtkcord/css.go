@@ -7,7 +7,7 @@ import (
 )
 
 const CSS = `
-
+headerbar { padding: 0; }
 `
 
 func (a *Application) loadCSS() error {
