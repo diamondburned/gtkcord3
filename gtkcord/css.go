@@ -8,6 +8,7 @@ import (
 
 const CSS = `
 headerbar { padding: 0; }
+headerbar button { box-shadow: none; }
 `
 
 func (a *Application) loadCSS() error {
@@ -31,7 +32,8 @@ func (a *Application) loadCSS() error {
 		return errors.Wrap(err, "Failed to get default screen")
 	}
 
-	gtk.AddProviderForScreen(s, css, 1)
+	gtk.AddProviderForScreen(s, css,
+		uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
 
 	return nil
 }

@@ -13,7 +13,8 @@ import (
 const AvatarSize = 38
 
 type HeaderMenu struct {
-	*gtk.MenuButton
+	gtk.IWidget
+	Menu   *gtk.MenuButton
 	Avatar *gtk.Image
 	Name   *gtk.Label
 
@@ -25,40 +26,63 @@ type HeaderMenu struct {
 }
 
 func newHeaderMenu() (*HeaderMenu, error) {
+	b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to make hamburger box")
+	}
+	b.SetSizeRequest(IconSize+IconPadding*2, -1)
+
 	m, err := gtk.MenuButtonNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create menu button")
 	}
+	m.SetHAlign(gtk.ALIGN_CENTER)
+	b.Add(m)
 
-	hm := &HeaderMenu{
-		MenuButton: m,
-	}
-
-	// header box
-
-	b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create hamburger header box")
-	}
-
-	i, err := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	i, err := gtk.ImageNewFromIconName("open-menu", gtk.ICON_SIZE_LARGE_TOOLBAR)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create avatar placeholder")
 	}
-	i.SetSizeRequest(IconSize-IconPadding, -1)
-	b.Add(i)
-	hm.Avatar = i
 
-	l, err := gtk.LabelNew("?")
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create label")
+	m.Add(i)
+
+	hm := &HeaderMenu{
+		IWidget: b,
+		Menu:    m,
 	}
-	l.SetXAlign(0.0)
-	l.SetMarginStart(10)
-	b.Add(i)
-	hm.Name = l
 
-	m.Add(b)
+	{ // header box
+
+		b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create hamburger header box")
+		}
+
+		i, err := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create avatar placeholder")
+		}
+		i.SetSizeRequest(IconSize, -1)
+		b.Add(i)
+		hm.Avatar = i
+
+		l, err := gtk.LabelNew("?")
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create label")
+		}
+		l.SetXAlign(0.0)
+		l.SetMarginStart(10)
+		b.Add(i)
+		hm.Name = l
+
+		c, err := gtk.PopoverMenuNew()
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to make popover menu")
+		}
+
+		c.Add(b)
+		m.SetPopover(&c.Popover)
+	}
 
 	return hm, nil
 }

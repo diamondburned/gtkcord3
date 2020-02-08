@@ -153,6 +153,12 @@ func newGuilds(s *state.State, callback func(*Guild)) (*Guilds, error) {
 	}
 	l.SetActivateOnSingleClick(true)
 
+	ctx, err := l.GetStyleContext()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get guild stylecontext")
+	}
+	ctx.AddClass("guild")
+
 	for _, r := range rows {
 		must(l.Add, r.IWidget)
 	}
@@ -202,7 +208,7 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 	r.SetTooltipMarkup(bold(guild.Name))
 	r.SetActivatable(true)
 
-	i, err := gtk.ImageNewFromIconName("image-loading", gtk.ICON_SIZE_DIALOG)
+	i, err := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get image-loading icon")
 	}

@@ -61,8 +61,8 @@ func newHeader() (*Header, error) {
 		return nil, errors.Wrap(err, "Failed to create guild name label")
 	}
 	label.SetXAlign(0.0)
-	label.SetMarginStart(20)
-	label.SetSizeRequest(ChannelsWidth, -1)
+	label.SetMarginStart(15)
+	label.SetSizeRequest(ChannelsWidth-15, -1)
 	lblseparator, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create ham separator")
