@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
-	"log"
+	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
@@ -31,6 +31,7 @@ type Guilds struct {
 
 type Guild struct {
 	gtk.IWidget
+	Row *gtk.ListBoxRow
 
 	/* Tree logic
 
@@ -59,9 +60,7 @@ type Guild struct {
 	Channels *Channels
 }
 
-func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
-	log.Println("Version", s.Ready.Version)
-
+func newGuildsFromFolders(s *state.State) ([]*Guild, error) {
 	var folders = s.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
 
@@ -76,7 +75,7 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 					errors.Wrap(err, "Failed to get guild in folder "+f.Name)
 			}
 
-			r, err := a.newGuildRow(g)
+			r, err := newGuildRow(*g)
 			if err != nil {
 				return nil,
 					errors.Wrap(err, "Failed to load guild "+g.Name)
@@ -85,7 +84,7 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 			rows = append(rows, r)
 
 		default:
-			e, err := a.newGuildFolder(s, f)
+			e, err := newGuildFolder(s, f)
 			if err != nil {
 				return nil,
 					errors.Wrap(err, "Failed to create a new folder "+f.Name)
@@ -93,6 +92,59 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 
 			rows = append(rows, e)
 		}
+	}
+
+	return rows, nil
+}
+
+func newGuildsLegacy(s *state.State) ([]*Guild, error) {
+	gs, err := s.Guilds()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get guilds")
+	}
+
+	var pos = s.Ready.Settings.GuildPositions
+	var rows = make([]*Guild, 0, len(gs))
+
+	sort.Slice(gs, func(a, b int) bool {
+		var found = false
+		for _, guild := range pos {
+			if found && guild == gs[b].ID {
+				return true
+			}
+			if !found && guild == gs[a].ID {
+				found = true
+			}
+		}
+
+		return false
+	})
+
+	for _, g := range gs {
+		r, err := newGuildRow(g)
+		if err != nil {
+			return nil,
+				errors.Wrap(err, "Failed to load guild "+g.Name)
+		}
+
+		rows = append(rows, r)
+	}
+
+	return rows, nil
+}
+
+func newGuilds(s *state.State, callback func(*Guild)) (*Guilds, error) {
+	var rows []*Guild
+	var err error
+
+	if len(s.Ready.Settings.GuildPositions) > 0 {
+		rows, err = newGuildsFromFolders(s)
+	} else {
+		rows, err = newGuildsLegacy(s)
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get guilds list")
 	}
 
 	l, err := gtk.ListBoxNew()
@@ -118,13 +170,14 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 		} else {
 			index := row.Folder.List.GetSelectedRow().GetIndex()
 			if index < 0 {
-				return
+				index = 0
+				row.Folder.List.SelectRow(row.Folder.Guilds[0].Row)
 			}
 
 			row = row.Folder.Guilds[index]
 		}
 
-		a.loadGuild(row)
+		callback(row)
 	})
 
 	must(l.ShowAll)
@@ -137,48 +190,7 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 	return g, nil
 }
 
-/* Tree logic
-func (gs *Guilds) selector(sl *gtk.TreeSelection) {
-	_, iter, ok := sl.GetSelected()
-	if !ok {
-		return
-	}
-
-	path, err := gs.Store.GetPath(iter)
-	if err != nil {
-		logWrap(err, "Couldn't get path from selected")
-		return
-	}
-
-	var target *Guild
-
-	for _, g := range gs.Guilds {
-		if g := g.Search(path); g != nil {
-			target = g
-			break
-		}
-	}
-
-	if target == nil {
-		logError(errors.New("What was clicked?"))
-		return
-	}
-
-	if target.Folder != nil {
-		if !target.Folder.Expanded {
-			target.Folder.Expanded = true
-			gs.CollapseAll()
-			gs.ExpandRow(target.Path, true)
-		} else {
-			target.Folder.Expanded = false
-			// target.Pixbuf.SetProperty("class")
-			gs.CollapseRow(target.Path)
-		}
-	}
-}
-*/
-
-func (a *Application) newGuildRow(guild *discord.Guild) (*Guild, error) {
+func newGuildRow(guild discord.Guild) (*Guild, error) {
 	r, err := gtk.ListBoxRowNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a list row")
@@ -198,13 +210,9 @@ func (a *Application) newGuildRow(guild *discord.Guild) (*Guild, error) {
 
 	must(r.Add, i)
 
-	r.Connect("activate", func(r *gtk.ListBoxRow) bool {
-		log.Println("Guild", guild.Name, "pressed")
-		return true
-	})
-
 	g := &Guild{
 		IWidget: r,
+		Row:     r,
 		ID:      guild.ID,
 		Name:    guild.Name,
 		Image:   i,
@@ -276,49 +284,10 @@ func (g *Guild) updateImage() {
 	}
 }
 
-/* Tree logic
-
-func (g *Guild) Search(path *gtk.TreePath) *Guild {
-	if g.Path.Compare(path) == 0 {
-		return g
-	}
-
-	if g.Folder == nil {
-		return nil
-	}
-
-	for _, g := range g.Folder.Guilds {
-		if g.Path.Compare(path) == 0 {
-			return g
-		}
-	}
-
-	return nil
+func escape(str string) string {
+	return html.EscapeString(str)
 }
-
-func (g *Guild) UpdateStore() {
-	if g.Path == nil {
-		path, err := g.Store.GetPath(g.Iter)
-		if err != nil {
-			logWrap(err, "Failed to get iter path")
-		}
-		g.Path = path
-	}
-
-	switch {
-	case g.Pixbuf != nil:
-		must(func(g *Guild) {
-			g.Store.SetValue(g.Iter, 0, g.Pixbuf)
-		}, g)
-	case g.Animation != nil:
-		must(func(g *Guild) {
-			g.Store.SetValue(g.Iter, 0, *g.Animation)
-		}, g)
-	}
-}
-
-*/
 
 func bold(str string) string {
-	return "<b>" + html.EscapeString(str) + "</b>"
+	return "<b>" + escape(str) + "</b>"
 }

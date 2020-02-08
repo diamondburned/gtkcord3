@@ -3,10 +3,11 @@ package gtkcord
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
+	"strconv"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -15,17 +16,17 @@ const (
 	ChannelsWidth = 240
 	BannerHeight  = 135
 	LabelHeight   = 48
+
+	ChannelHash = "# "
 )
 
 type Channels struct {
 	gtk.IWidget
 
-	Main *gtk.Box
+	Scroll *gtk.ScrolledWindow
+	Main   *gtk.Box
 
 	// Headers
-	Header *gtk.Box
-	Name   *gtk.Label
-	// nullable
 	BannerImage *gtk.Image
 
 	// Channel list
@@ -36,8 +37,14 @@ type Channels struct {
 }
 
 type Channel struct {
-	ID   discord.Snowflake
-	Name string
+	gtk.IWidget
+
+	Row   *gtk.ListBoxRow
+	Label *gtk.Label
+
+	ID       discord.Snowflake
+	Name     string
+	Category bool
 }
 
 func (g *Guild) loadChannels(s *state.State, guild discord.Guild) error {
@@ -45,106 +52,149 @@ func (g *Guild) loadChannels(s *state.State, guild discord.Guild) error {
 		return nil
 	}
 
-	/*
-		discordChannels, err := s.Channels(guild.ID)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get channels")
-		}
-	*/
+	chs, err := s.Channels(guild.ID)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get channels")
+	}
+	chs = filterChannels(s, chs)
+
+	cs, err := gtk.ScrolledWindowNew(nil, nil)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create channel scroller")
+	}
+	cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
 	main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create main box")
 	}
+	main.SetSizeRequest(ChannelsWidth, -1)
+	must(cs.Add, main)
 
 	g.Channels = &Channels{
-		IWidget: main,
+		IWidget: cs,
+		Scroll:  cs,
 		Main:    main,
 	}
 
-	{ // Header
+	/*
+	 * === Header ===
+	 */
 
-		overlay, err := gtk.OverlayNew()
-		if err != nil {
-			return errors.Wrap(err, "Failed to make header overlay")
-		}
-
-		header, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		if err != nil {
-			return errors.Wrap(err, "Failed to create header box")
-		}
-		header.SetSizeRequest(ChannelsWidth, LabelHeight)
-		g.Channels.Header = header
-
+	if guild.Banner != "" {
 		banner, err := gtk.ImageNew()
 		if err != nil {
 			return errors.Wrap(err, "Failed to create banner image")
 		}
-		banner.SetSizeRequest(ChannelsWidth, LabelHeight)
+		banner.SetSizeRequest(ChannelsWidth, BannerHeight)
+
+		must(main.Add, banner)
 		g.Channels.BannerImage = banner
 
-		if guild.Banner != "" {
-			banner.SetSizeRequest(ChannelsWidth, BannerHeight)
-			header.SetSizeRequest(ChannelsWidth, BannerHeight)
-
-			go g.UpdateBanner(guild.BannerURL())
-		}
-
-		must(overlay.Add, banner)
-
-		// Add label here
-		{
-			var labelMain gtk.IWidget
-
-			label, err := gtk.LabelNew("")
-			if err != nil {
-				return errors.Wrap(err, "Failed to create guild name label")
-			}
-			label.SetXAlign(0.0)
-			label.SetMarginStart(20)
-			label.SetSizeRequest(ChannelsWidth, LabelHeight)
-			g.Channels.Name = label
-
-			if guild.Banner != "" {
-				label.SetYAlign(0.1)
-
-				ov, err := gtk.OverlayNew()
-				if err != nil {
-					return errors.Wrap(err, "Failed to create guild name overlay")
-				}
-
-				p, err := icons.PixbufSolid(ChannelsWidth, LabelHeight, 0, 0, 0, 85)
-				if err != nil {
-					return errors.Wrap(err, "Failed to create pixbuf solid")
-				}
-
-				i, err := gtk.ImageNewFromPixbuf(p)
-				if err != nil {
-					return errors.Wrap(err, "Failed to create solid image")
-				}
-				i.SetProperty("xalign", 0.0)
-				i.SetProperty("yalign", 0.0)
-
-				must(ov.Add, i)
-				must(ov.AddOverlay, label)
-				labelMain = ov
-			} else {
-				labelMain = label
-			}
-			must(label.SetMarkup, bold(guild.Name))
-			must(overlay.AddOverlay, labelMain)
-		}
-
-		header.Add(overlay)
-		main.Add(header)
-
+		go g.UpdateBanner(guild.BannerURL())
 	}
+
+	/*
+	 * === Channels list ===
+	 */
+
+	cl, err := gtk.ListBoxNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create channel list")
+	}
+	cl.SetActivateOnSingleClick(true)
+	must(main.Add, cl)
+
+	if err := transformChannels(g.Channels, chs); err != nil {
+		return errors.Wrap(err, "Failed to transform channels")
+	}
+
+	for _, ch := range g.Channels.Channels {
+		must(cl.Add, ch.IWidget)
+	}
+
+	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		row := g.Channels.Channels[r.GetIndex()]
+		log.Println("Channel", row.Name, "selected")
+	})
 
 	return nil
 }
 
+func newChannel(ch discord.Channel) (*Channel, error) {
+	switch ch.Type {
+	case discord.GuildText, discord.GuildNews, discord.GuildStore:
+		return newChannelRow(ch)
+	case discord.GuildCategory:
+		return newCategory(ch)
+	case discord.DirectMessage, discord.GroupDM:
+		return newDMChannel(ch)
+	case discord.GuildVoice:
+		// TODO
+		return newChannelRow(ch)
+	}
+
+	panic("Unknown channel type " + strconv.Itoa(int(ch.Type)))
+}
+
+func newCategory(ch discord.Channel) (*Channel, error) {
+	r, err := gtk.ListBoxRowNew()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create channel row")
+	}
+	r.SetSelectable(false)
+	r.SetSensitive(false)
+
+	l, err := gtk.LabelNew(
+		`<span font_variant="smallcaps" font_size="smaller">` + escape(ch.Name) + "</span>")
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create label")
+	}
+	l.SetUseMarkup(true)
+	l.SetXAlign(0)
+	l.SetMarginStart(15)
+	l.SetMarginTop(15)
+
+	must(r.Add, l)
+	return &Channel{
+		IWidget:  r,
+		Row:      r,
+		Label:    l,
+		ID:       ch.ID,
+		Name:     ch.Name,
+		Category: true,
+	}, nil
+}
+func newChannelRow(ch discord.Channel) (*Channel, error) {
+	r, err := gtk.ListBoxRowNew()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create channel row")
+	}
+
+	l, err := gtk.LabelNew(ChannelHash + bold(ch.Name))
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create label")
+	}
+	l.SetXAlign(0)
+	l.SetMarginStart(8)
+	l.SetUseMarkup(true)
+
+	must(r.Add, l)
+	return &Channel{
+		IWidget:  r,
+		Row:      r,
+		Label:    l,
+		ID:       ch.ID,
+		Name:     ch.Name,
+		Category: false,
+	}, nil
+}
+func newDMChannel(ch discord.Channel) (*Channel, error) {
+	panic("Implement me")
+}
+
 func (g *Guild) UpdateBanner(url string) {
-	r, err := HTTPClient.Get(url)
+	r, err := HTTPClient.Get(url + "?size=512")
 	if err != nil {
 		logWrap(err, "Failed to GET URL "+url)
 		return

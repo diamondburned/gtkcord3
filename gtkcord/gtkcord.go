@@ -22,7 +22,7 @@ type Application struct {
 
 	// Dynamic sidebars and main pages
 	Sidebar gtk.IWidget
-	// Main
+	Guild   *Guild // current
 
 	// nil after finalize()
 	spinner   *gtk.Spinner
@@ -51,7 +51,7 @@ func (a *Application) UseState(s *state.State) error {
 		}
 		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
-		gs, err := a.newGuilds(s)
+		gs, err := newGuilds(s, a.loadGuild)
 		if err != nil {
 			return errors.Wrap(err, "Failed to make guilds view")
 		}
@@ -86,7 +86,7 @@ func (a *Application) init() error {
 		a.close()
 		gtk.MainQuit()
 	})
-	w.SetDefaultSize(800, 600)
+	w.SetDefaultSize(1000, 750)
 	a.Window = w
 
 	i, err := gtk.IconThemeGetDefault()
@@ -159,4 +159,5 @@ func (a *Application) loadGuild(g *Guild) {
 
 	must(a.Grid.ShowAll)
 	a.Sidebar = g.Channels.IWidget
+	a.Guild = g
 }

@@ -17,9 +17,7 @@ type GuildFolder struct {
 	Guilds   []*Guild
 }
 
-func (a *Application) newGuildFolder(
-	s *state.State, folder gateway.GuildFolder) (*Guild, error) {
-
+func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) {
 	if folder.Color == 0 {
 		folder.Color = 0x7289DA
 	}
@@ -99,7 +97,7 @@ func (a *Application) newGuildFolder(
 			return nil, errors.Wrap(err, "Failed to get guild ID"+id.String())
 		}
 
-		r, err := a.newGuildRow(g)
+		r, err := newGuildRow(*g)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
 		}
