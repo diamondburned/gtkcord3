@@ -77,3 +77,15 @@ func PixbufIcon(img image.Image, size int) (*gdk.Pixbuf, error) {
 
 	return p, nil
 }
+
+func PixbufSolid(w, h int, r, g, b, a uint8) (*gdk.Pixbuf, error) {
+	i := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for j := 0; j < len(i.Pix); j += 4 {
+		i.Pix[j+0] = r
+		i.Pix[j+1] = g
+		i.Pix[j+2] = b
+		i.Pix[j+3] = a
+	}
+
+	return Pixbuf(i)
+}

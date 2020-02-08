@@ -2,6 +2,8 @@ module github.com/diamondburned/gtkcord3
 
 go 1.13
 
+replace github.com/diamondburned/arikawa => ../arikawa/
+
 require (
 	github.com/d2r2/gotk3 v0.0.0-20191124065233-86f7ea85405b
 	github.com/davecgh/go-spew v1.1.1

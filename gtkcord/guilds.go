@@ -2,14 +2,13 @@ package gtkcord
 
 import (
 	"fmt"
+	"html"
 	"io/ioutil"
+	"log"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -21,14 +20,20 @@ const (
 )
 
 type Guilds struct {
-	*gtk.TreeView
-	Store *gtk.TreeStore
+	// *gtk.TreeView
+	// Store *gtk.TreeStore
+
+	*gtk.ListBox
 
 	Friends *gtk.TreeIter // TODO
 	Guilds  []*Guild
 }
 
 type Guild struct {
+	gtk.IWidget
+
+	/* Tree logic
+
 	*gtk.TreeIter
 	Folder *GuildFolder // can be non-nil
 
@@ -37,8 +42,13 @@ type Guild struct {
 	Path   *gtk.TreePath
 	Store  *gtk.TreeStore
 
+	*/
+
+	Folder *GuildFolder
+
+	Style *gtk.StyleContext
+	Image *gtk.Image
 	// nil if not downloaded
-	Style     *gtk.StyleContext
 	Pixbuf    *gdk.Pixbuf
 	Animation *gdk.PixbufAnimation
 
@@ -49,43 +59,8 @@ type Guild struct {
 	Channels *Channels
 }
 
-type GuildFolder struct {
-	Expanded bool
-	Guilds   []*Guild
-}
-
 func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
-	tv, err := gtk.TreeViewNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create the guild tree")
-	}
-	tv.SetHeadersVisible(false)
-	tv.SetEnableTreeLines(false)
-	tv.SetEnableSearch(false)
-	tv.SetShowExpanders(false)
-	tv.SetLevelIndentation(0)
-	tv.SetFixedHeightMode(true)
-
-	cr, err := gtk.CellRendererPixbufNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create cell renderer")
-	}
-	cr.SetProperty("height", IconSize+IconPadding*2)
-	cr.SetProperty("width", IconSize+IconPadding*2)
-
-	cl, err := gtk.TreeViewColumnNewWithAttribute("", cr, "pixbuf", 0)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create tree column")
-	}
-	cl.SetSizing(gtk.TreeViewColumnSizing(gtk.TREE_VIEW_COLUMN_FIXED))
-
-	must(tv.AppendColumn, cl)
-
-	ts, err := gtk.TreeStoreNew(glib.TYPE_OBJECT)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create guild tree store")
-	}
-	must(tv.SetModel, ts)
+	log.Println("Version", s.Ready.Version)
 
 	var folders = s.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
@@ -101,7 +76,7 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 					errors.Wrap(err, "Failed to get guild in folder "+f.Name)
 			}
 
-			r, err := a.newGuildRow(ts, nil, g)
+			r, err := a.newGuildRow(g)
 			if err != nil {
 				return nil,
 					errors.Wrap(err, "Failed to load guild "+g.Name)
@@ -110,7 +85,7 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 			rows = append(rows, r)
 
 		default:
-			e, err := a.newGuildFolder(s, ts, f)
+			e, err := a.newGuildFolder(s, f)
 			if err != nil {
 				return nil,
 					errors.Wrap(err, "Failed to create a new folder "+f.Name)
@@ -120,24 +95,49 @@ func (a *Application) newGuilds(s *state.State) (*Guilds, error) {
 		}
 	}
 
-	must(tv.ShowAll)
+	l, err := gtk.ListBoxNew()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create list")
+	}
+	l.SetActivateOnSingleClick(true)
+
+	for _, r := range rows {
+		must(l.Add, r.IWidget)
+	}
+
+	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		row := rows[r.GetIndex()]
+
+		if row.Folder == nil {
+			// Collapse all revealers:
+			for _, r := range rows {
+				if r.Folder != nil {
+					r.Folder.Revealer.SetRevealChild(false)
+				}
+			}
+		} else {
+			index := row.Folder.List.GetSelectedRow().GetIndex()
+			if index < 0 {
+				return
+			}
+
+			row = row.Folder.Guilds[index]
+		}
+
+		a.loadGuild(row)
+	})
+
+	must(l.ShowAll)
 
 	g := &Guilds{
-		TreeView: tv,
-		Store:    ts,
-		Guilds:   rows,
+		ListBox: l,
+		Guilds:  rows,
 	}
-
-	sl, err := tv.GetSelection()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get selection")
-	}
-	sl.SetMode(gtk.SELECTION_SINGLE)
-	sl.Connect("changed", g.selector)
 
 	return g, nil
 }
 
+/* Tree logic
 func (gs *Guilds) selector(sl *gtk.TreeSelection) {
 	_, iter, ok := sl.GetSelected()
 	if !ok {
@@ -167,6 +167,7 @@ func (gs *Guilds) selector(sl *gtk.TreeSelection) {
 	if target.Folder != nil {
 		if !target.Folder.Expanded {
 			target.Folder.Expanded = true
+			gs.CollapseAll()
 			gs.ExpandRow(target.Path, true)
 		} else {
 			target.Folder.Expanded = false
@@ -175,82 +176,42 @@ func (gs *Guilds) selector(sl *gtk.TreeSelection) {
 		}
 	}
 }
+*/
 
-func (a *Application) newGuildFolder(
-	s *state.State,
-	store *gtk.TreeStore, folder gateway.GuildFolder) (*Guild, error) {
-
-	if folder.Color == 0 {
-		folder.Color = 0x7289DA
-	}
-
-	p, err := icons.PixbufIcon(icons.Folder(folder.Color.Uint32()), FolderSize)
+func (a *Application) newGuildRow(guild *discord.Guild) (*Guild, error) {
+	r, err := gtk.ListBoxRowNew()
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create the folder pixbuf")
+		return nil, errors.Wrap(err, "Failed to create a list row")
 	}
+	// Set paddings:
+	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
+	r.SetHAlign(gtk.ALIGN_CENTER)
+	r.SetVAlign(gtk.ALIGN_CENTER)
+	r.SetTooltipMarkup(bold(guild.Name))
+	r.SetActivatable(true)
 
-	f := &Guild{
-		Iter:  store.Append(nil),
-		Store: store,
-		Folder: &GuildFolder{
-			Guilds: make([]*Guild, 0, len(folder.GuildIDs)),
-		},
-		Pixbuf: p,
-
-		ID:   folder.ID,
-		Name: folder.Name,
+	i, err := gtk.ImageNewFromIconName("image-loading", gtk.ICON_SIZE_DIALOG)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get image-loading icon")
 	}
+	// i.SetTooltipText(guild.Name)
 
-	f.UpdateStore()
+	must(r.Add, i)
 
-	for _, id := range folder.GuildIDs {
-		g, err := s.Guild(id)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to get guild ID"+id.String())
-		}
-
-		r, err := a.newGuildRow(store, f.Iter, g)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
-		}
-
-		f.Folder.Guilds = append(f.Folder.Guilds, r)
-	}
-
-	return f, nil
-}
-
-func (a *Application) newGuildRow(
-	store *gtk.TreeStore,
-	parent *gtk.TreeIter, guild *discord.Guild) (*Guild, error) {
-
-	/*
-		// Set paddings:
-		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
-		r.SetHAlign(gtk.ALIGN_CENTER)
-		r.SetVAlign(gtk.ALIGN_CENTER)
-		r.SetTooltipText(guild.Name)
-	*/
+	r.Connect("activate", func(r *gtk.ListBoxRow) bool {
+		log.Println("Guild", guild.Name, "pressed")
+		return true
+	})
 
 	g := &Guild{
-		Iter:   store.Append(parent),
-		ID:     guild.ID,
-		Name:   guild.Name,
-		Store:  store,
-		Parent: parent,
+		IWidget: r,
+		ID:      guild.ID,
+		Name:    guild.Name,
+		Image:   i,
+		// Iter:       store.Append(parent),
+		// Store:      store,
+		// Parent:     parent,
 	}
-
-	i, err := a.iconTheme.LoadIcon("image-loading", 48, 0)
-	if err == nil {
-		p, err := i.ApplyEmbeddedOrientation()
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to convert icon to pixbuf")
-		}
-
-		g.Pixbuf = p
-	}
-
-	g.UpdateStore()
 
 	var url = guild.IconURL()
 	if url == "" {
@@ -258,48 +219,64 @@ func (a *Application) newGuildRow(
 		return g, nil
 	}
 
-	var animated = url[:len(url)-4] == ".gif"
-
-	go func() {
-		r, err := HTTPClient.Get(url + "?size=64")
-		if err != nil {
-			logWrap(err, "Failed to GET URL "+url)
-			return
-		}
-		defer r.Body.Close()
-
-		if r.StatusCode < 200 || r.StatusCode > 299 {
-			logError(fmt.Errorf("Bad status code %d for %s", r.StatusCode, url))
-		}
-
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logWrap(err, "Failed to download image")
-			return
-		}
-
-		if !animated {
-			p, err := NewPixbuf(b, PbSize(IconSize, IconSize))
-			if err != nil {
-				logWrap(err, "Failed to get the pixbuf guild icon")
-				return
-			}
-
-			g.Pixbuf = p
-			g.UpdateStore()
-		} else {
-			p, err := NewAnimator(b, PbSize(IconSize, IconSize))
-			if err != nil {
-				logWrap(err, "Failed to get the pixbuf guild animation")
-			}
-
-			g.Animation = p
-			g.UpdateStore()
-		}
-	}()
-
+	go g.UpdateImage(url)
 	return g, nil
 }
+
+func (g *Guild) UpdateImage(url string) {
+	var animated = url[:len(url)-4] == ".gif"
+
+	r, err := HTTPClient.Get(url + "?size=64")
+	if err != nil {
+		logWrap(err, "Failed to GET URL "+url)
+		return
+	}
+	defer r.Body.Close()
+
+	if r.StatusCode < 200 || r.StatusCode > 299 {
+		logError(fmt.Errorf("Bad status code %d for %s", r.StatusCode, url))
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		logWrap(err, "Failed to download image")
+		return
+	}
+
+	if !animated {
+		p, err := NewPixbuf(b, PbSize(IconSize, IconSize))
+		if err != nil {
+			logWrap(err, "Failed to get the pixbuf guild icon")
+			return
+		}
+
+		g.Pixbuf = p
+		g.updateImage()
+	} else {
+		p, err := NewAnimator(b, PbSize(IconSize, IconSize))
+		if err != nil {
+			logWrap(err, "Failed to get the pixbuf guild animation")
+		}
+
+		g.Animation = p
+		g.updateImage()
+	}
+}
+
+func (g *Guild) updateImage() {
+	switch {
+	case g.Pixbuf != nil:
+		must(func(g *Guild) {
+			g.Image.SetFromPixbuf(g.Pixbuf)
+		}, g)
+	case g.Animation != nil:
+		must(func(g *Guild) {
+			g.Image.SetFromAnimation(g.Animation)
+		}, g)
+	}
+}
+
+/* Tree logic
 
 func (g *Guild) Search(path *gtk.TreePath) *Guild {
 	if g.Path.Compare(path) == 0 {
@@ -338,4 +315,10 @@ func (g *Guild) UpdateStore() {
 			g.Store.SetValue(g.Iter, 0, *g.Animation)
 		}, g)
 	}
+}
+
+*/
+
+func bold(str string) string {
+	return "<b>" + html.EscapeString(str) + "</b>"
 }

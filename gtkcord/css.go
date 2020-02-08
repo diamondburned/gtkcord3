@@ -7,9 +7,7 @@ import (
 )
 
 const CSS = `
-GtkTreeView *:active {
-	background-color: black;
-}
+
 `
 
 func (a *Application) loadCSS() error {
