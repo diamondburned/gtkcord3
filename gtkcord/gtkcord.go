@@ -86,23 +86,21 @@ func (a *Application) UseState(s *state.State) error {
 
 	// 100 goroutines is pretty cheap (lol)
 	for _, g := range a.Guilds.Guilds {
-		g := g
-		go func() {
+		go func(g *Guild) {
 			_, err := s.Channels(g.ID)
 			if err != nil {
 				logWrap(err, "Failed to pre-fetch channels")
 			}
-		}()
+		}(g)
 
 		if g.Folder != nil {
 			for _, g := range g.Folder.Guilds {
-				g := g
-				go func() {
+				go func(g *Guild) {
 					_, err := s.Channels(g.ID)
 					if err != nil {
 						logWrap(err, "Failed to pre-fetch channels")
 					}
-				}()
+				}(g)
 			}
 		}
 	}

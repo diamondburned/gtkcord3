@@ -2,6 +2,7 @@ package md
 
 import (
 	"bytes"
+	"log"
 	"regexp"
 	"sync"
 
@@ -9,33 +10,49 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/gotk3/gotk3/gtk"
 )
+
+func newPool(p *Parser) sync.Pool {
+	return sync.Pool{
+		New: func() interface{} {
+			return newState(p)
+		},
+	}
+}
 
 type match struct {
 	from, to int32
 	str      []byte
 }
 
-var statePool = sync.Pool{
-	New: func() interface{} {
-		return &mdState{
-			fmtter: &Formatter{},
-			buffer: &bytes.Buffer{},
-		}
-	},
-}
-
 type mdState struct {
+	p *Parser
+
+	// We need to lock the iterators so they can't be invalidated while we're
+	// using them.
+	iterMu sync.Mutex
+	iterWg sync.WaitGroup
+
 	last    int32
 	chunk   []byte
 	prev    []byte
 	matches [][]match
 	context [][]byte
 
+	// Used to determine whether or not emojis should be large:
+	hasText bool
+
 	fmtter *Formatter
 	buffer *bytes.Buffer
+}
+
+func newState(p *Parser) *mdState {
+	return &mdState{
+		p:      p,
+		fmtter: &Formatter{},
+		buffer: &bytes.Buffer{},
+	}
 }
 
 var (
@@ -83,16 +100,14 @@ func (s *mdState) tag(token []byte) []byte {
 
 	if index >= 0 { // len(context) > 0 always
 		s.context = append(s.context[:index], s.context[index+1:]...)
-		return tags[1]
+		return tags[2]
 	} else {
 		s.context = append(s.context, token)
-		return tags[0]
+		return tags[1]
 	}
 }
 
-func (s *mdState) switchTree(
-	iter *gtk.TextIter, buf *gtk.TextBuffer) func(i int) {
-
+func (s *mdState) switchTree(buf *gtk.TextBuffer) func(i int) {
 	return func(i int) {
 		switch {
 		case len(s.matches[i][2].str) > 0:
@@ -114,18 +129,14 @@ func (s *mdState) switchTree(
 			// URLs
 			s.chunk = s.matches[i][6].str
 		case len(s.matches[i][10].str) > 0:
-			// emojis
-			p, err := NewPixbuf(len(s.prev) == 0, EmojiURL(
-				string(s.matches[i][12].str),
-				len(s.matches[i][11].str) > 0,
-			))
-			if err != nil {
-				s.chunk = s.matches[i][10].str
-				break
-			}
+			// Emojis
+			var animated = len(s.matches[i][11].str) > 0
 
-			s.prev = s.prev[:0]
-			buf.InsertPixbuf(iter, p)
+			if err := s.InsertAsyncPixbuf(buf,
+				EmojiURL(string(s.matches[i][12].str), animated)); err != nil {
+
+				s.chunk = s.matches[i][10].str
+			}
 
 		case bytes.Count(s.prev, []byte(`\`))%2 != 0:
 			// escaped, print raw
@@ -136,23 +147,22 @@ func (s *mdState) switchTree(
 	}
 }
 
-func (s *mdState) switchTreeMessage(
-	iter *gtk.TextIter, buf *gtk.TextBuffer,
-	state *state.State, m *discord.Message) func(i int) {
+func (s *mdState) switchTreeMessage(buf *gtk.TextBuffer, m *discord.Message) func(i int) {
+	normal := s.switchTree(buf)
 
 	return func(i int) {
 		switch {
 		case len(s.matches[i][7].str) > 0:
 			// user mentions
-			s.chunk = UserNicknameHTML(d, m, s.matches[i][7].str)
+			// s.chunk = UserNicknameHTML(d, m, s.matches[i][7].str)
 		case len(s.matches[i][8].str) > 0:
 			// role mentions
-			s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
+			// s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
 		case len(s.matches[i][9].str) > 0:
 			// channel mentions
-			s.chunk = ChannelNameHTML(d, m, s.matches[i][9].str)
+			// s.chunk = ChannelNameHTML(d, m, s.matches[i][9].str)
 		default:
-			s.switchTree(i, iter, buf)
+			normal(i)
 		}
 	}
 }
@@ -201,6 +211,17 @@ func (s *mdState) submatch(r *regexp.Regexp, input []byte) {
 				}
 
 				matches = append(matches, m)
+			}
+		}
+
+		// If we still don't know if there are texts:
+		if !s.hasText {
+			// We know 1-10 are not emojis:
+			for i := 1; i < len(matches) && i < 10; i++ {
+				if len(matches[i].str) > 0 && matches[i].str[0] != '\n' {
+					log.Println("Found", i, string(matches[i].str))
+					s.hasText = true
+				}
 			}
 		}
 
