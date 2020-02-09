@@ -13,7 +13,7 @@ import (
 
 const (
 	FolderSize  = 36
-	IconSize    = 56
+	IconSize    = 52
 	IconPadding = 6
 )
 

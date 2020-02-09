@@ -2,6 +2,7 @@ package md
 
 import (
 	"bytes"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -32,7 +33,7 @@ var regexes = []string{
 	// Channel mentions
 	`(?:<#(\d+)>)`,
 	// Emojis
-	`(<(a?):.*:(\d+)>)`,
+	`(<(a?):\w+:(\d+)>)`,
 }
 
 var HighlightStyle = "solarized-dark"
@@ -45,23 +46,59 @@ var (
 	lexerMap = sync.Map{}
 )
 
-func Parse(md []byte, buf *gtk.TextBuffer) {
-	ParseMessage(nil, nil, md, buf)
+type Parser struct {
+	pool  sync.Pool
+	State *state.State
+
+	ChannelPressed func(id discord.Snowflake)
+	UserPressed    func(id discord.Snowflake)
+	RolePressed    func(id discord.Snowflake)
+	URLPressed     func(url string)
+
+	Error func(err error)
+
+	theme *gtk.IconTheme
 }
 
-func ParseMessage(state *state.State, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
-	iter := buf.GetEndIter()
+func NewParser(s *state.State) *Parser {
+	i, err := gtk.IconThemeGetDefault()
+	if err != nil {
+		// We can panic here, as nothing would work if this ever panics.
+		panic("Can't get GTK Icon Theme: " + err.Error())
+	}
 
-	s := statePool.Get().(*mdState)
-	defer statePool.Put(s)
+	p := &Parser{
+		State: s,
+		theme: i,
+		Error: func(err error) {
+			log.Println("Markdown:", err)
+		},
+	}
+	p.pool = newPool(p)
+
+	return p
+}
+
+func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
+	p.ParseMessage(nil, md, buf)
+}
+
+func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer) {
+	s := p.pool.Get().(*mdState)
+	defer func() {
+		go func() {
+			s.iterWg.Wait()
+			p.pool.Put(s)
+		}()
+	}()
 
 	s.submatch(regex, md)
 
 	var tree func(i int)
 	if s == nil || m == nil {
-		tree = s.switchTree(iter, buf)
+		tree = s.switchTree(buf)
 	} else {
-		tree = s.switchTreeMessage(iter, buf, state, m)
+		tree = s.switchTreeMessage(buf, m)
 	}
 
 	for i := 0; i < len(s.matches); i++ {
@@ -72,9 +109,16 @@ func ParseMessage(state *state.State, m *discord.Message, md []byte, buf *gtk.Te
 		tree(i)
 
 		if b := append(escape(s.prev), s.chunk...); len(b) > 0 {
-			buf.InsertMarkup(iter, string(b))
+			s.iterMu.Lock()
+			buf.InsertMarkup(buf.GetEndIter(), string(b))
+			s.iterMu.Unlock()
 		}
 	}
+
+	s.iterMu.Lock()
+	defer s.iterMu.Unlock()
+
+	iter := buf.GetEndIter()
 
 	buf.InsertMarkup(iter, string(md[s.last:]))
 

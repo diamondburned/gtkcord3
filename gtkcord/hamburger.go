@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const AvatarSize = 38
+const HeaderAvatarSize = 38
 
 type HeaderMenu struct {
 	gtk.IWidget
@@ -123,7 +123,7 @@ func (m *HeaderMenu) UpdateAvatar(url string) {
 	}
 
 	if !animated {
-		p, err := NewPixbuf(b, PbSize(AvatarSize, AvatarSize))
+		p, err := NewPixbuf(b, PbSize(HeaderAvatarSize, HeaderAvatarSize))
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild icon")
 			return
@@ -131,7 +131,7 @@ func (m *HeaderMenu) UpdateAvatar(url string) {
 
 		m.Pixbuf = p
 	} else {
-		p, err := NewAnimator(b, PbSize(AvatarSize, AvatarSize))
+		p, err := NewAnimator(b, PbSize(HeaderAvatarSize, HeaderAvatarSize))
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild animation")
 		}
