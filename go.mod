@@ -2,8 +2,6 @@ module github.com/diamondburned/gtkcord3
 
 go 1.13
 
-replace github.com/diamondburned/arikawa => ../arikawa/
-
 require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/bwmarrin/discordgo v0.20.2
