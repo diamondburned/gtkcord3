@@ -87,8 +87,7 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 			Guilds:   make([]*Guild, 0, len(folder.GuildIDs)),
 		},
 
-		ID:   folder.ID,
-		Name: folder.Name,
+		ID: folder.ID,
 	}
 
 	for _, id := range folder.GuildIDs {

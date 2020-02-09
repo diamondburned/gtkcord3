@@ -3,7 +3,6 @@ package gtkcord
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"strconv"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -43,11 +42,14 @@ type Channel struct {
 	Label *gtk.Label
 
 	ID       discord.Snowflake
-	Name     string
 	Category bool
 }
 
-func (g *Guild) loadChannels(s *state.State, guild discord.Guild) error {
+func (g *Guild) loadChannels(
+	s *state.State,
+	guild discord.Guild,
+	onChannel func(*Guild, *Channel)) error {
+
 	if g.Channels != nil {
 		return nil
 	}
@@ -102,6 +104,7 @@ func (g *Guild) loadChannels(s *state.State, guild discord.Guild) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to create channel list")
 	}
+	cl.SetVExpand(true)
 	cl.SetActivateOnSingleClick(true)
 	must(main.Add, cl)
 
@@ -115,7 +118,7 @@ func (g *Guild) loadChannels(s *state.State, guild discord.Guild) error {
 
 	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := g.Channels.Channels[r.GetIndex()]
-		log.Println("Channel", row.Name, "selected")
+		onChannel(g, row)
 	})
 
 	return nil
@@ -123,15 +126,12 @@ func (g *Guild) loadChannels(s *state.State, guild discord.Guild) error {
 
 func newChannel(ch discord.Channel) (*Channel, error) {
 	switch ch.Type {
-	case discord.GuildText, discord.GuildNews, discord.GuildStore:
+	case discord.GuildText:
 		return newChannelRow(ch)
 	case discord.GuildCategory:
 		return newCategory(ch)
 	case discord.DirectMessage, discord.GroupDM:
 		return newDMChannel(ch)
-	case discord.GuildVoice:
-		// TODO
-		return newChannelRow(ch)
 	}
 
 	panic("Unknown channel type " + strconv.Itoa(int(ch.Type)))
@@ -161,7 +161,6 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 		Row:      r,
 		Label:    l,
 		ID:       ch.ID,
-		Name:     ch.Name,
 		Category: true,
 	}, nil
 }
@@ -185,7 +184,6 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 		Row:      r,
 		Label:    l,
 		ID:       ch.ID,
-		Name:     ch.Name,
 		Category: false,
 	}, nil
 }
@@ -218,4 +216,15 @@ func (g *Guild) UpdateBanner(url string) {
 	}
 
 	must(g.Channels.BannerImage.SetFromPixbuf, p)
+}
+
+func (chs *Channels) First() int {
+	for i, ch := range chs.Channels {
+		if ch.Category {
+			continue
+		}
+
+		return i
+	}
+	return -1
 }

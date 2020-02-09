@@ -9,8 +9,9 @@ import (
 )
 
 type _sortStructure struct {
-	parent   discord.Channel
-	children []discord.Channel
+	parent    discord.Channel
+	hasParent bool
+	children  []discord.Channel
 }
 
 func filterChannels(s *state.State, chs []discord.Channel) []discord.Channel {
@@ -31,6 +32,18 @@ func filterChannels(s *state.State, chs []discord.Channel) []discord.Channel {
 			continue
 		}
 
+		switch ch.Type {
+		case discord.DirectMessage,
+			discord.GuildText,
+			discord.GuildCategory,
+			discord.GroupDM:
+
+			break
+
+		default:
+			continue
+		}
+
 		filtered = append(filtered, ch)
 	}
 
@@ -45,9 +58,11 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 			v, ok := tree[ch.ID]
 			if ok {
 				v.parent = ch
+				v.hasParent = true
 			} else {
 				tree[ch.ID] = &_sortStructure{
-					parent: ch,
+					parent:    ch,
+					hasParent: true,
 				}
 			}
 
@@ -68,7 +83,8 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 		}
 
 		tree[ch.ID] = &_sortStructure{
-			parent: ch,
+			parent:    ch,
+			hasParent: true,
 		}
 	}
 
@@ -79,11 +95,6 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 			sort.Slice(v.children, func(i, j int) bool {
 				return v.children[i].Position < v.children[j].Position
 			})
-		} else {
-			if v.parent.Type == discord.GuildCategory {
-				// Empty category, skip
-				continue
-			}
 		}
 
 		list = append(list, v)
@@ -96,22 +107,22 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 	widget.Channels = make([]*Channel, 0, len(chs))
 
 	for _, sch := range list {
-		w, err := newChannel(sch.parent)
-		if err != nil {
-			return errors.Wrap(err, "Failed to create sch.parent")
+		if sch.hasParent {
+			w, err := newChannel(sch.parent)
+			if err != nil {
+				return errors.Wrap(err, "Failed to create sch.parent")
+			}
+
+			widget.Channels = append(widget.Channels, w)
 		}
 
-		widget.Channels = append(widget.Channels, w)
-
-		if sch.children != nil {
-			for _, ch := range sch.children {
-				w, err := newChannel(ch)
-				if err != nil {
-					return errors.Wrap(err, "Failed to create children channel")
-				}
-
-				widget.Channels = append(widget.Channels, w)
+		for _, ch := range sch.children {
+			w, err := newChannel(ch)
+			if err != nil {
+				return errors.Wrap(err, "Failed to create children channel")
 			}
+
+			widget.Channels = append(widget.Channels, w)
 		}
 	}
 

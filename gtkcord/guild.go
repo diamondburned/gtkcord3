@@ -53,8 +53,7 @@ type Guild struct {
 	Pixbuf    *gdk.Pixbuf
 	Animation *gdk.PixbufAnimation
 
-	ID   discord.Snowflake
-	Name string
+	ID discord.Snowflake
 
 	// nil if Folder
 	Channels *Channels
@@ -133,7 +132,7 @@ func newGuildsLegacy(s *state.State) ([]*Guild, error) {
 	return rows, nil
 }
 
-func newGuilds(s *state.State, callback func(*Guild)) (*Guilds, error) {
+func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 	var rows []*Guild
 	var err error
 
@@ -183,7 +182,7 @@ func newGuilds(s *state.State, callback func(*Guild)) (*Guilds, error) {
 			row = row.Folder.Guilds[index]
 		}
 
-		callback(row)
+		onGuild(row)
 	})
 
 	must(l.ShowAll)
@@ -220,7 +219,6 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 		IWidget: r,
 		Row:     r,
 		ID:      guild.ID,
-		Name:    guild.Name,
 		Image:   i,
 		// Iter:       store.Append(parent),
 		// Store:      store,

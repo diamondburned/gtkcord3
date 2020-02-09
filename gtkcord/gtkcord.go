@@ -2,6 +2,8 @@ package gtkcord
 
 import (
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/diamondburned/arikawa/state"
@@ -23,16 +25,22 @@ type Application struct {
 
 	// Dynamic sidebars and main pages
 	Sidebar gtk.IWidget
-	Guild   *Guild // current
+
+	// Stuff
+	Guilds *Guilds
 
 	// nil after finalize()
+	sbox      *gtk.Box
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
 	css       *gtk.CssProvider
+
+	done chan struct{}
 }
 
 func New() (*Application, error) {
-	var a = new(Application)
+	a := new(Application)
+	a.done = make(chan struct{})
 
 	if err := a.init(); err != nil {
 		return nil, errors.Wrap(err, "Failed to start Gtk")
@@ -44,6 +52,7 @@ func New() (*Application, error) {
 
 func (a *Application) UseState(s *state.State) error {
 	a.State = s
+	a.Window.Remove(a.sbox)
 
 	if err := a.Header.Hamburger.Refresh(s); err != nil {
 		return errors.Wrap(err, "Failed to refresh hamburger")
@@ -60,6 +69,7 @@ func (a *Application) UseState(s *state.State) error {
 		if err != nil {
 			return errors.Wrap(err, "Failed to make guilds view")
 		}
+		a.Guilds = gs
 
 		must(gw.Add, gs.ListBox)
 		must(a.Grid.Add, gw)
@@ -74,8 +84,30 @@ func (a *Application) UseState(s *state.State) error {
 	// Finalize the window:
 	a.finalize()
 
-	// I wonder if you really need to do this:
-	gtk.Main()
+	// 100 goroutines is pretty cheap (lol)
+	for _, g := range a.Guilds.Guilds {
+		g := g
+		go func() {
+			_, err := s.Channels(g.ID)
+			if err != nil {
+				logWrap(err, "Failed to pre-fetch channels")
+			}
+		}()
+
+		if g.Folder != nil {
+			for _, g := range g.Folder.Guilds {
+				g := g
+				go func() {
+					_, err := s.Channels(g.ID)
+					if err != nil {
+						logWrap(err, "Failed to pre-fetch channels")
+					}
+				}()
+			}
+		}
+	}
+
+	a.wait()
 
 	return nil
 }
@@ -94,6 +126,7 @@ func (a *Application) init() error {
 	w.Connect("destroy", func() {
 		a.close()
 		gtk.MainQuit()
+		close(a.done)
 	})
 	w.SetDefaultSize(1000, 750)
 	a.Window = w
@@ -120,15 +153,26 @@ func (a *Application) init() error {
 	a.Grid = g
 
 	// Instead of adding the above grid, we should add the spinning circle.
+	sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create spinner box")
+	}
+	sbox.SetSizeRequest(50, 50)
+	sbox.SetVAlign(gtk.ALIGN_CENTER)
+	w.Add(sbox)
+	a.sbox = sbox
+
 	s, err := gtk.SpinnerNew()
 	if err != nil {
 		return errors.Wrap(err, "Failed to create spinner")
 	}
+	s.SetSizeRequest(50, 50)
 	s.Start()
+	sbox.Add(s)
 	a.spinner = s
-	w.Add(a.spinner)
 
 	w.ShowAll()
+	go gtk.Main()
 
 	return nil
 }
@@ -137,7 +181,8 @@ func (a *Application) finalize() {
 	must(a.Window.Remove, a.spinner)
 	must(a.Window.Add, a.Grid)
 	must(a.Window.ShowAll)
-	a.spinner = nil
+	a.spinner.Stop()
+	a.sbox.SetSizeRequest(ChannelsWidth, -1)
 }
 
 func (a *Application) close() {
@@ -146,24 +191,36 @@ func (a *Application) close() {
 	}
 }
 
+func (a *Application) setChannelCol(w gtk.IWidget) {
+	a.Grid.Attach(w, 2, 0, 1, 1)
+}
+
 func (a *Application) loadGuild(g *Guild) {
+	if a.Sidebar != nil {
+		a.Grid.Remove(a.Sidebar)
+	}
+
+	a.spinner.Start()
+	a.setChannelCol(a.sbox)
+
+	go a._loadGuild(g)
+}
+
+func (a *Application) _loadGuild(g *Guild) {
 	dg, err := a.State.Guild(g.ID)
 	if err != nil {
 		logWrap(err, "Failed to get guild")
 		return
 	}
 
-	if err := g.loadChannels(a.State, *dg); err != nil {
+	if err := g.loadChannels(a.State, *dg, a.loadChannel); err != nil {
 		logWrap(err, "Failed to load channels")
 		return
 	}
 
-	if a.Sidebar != nil {
-		a.Grid.Remove(a.Sidebar)
-	}
-
-	a.Grid.Attach(g.Channels.IWidget, 2, 0, 1, 1)
-	// must(a.Grid.Add, g.Channels.IWidget)
+	must(a.spinner.Stop)
+	must(a.Grid.Remove, a.sbox)
+	must(a.setChannelCol, g.Channels.IWidget)
 
 	if a.Sidebar == nil {
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
@@ -176,5 +233,40 @@ func (a *Application) loadGuild(g *Guild) {
 
 	must(a.Grid.ShowAll)
 	a.Sidebar = g.Channels.IWidget
-	a.Guild = g
+
+	// Run hook
+	a.Header.hookGuild(dg)
+
+	index := 0
+	current := g.Channels.ChList.GetSelectedRow()
+	if current != nil {
+		index = current.GetIndex()
+	}
+	if index < 0 {
+		index = g.Channels.First()
+		must(g.Channels.ChList.SelectRow, g.Channels.Channels[index].Row)
+	}
+
+	a.loadChannel(g, g.Channels.Channels[index])
+}
+
+func (a *Application) loadChannel(g *Guild, ch *Channel) {
+	dch, err := a.State.Channel(ch.ID)
+	if err != nil {
+		logWrap(err, "Failed to load channel "+ch.ID.String())
+		return
+	}
+
+	// Run hook
+	a.Header.hookChannel(dch)
+}
+
+func (a *Application) wait() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt)
+
+	select {
+	case <-sig:
+	case <-a.done:
+	}
 }

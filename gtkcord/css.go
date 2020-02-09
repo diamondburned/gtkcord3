@@ -11,13 +11,18 @@ headerbar { padding: 0; }
 headerbar button { box-shadow: none; }
 `
 
+var CustomCSS string
+
+// I don't like this:
+// list row:selected { box-shadow: inset 2px 0 0 0 white; }
+
 func (a *Application) loadCSS() error {
 	css, err := gtk.CssProviderNew()
 	if err != nil {
 		return errors.Wrap(err, "Failed to make a CSS provider")
 	}
 
-	if err := css.LoadFromData(CSS); err != nil {
+	if err := css.LoadFromData(CSS + CustomCSS); err != nil {
 		return errors.Wrap(err, "Failed to parse CSS")
 	}
 

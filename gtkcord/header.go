@@ -1,7 +1,9 @@
 package gtkcord
 
 import (
+	"github.com/diamondburned/arikawa/discord"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
 )
 
@@ -56,13 +58,16 @@ func newHeader() (*Header, error) {
 	 * Grid 2
 	 */
 
-	label, err := gtk.LabelNew("test test")
+	label, err := gtk.LabelNew("gtkcord3")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create guild name label")
 	}
 	label.SetXAlign(0.0)
 	label.SetMarginStart(15)
 	label.SetSizeRequest(ChannelsWidth-15, -1)
+	label.SetLines(1)
+	label.SetLineWrap(true)
+	label.SetEllipsize(pango.ELLIPSIZE_END)
 	lblseparator, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create ham separator")
@@ -74,16 +79,22 @@ func newHeader() (*Header, error) {
 	 * Grid 3
 	 */
 
-	chname, err := gtk.LabelNew("#idk")
+	chname, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create channel name")
 	}
+	chname.SetLines(1)
+	chname.SetLineWrap(true)
+	chname.SetEllipsize(pango.ELLIPSIZE_END)
 	chname.SetXAlign(0.0)
 	chname.SetMarginStart(20)
-	chtopic, err := gtk.LabelNew("topic")
+	chtopic, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create channel topic")
 	}
+	chtopic.SetLines(1)
+	chtopic.SetLineWrap(true)
+	chtopic.SetEllipsize(pango.ELLIPSIZE_END)
 	chtopic.SetXAlign(0.0)
 	chtopic.SetMarginStart(20)
 
@@ -101,4 +112,22 @@ func newHeader() (*Header, error) {
 	}, nil
 }
 
-// func (h *Header) hookGuild(a *Application) {}
+func (h *Header) hookGuild(g *discord.Guild) {
+	if g == nil {
+		h.GuildName.SetMarkup("")
+		return
+	}
+
+	h.GuildName.SetMarkup(bold(g.Name))
+}
+
+func (h *Header) hookChannel(ch *discord.Channel) {
+	if ch == nil {
+		h.ChannelName.SetMarkup("")
+		h.ChannelTopic.SetText("")
+		return
+	}
+
+	h.ChannelName.SetMarkup(ChannelHash + bold(ch.Name))
+	h.ChannelTopic.SetText(ch.Topic)
+}
