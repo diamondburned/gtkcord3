@@ -1,12 +1,12 @@
 package gtkcord
 
 import (
-	"fmt"
-	"io/ioutil"
 	"strconv"
+	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/httpcache"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -146,7 +146,7 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 	r.SetSensitive(false)
 
 	l, err := gtk.LabelNew(
-		`<span font_variant="smallcaps" font_size="smaller">` + escape(ch.Name) + "</span>")
+		`<span font_size="smaller">` + escape(strings.ToUpper(ch.Name)) + "</span>")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create label")
 	}
@@ -192,20 +192,9 @@ func newDMChannel(ch discord.Channel) (*Channel, error) {
 }
 
 func (g *Guild) UpdateBanner(url string) {
-	r, err := HTTPClient.Get(url + "?size=512")
+	b, err := httpcache.HTTPGet(url + "?size=512")
 	if err != nil {
 		logWrap(err, "Failed to GET URL "+url)
-		return
-	}
-	defer r.Body.Close()
-
-	if r.StatusCode < 200 || r.StatusCode > 299 {
-		logError(fmt.Errorf("Bad status code %d for %s", r.StatusCode, url))
-	}
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logWrap(err, "Failed to download image")
 		return
 	}
 

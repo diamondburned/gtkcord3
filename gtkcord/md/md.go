@@ -3,78 +3,85 @@ package md
 import (
 	"bytes"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/alecthomas/chroma"
+	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/state"
+	"github.com/gotk3/gotk3/gtk"
 )
 
-const mdRegex = `(?m)` +
-	`(?:^\x60\x60\x60 *(\w*)([\s\S]*?)\n?\x60\x60\x60$)` +
-	`|((?:(?:^|\n)^>\s+.*)+)\n` +
-	`|(?:(?:^|\n)(?:[>*+-]|\d+\.)\s+.*)+` +
-	`|(?:\x60([^\x60].*?)\x60)` +
-	`|(__|\*\*\*|\*\*|[_*]|~~|\|\|)` +
-	`|(https?:\/\S+(?:\.|:)\S+)`
+var regexes = []string{
+	// codeblock
+	`(?:^\x60\x60\x60 *(\w*)([\s\S]*?)\n?\x60\x60\x60$)`,
+	// blockquote
+	`((?:(?:^|\n)^>\s+.*)+)\n`,
+	// Bullet points, but there's no capture group (disabled)
+	`(?:(?:^|\n)(?:[>*+-]|\d+\.)\s+.*)+`,
+	// This is actually inline code
+	`(?:\x60([^\x60].*?)\x60)`,
+	// Inline markup stuff
+	`(__|\*\*\*|\*\*|[_*]|~~|\|\|)`,
+	// Hyperlinks
+	`(https?:\/\S+(?:\.|:)\S+)`,
+	// User mentions
+	`(?:<@!?(\d+)>)`,
+	// Role mentions
+	`(?:<@&(\d+)>)`,
+	// Channel mentions
+	`(?:<#(\d+)>)`,
+	// Emojis
+	`(<(a?):.*:(\d+)>)`,
+}
 
 var HighlightStyle = "solarized-dark"
 
 var (
 	style    = (*chroma.Style)(nil)
-	regex    = regexp.MustCompile(mdRegex)
+	regex    = regexp.MustCompile(`(?m)` + strings.Join(regexes, "|"))
 	fmtter   = Formatter{}
 	css      = map[chroma.TokenType]string{}
 	lexerMap = sync.Map{}
 )
 
-func Parse(md []byte) []byte {
+func Parse(md []byte, buf *gtk.TextBuffer) {
+	ParseMessage(nil, nil, md, buf)
+}
+
+func ParseMessage(state *state.State, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
+	iter := buf.GetEndIter()
+
 	s := statePool.Get().(*mdState)
 	defer statePool.Put(s)
 
 	s.submatch(regex, md)
+
+	var tree func(i int)
+	if s == nil || m == nil {
+		tree = s.switchTree(iter, buf)
+	} else {
+		tree = s.switchTreeMessage(iter, buf, state, m)
+	}
 
 	for i := 0; i < len(s.matches); i++ {
 		s.prev = md[s.last:s.matches[i][0].from]
 		s.last = s.getLastIndex(i)
 		s.chunk = s.chunk[:0] // reset chunk
 
-		switch {
-		case len(s.matches[i][2].str) > 0:
-			// codeblock
-			s.chunk = s.renderCodeBlock(
-				s.matches[i][1].str,
-				s.matches[i][2].str,
-			)
-		case len(s.matches[i][3].str) > 0:
-			// blockquotes, greentext
-			s.chunk = renderBlockquote(s.matches[i][3].str)
-		case len(s.matches[i][4].str) > 0:
-			// inline code
-			s.chunk = bytes.Join([][]byte{codeSpan[0], s.matches[i][4].str, codeSpan[1]}, nil)
-		case len(s.matches[i][5].str) > 0:
-			// inline stuff
-			s.chunk = s.tag(s.matches[i][5].str)
-		case len(s.matches[i][6].str) > 0:
-			// URLs
-			s.chunk = s.matches[i][6].str
-		case bytes.Count(s.prev, []byte(`\`))%2 != 0:
-			// escaped, print raw
-			s.chunk = escape(s.matches[i][0].str)
-		default:
-			s.chunk = escape(s.matches[i][0].str)
-		}
+		tree(i)
 
-		s.output = append(s.output, escape(s.prev)...)
-		s.output = append(s.output, s.chunk...)
+		if b := append(escape(s.prev), s.chunk...); len(b) > 0 {
+			buf.InsertMarkup(iter, string(b))
+		}
 	}
 
-	s.output = append(s.output, md[s.last:]...)
+	buf.InsertMarkup(iter, string(md[s.last:]))
 
 	// Flush:
 	for len(s.context) > 0 {
-		s.output = append(s.output, s.tag(s.context[len(s.context)-1])...)
+		buf.InsertMarkup(iter, string(s.tag(s.context[len(s.context)-1])))
 	}
-
-	return s.output
 }
 
 func renderBlockquote(body []byte) []byte {
@@ -82,6 +89,10 @@ func renderBlockquote(body []byte) []byte {
 }
 
 func escape(thing []byte) []byte {
+	if len(thing) == 0 {
+		return nil
+	}
+
 	// escaped := thing[:0]
 	escaped := make([]byte, 0, len(thing))
 

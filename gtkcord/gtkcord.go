@@ -237,9 +237,9 @@ func (a *Application) _loadGuild(g *Guild) {
 	// Run hook
 	a.Header.hookGuild(dg)
 
-	index := 0
+	index := -1
 	current := g.Channels.ChList.GetSelectedRow()
-	if current != nil {
+	if current == nil {
 		index = current.GetIndex()
 	}
 	if index < 0 {

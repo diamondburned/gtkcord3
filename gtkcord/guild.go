@@ -1,14 +1,12 @@
 package gtkcord
 
 import (
-	"fmt"
 	"html"
-	"io/ioutil"
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/gotk3/gotk3/gdk"
+	"github.com/diamondburned/gtkcord3/httpcache"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -50,8 +48,7 @@ type Guild struct {
 	Style *gtk.StyleContext
 	Image *gtk.Image
 	// nil if not downloaded
-	Pixbuf    *gdk.Pixbuf
-	Animation *gdk.PixbufAnimation
+	Pixbuf *Pixbuf
 
 	ID discord.Snowflake
 
@@ -238,20 +235,9 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 func (g *Guild) UpdateImage(url string) {
 	var animated = url[:len(url)-4] == ".gif"
 
-	r, err := HTTPClient.Get(url + "?size=64")
+	b, err := httpcache.HTTPGet(url + "?size=64")
 	if err != nil {
 		logWrap(err, "Failed to GET URL "+url)
-		return
-	}
-	defer r.Body.Close()
-
-	if r.StatusCode < 200 || r.StatusCode > 299 {
-		logError(fmt.Errorf("Bad status code %d for %s", r.StatusCode, url))
-	}
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logWrap(err, "Failed to download image")
 		return
 	}
 
@@ -262,29 +248,17 @@ func (g *Guild) UpdateImage(url string) {
 			return
 		}
 
-		g.Pixbuf = p
-		g.updateImage()
+		g.Pixbuf = &Pixbuf{p, nil}
+		g.Pixbuf.Set(g.Image)
 	} else {
 		p, err := NewAnimator(b, PbSize(IconSize, IconSize))
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild animation")
+			return
 		}
 
-		g.Animation = p
-		g.updateImage()
-	}
-}
-
-func (g *Guild) updateImage() {
-	switch {
-	case g.Pixbuf != nil:
-		must(func(g *Guild) {
-			g.Image.SetFromPixbuf(g.Pixbuf)
-		}, g)
-	case g.Animation != nil:
-		must(func(g *Guild) {
-			g.Image.SetFromAnimation(g.Animation)
-		}, g)
+		g.Pixbuf = &Pixbuf{nil, p}
+		g.Pixbuf.Set(g.Image)
 	}
 }
 

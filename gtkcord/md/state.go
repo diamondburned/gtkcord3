@@ -8,6 +8,9 @@ import (
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
+	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/state"
+	"github.com/gotk3/gotk3/gtk"
 )
 
 type match struct {
@@ -26,7 +29,6 @@ var statePool = sync.Pool{
 
 type mdState struct {
 	last    int32
-	output  []byte
 	chunk   []byte
 	prev    []byte
 	matches [][]match
@@ -88,6 +90,73 @@ func (s *mdState) tag(token []byte) []byte {
 	}
 }
 
+func (s *mdState) switchTree(
+	iter *gtk.TextIter, buf *gtk.TextBuffer) func(i int) {
+
+	return func(i int) {
+		switch {
+		case len(s.matches[i][2].str) > 0:
+			// codeblock
+			s.chunk = s.renderCodeBlock(
+				s.matches[i][1].str,
+				s.matches[i][2].str,
+			)
+		case len(s.matches[i][3].str) > 0:
+			// blockquotes, greentext
+			s.chunk = renderBlockquote(s.matches[i][3].str)
+		case len(s.matches[i][4].str) > 0:
+			// inline code
+			s.chunk = bytes.Join([][]byte{codeSpan[0], s.matches[i][4].str, codeSpan[1]}, nil)
+		case len(s.matches[i][5].str) > 0:
+			// inline stuff
+			s.chunk = s.tag(s.matches[i][5].str)
+		case len(s.matches[i][6].str) > 0:
+			// URLs
+			s.chunk = s.matches[i][6].str
+		case len(s.matches[i][10].str) > 0:
+			// emojis
+			p, err := NewPixbuf(len(s.prev) == 0, EmojiURL(
+				string(s.matches[i][12].str),
+				len(s.matches[i][11].str) > 0,
+			))
+			if err != nil {
+				s.chunk = s.matches[i][10].str
+				break
+			}
+
+			s.prev = s.prev[:0]
+			buf.InsertPixbuf(iter, p)
+
+		case bytes.Count(s.prev, []byte(`\`))%2 != 0:
+			// escaped, print raw
+			s.chunk = escape(s.matches[i][0].str)
+		default:
+			s.chunk = escape(s.matches[i][0].str)
+		}
+	}
+}
+
+func (s *mdState) switchTreeMessage(
+	iter *gtk.TextIter, buf *gtk.TextBuffer,
+	state *state.State, m *discord.Message) func(i int) {
+
+	return func(i int) {
+		switch {
+		case len(s.matches[i][7].str) > 0:
+			// user mentions
+			s.chunk = UserNicknameHTML(d, m, s.matches[i][7].str)
+		case len(s.matches[i][8].str) > 0:
+			// role mentions
+			s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
+		case len(s.matches[i][9].str) > 0:
+			// channel mentions
+			s.chunk = ChannelNameHTML(d, m, s.matches[i][9].str)
+		default:
+			s.switchTree(i, iter, buf)
+		}
+	}
+}
+
 func (s *mdState) getLastIndex(currentIndex int) int32 {
 	if currentIndex >= len(s.matches) {
 		return 0
@@ -100,7 +169,6 @@ func (s *mdState) submatch(r *regexp.Regexp, input []byte) {
 	found := r.FindAllSubmatchIndex(input, -1)
 
 	s.last = 0
-	s.output = s.output[:0]
 	s.chunk = s.chunk[:0]
 	s.prev = s.prev[:0]
 	s.context = s.context[:0]

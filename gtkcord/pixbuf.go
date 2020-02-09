@@ -2,8 +2,31 @@ package gtkcord
 
 import (
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
+
+// WHEN THE ENUM
+//
+// WHEN THE ENUM
+type Pixbuf struct {
+	// enum
+	Pixbuf    *gdk.Pixbuf
+	Animation *gdk.PixbufAnimation
+}
+
+func (pb *Pixbuf) Set(img *gtk.Image) {
+	switch {
+	case pb.Pixbuf != nil:
+		must(func() {
+			img.SetFromPixbuf(pb.Pixbuf)
+		})
+	case pb.Animation != nil:
+		must(func() {
+			img.SetFromAnimation(pb.Animation)
+		})
+	}
+}
 
 func loadPixbuf(
 	b []byte, cfg func(pl *gdk.PixbufLoader)) (*gdk.PixbufLoader, error) {
