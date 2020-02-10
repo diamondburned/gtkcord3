@@ -2,8 +2,6 @@ package md
 
 import (
 	"bytes"
-	"log"
-	"regexp"
 	"sync"
 
 	"github.com/alecthomas/chroma"
@@ -13,17 +11,22 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-func newPool(p *Parser) sync.Pool {
-	return sync.Pool{
-		New: func() interface{} {
-			return newState(p)
-		},
-	}
-}
-
 type match struct {
 	from, to int32
 	str      []byte
+}
+
+func newPool(p *Parser) sync.Pool {
+	return sync.Pool{
+		New: func() interface{} {
+			return &mdState{
+				p:      p,
+				state:  &TagState{},
+				fmtter: &Formatter{},
+				buffer: &bytes.Buffer{},
+			}
+		},
+	}
 }
 
 type mdState struct {
@@ -34,11 +37,13 @@ type mdState struct {
 	iterMu sync.Mutex
 	iterWg sync.WaitGroup
 
+	buf *gtk.TextBuffer
+
 	last    int32
-	chunk   []byte
 	prev    []byte
 	matches [][]match
-	context [][]byte
+
+	state *TagState
 
 	// Used to determine whether or not emojis should be large:
 	hasText bool
@@ -47,124 +52,84 @@ type mdState struct {
 	buffer *bytes.Buffer
 }
 
-func newState(p *Parser) *mdState {
-	return &mdState{
-		p:      p,
-		fmtter: &Formatter{},
-		buffer: &bytes.Buffer{},
-	}
-}
-
-var (
-	boldItalics = [2][]byte{[]byte(`<span font_style="italic" font_weight="bold">`), []byte("</span>")}
-	codeSpan    = [2][]byte{[]byte(`<span font_family="monospace">`), []byte("</span>")}
-	quoteSpan   = [2][]byte{[]byte(`<span color="#789922">`), []byte("</span>")}
-	newLine     = []byte("\n")
-	tagsList    = [...][3][]byte{
-		[3][]byte{[]byte("*"), []byte("<i>"), []byte("</i>")},
-		[3][]byte{[]byte("_"), []byte("<i>"), []byte("</i>")},
-		[3][]byte{[]byte("**"), []byte("<b>"), []byte("</b>")},
-		[3][]byte{[]byte("__"), []byte("<u>"), []byte("</u>")},
-		[3][]byte{[]byte("***"), boldItalics[0], boldItalics[1]},
-		[3][]byte{[]byte("~~"), []byte("<s>"), []byte("</s>")},
-		[3][]byte{[]byte("||"), []byte(`<span fgcolor="#808080>"`), []byte("</span>")},
-	}
-	escapes = [...][]byte{
-		[]byte("&amp;"),
-		[]byte("&#39;"),
-		[]byte("&lt;"),
-		[]byte("&gt;"),
-	}
-)
-
-func (s *mdState) tag(token []byte) []byte {
-	var tags [3][]byte
-
-	for _, t := range tagsList {
-		if bytecmp(t[0], token) {
-			tags = t
-		}
+func (s *mdState) tagAttr(token []byte) {
+	attr := TagAttribute(token)
+	if attr == 0 {
+		return
 	}
 
-	if tags[0] == nil {
-		return token
-	}
-
-	var index = -1
-	for i, t := range s.context {
-		if bytecmp(t, token) {
-			index = i
-			break
-		}
-	}
-
-	if index >= 0 { // len(context) > 0 always
-		s.context = append(s.context[:index], s.context[index+1:]...)
-		return tags[2]
+	if s.state.Attr().Has(attr) {
+		s.state.Remove(attr)
 	} else {
-		s.context = append(s.context, token)
-		return tags[1]
+		s.state.Add(attr)
 	}
 }
 
-func (s *mdState) switchTree(buf *gtk.TextBuffer) func(i int) {
+func (s *mdState) switchTree(i int) {
+	switch {
+	case len(s.matches[i][2].str) > 0:
+		code := string(s.renderCodeBlock(
+			s.matches[i][1].str,
+			s.matches[i][2].str,
+		))
+
+		s.buf.InsertMarkup(s.buf.GetEndIter(), code)
+
+	case len(s.matches[i][3].str) > 0:
+		// blockquotes, greentext
+		s.insertWithTag(s.matches[i][3].str, s.state.With(AttrQuoted))
+
+	case len(s.matches[i][4].str) > 0:
+		// inline stuff
+		s.tagAttr(s.matches[i][4].str)
+
+	case len(s.matches[i][5].str) > 0:
+		// TODO URLs
+		s.insertWithTag(s.matches[i][5].str, s.state.WithColor("cyan"))
+
+	case len(s.matches[i][9].str) > 0:
+		// Emojis
+		var animated = len(s.matches[i][10].str) > 0
+		s.InsertAsyncPixbuf(s.buf,
+			EmojiURL(string(s.matches[i][11].str), animated))
+
+	case bytes.Count(s.prev, []byte(`\`))%2 != 0:
+		// Escaped:
+		fallthrough
+	default:
+		s.insertWithTag(s.matches[i][0].str, nil)
+	}
+}
+
+func (s *mdState) switchTreeMessage(m *discord.Message) func(i int) {
 	return func(i int) {
 		switch {
-		case len(s.matches[i][2].str) > 0:
-			// codeblock
-			s.chunk = s.renderCodeBlock(
-				s.matches[i][1].str,
-				s.matches[i][2].str,
-			)
-		case len(s.matches[i][3].str) > 0:
-			// blockquotes, greentext
-			s.chunk = renderBlockquote(s.matches[i][3].str)
-		case len(s.matches[i][4].str) > 0:
-			// inline code
-			s.chunk = bytes.Join([][]byte{codeSpan[0], s.matches[i][4].str, codeSpan[1]}, nil)
-		case len(s.matches[i][5].str) > 0:
-			// inline stuff
-			s.chunk = s.tag(s.matches[i][5].str)
 		case len(s.matches[i][6].str) > 0:
-			// URLs
-			s.chunk = s.matches[i][6].str
-		case len(s.matches[i][10].str) > 0:
-			// Emojis
-			var animated = len(s.matches[i][11].str) > 0
+			// user mentions
+			s.insertWithTag(s.matches[i][6].str, nil)
+			// s.chunk = UserNicknameHTML(d, m, s.matches[i][7].str)
 
-			if err := s.InsertAsyncPixbuf(buf,
-				EmojiURL(string(s.matches[i][12].str), animated)); err != nil {
+		case len(s.matches[i][7].str) > 0:
+			// role mentions
+			s.insertWithTag(s.matches[i][7].str, nil)
+			// s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
 
-				s.chunk = s.matches[i][10].str
-			}
+		case len(s.matches[i][8].str) > 0:
+			// channel mentions
+			s.insertWithTag(s.matches[i][8].str, nil)
+			// s.chunk = ChannelNameHTML(d, m, s.matches[i][9].str)
 
-		case bytes.Count(s.prev, []byte(`\`))%2 != 0:
-			// escaped, print raw
-			s.chunk = escape(s.matches[i][0].str)
 		default:
-			s.chunk = escape(s.matches[i][0].str)
+			s.switchTree(i)
 		}
 	}
 }
 
-func (s *mdState) switchTreeMessage(buf *gtk.TextBuffer, m *discord.Message) func(i int) {
-	normal := s.switchTree(buf)
-
-	return func(i int) {
-		switch {
-		case len(s.matches[i][7].str) > 0:
-			// user mentions
-			// s.chunk = UserNicknameHTML(d, m, s.matches[i][7].str)
-		case len(s.matches[i][8].str) > 0:
-			// role mentions
-			// s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
-		case len(s.matches[i][9].str) > 0:
-			// channel mentions
-			// s.chunk = ChannelNameHTML(d, m, s.matches[i][9].str)
-		default:
-			normal(i)
-		}
+func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
+	if tag == nil {
+		tag = s.state.Get()
 	}
+	s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
 }
 
 func (s *mdState) getLastIndex(currentIndex int) int32 {
@@ -175,13 +140,13 @@ func (s *mdState) getLastIndex(currentIndex int) int32 {
 	return s.matches[currentIndex][0].to
 }
 
-func (s *mdState) submatch(r *regexp.Regexp, input []byte) {
-	found := r.FindAllSubmatchIndex(input, -1)
+func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
+	found := regex.FindAllSubmatchIndex(input, -1)
 
+	s.buf = buf
 	s.last = 0
-	s.chunk = s.chunk[:0]
 	s.prev = s.prev[:0]
-	s.context = s.context[:0]
+	s.hasText = false
 	s.fmtter.Reset()
 
 	// We're not clearing s.matches
@@ -219,7 +184,6 @@ func (s *mdState) submatch(r *regexp.Regexp, input []byte) {
 			// We know 1-10 are not emojis:
 			for i := 1; i < len(matches) && i < 10; i++ {
 				if len(matches[i].str) > 0 && matches[i].str[0] != '\n' {
-					log.Println("Found", i, string(matches[i].str))
 					s.hasText = true
 				}
 			}
@@ -250,12 +214,14 @@ func (s *mdState) renderCodeBlock(lang, content []byte) []byte {
 		if ok {
 			lexer = v.(chroma.Lexer)
 		} else {
-			lexer = lexers.Get(lang)
-			lexerMap.Store(lang, lexer)
+			if l := lexers.Get(lang); l != nil {
+				lexer = l
+				lexerMap.Store(lang, lexer)
+			}
 		}
 
 	} else {
-		content = bytes.Join([][]byte{lang, content}, newLine)
+		content = bytes.Join([][]byte{lang, content}, []byte("\n"))
 	}
 
 	iterator, err := lexer.Tokenise(nil, string(content))

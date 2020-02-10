@@ -50,6 +50,10 @@ func HTTPGet(url string) ([]byte, error) {
 		return nil, errors.Wrap(err, "Failed to download image")
 	}
 
+	if len(b) == 0 {
+		return nil, errors.New("nil body")
+	}
+
 	if len(b) > MaxCacheSize {
 		return b, nil
 	}
