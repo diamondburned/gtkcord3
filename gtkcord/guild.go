@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/httpcache"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -54,6 +55,7 @@ type Guild struct {
 
 	// nil if Folder
 	Channels *Channels
+	current  *Channel
 }
 
 func newGuildsFromFolders(s *state.State) ([]*Guild, error) {
@@ -230,6 +232,35 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 
 	go g.UpdateImage(url)
 	return g, nil
+}
+
+func (g *Guild) Current() *Channel {
+	if g.current != nil {
+		return g.current
+	}
+
+	index := -1
+	current := g.Channels.ChList.GetSelectedRow()
+	if current == nil {
+		index = g.Channels.First()
+	} else {
+		index = current.GetIndex()
+	}
+
+	g.current = g.Channels.Channels[index]
+	must(g.Channels.ChList.SelectRow, g.current.Row)
+
+	return g.current
+}
+
+func (g *Guild) GoTo(s *state.State, parser *md.Parser, ch *Channel) error {
+	g.current = ch
+
+	if err := ch.loadMessages(s, parser); err != nil {
+		return errors.Wrap(err, "Failed to load messages")
+	}
+
+	return nil
 }
 
 func (g *Guild) UpdateImage(url string) {

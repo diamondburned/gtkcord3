@@ -1,8 +1,6 @@
 package md
 
 import (
-	"log"
-
 	"github.com/diamondburned/gtkcord3/httpcache"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
@@ -53,8 +51,6 @@ func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) error {
 
 	// Insert Pixbuf after s.prev:
 	buf.InsertPixbuf(iter, i)
-
-	log.Println("Inserted icon at", lastIndex, lastLine)
 
 	// Clear so the buffers don't get added again:
 	s.chunk = s.chunk[:0]

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -24,7 +25,8 @@ type Application struct {
 	Grid   *gtk.Grid
 
 	// Dynamic sidebars and main pages
-	Sidebar gtk.IWidget
+	Sidebar  gtk.IWidget
+	Messages gtk.IWidget
 
 	// Stuff
 	Guilds *Guilds
@@ -34,6 +36,8 @@ type Application struct {
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
 	css       *gtk.CssProvider
+
+	parser *md.Parser
 
 	done chan struct{}
 }
@@ -53,6 +57,7 @@ func New() (*Application, error) {
 func (a *Application) UseState(s *state.State) error {
 	a.State = s
 	a.Window.Remove(a.sbox)
+	a.parser = md.NewParser(s)
 
 	if err := a.Header.Hamburger.Refresh(s); err != nil {
 		return errors.Wrap(err, "Failed to refresh hamburger")
@@ -190,7 +195,12 @@ func (a *Application) close() {
 }
 
 func (a *Application) setChannelCol(w gtk.IWidget) {
+	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
+}
+func (a *Application) setMessageCol(w gtk.IWidget) {
+	a.Messages = w
+	a.Grid.Attach(w, 4, 0, 1, 1)
 }
 
 func (a *Application) loadGuild(g *Guild) {
@@ -230,25 +240,17 @@ func (a *Application) _loadGuild(g *Guild) {
 	}
 
 	must(a.Grid.ShowAll)
-	a.Sidebar = g.Channels.IWidget
 
-	// Run hook
+	// Run hooks
 	a.Header.hookGuild(dg)
-
-	index := -1
-	current := g.Channels.ChList.GetSelectedRow()
-	if current == nil {
-		index = current.GetIndex()
-	}
-	if index < 0 {
-		index = g.Channels.First()
-		must(g.Channels.ChList.SelectRow, g.Channels.Channels[index].Row)
-	}
-
-	a.loadChannel(g, g.Channels.Channels[index])
+	a.loadChannel(g, g.Current())
 }
 
 func (a *Application) loadChannel(g *Guild, ch *Channel) {
+	if a.Messages != nil {
+		a.Grid.Remove(a.Messages)
+	}
+
 	dch, err := a.State.Channel(ch.ID)
 	if err != nil {
 		logWrap(err, "Failed to load channel "+ch.ID.String())
@@ -257,6 +259,18 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 
 	// Run hook
 	a.Header.hookChannel(dch)
+
+	if err := g.GoTo(a.State, a.parser, ch); err != nil {
+		logWrap(err, "Failed to go to channel")
+		return
+	}
+
+	must(a.setMessageCol, ch.Messages)
+	must(a.Grid.ShowAll)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		must(ch.Messages.SmartScroll)
+	}()
 }
 
 func (a *Application) wait() {

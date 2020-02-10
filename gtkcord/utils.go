@@ -2,7 +2,6 @@ package gtkcord
 
 import (
 	"log"
-	"runtime"
 
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -14,8 +13,12 @@ var logError = func(err error) {
 }
 
 func must(fn interface{}, args ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	log.Println("IdleAdd @", file+":", line)
+	// _, file, line, _ := runtime.Caller(1)
+	// log.Println("IdleAdd @", file+":", line)
+
+	if len(args) > 1 {
+		panic("BUG!")
+	}
 
 	if _, err := glib.IdleAdd(fn, args...); err != nil {
 		logError(errors.Wrap(err, "FATAL: IdleAdd in must()"))

@@ -110,6 +110,7 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 		if b := append(escape(s.prev), s.chunk...); len(b) > 0 {
 			s.iterMu.Lock()
+			log.Println("vvv", string(b))
 			buf.InsertMarkup(buf.GetEndIter(), string(b))
 			s.iterMu.Unlock()
 		}
@@ -120,6 +121,7 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	iter := buf.GetEndIter()
 
+	log.Println("last", string(md[s.last:]))
 	buf.InsertMarkup(iter, string(md[s.last:]))
 
 	// Flush:

@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/httpcache"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -43,6 +44,22 @@ type Channel struct {
 
 	ID       discord.Snowflake
 	Category bool
+
+	Messages *Messages
+}
+
+func (ch *Channel) loadMessages(s *state.State, parser *md.Parser) error {
+	if ch.Messages == nil {
+		ch.Messages = &Messages{
+			ChannelID: ch.ID,
+		}
+	}
+
+	if err := ch.Messages.Reset(s, parser); err != nil {
+		return errors.Wrap(err, "Failed to reset messages in channel")
+	}
+
+	return nil
 }
 
 func (g *Guild) loadChannels(
@@ -120,6 +137,10 @@ func (g *Guild) loadChannels(
 		row := g.Channels.Channels[r.GetIndex()]
 		onChannel(g, row)
 	})
+
+	/*
+	 * === Messages ===
+	 */
 
 	return nil
 }

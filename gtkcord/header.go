@@ -118,7 +118,7 @@ func (h *Header) hookGuild(g *discord.Guild) {
 		return
 	}
 
-	h.GuildName.SetMarkup(bold(g.Name))
+	must(h.GuildName.SetMarkup, bold(g.Name))
 }
 
 func (h *Header) hookChannel(ch *discord.Channel) {
@@ -128,6 +128,6 @@ func (h *Header) hookChannel(ch *discord.Channel) {
 		return
 	}
 
-	h.ChannelName.SetMarkup(ChannelHash + bold(ch.Name))
-	h.ChannelTopic.SetText(ch.Topic)
+	must(h.ChannelName.SetMarkup, ChannelHash+bold(ch.Name))
+	must(h.ChannelTopic.SetText, ch.Topic)
 }

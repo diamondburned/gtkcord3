@@ -2,7 +2,6 @@ package md
 
 import (
 	"bytes"
-	"log"
 	"regexp"
 	"sync"
 
@@ -219,7 +218,6 @@ func (s *mdState) submatch(r *regexp.Regexp, input []byte) {
 			// We know 1-10 are not emojis:
 			for i := 1; i < len(matches) && i < 10; i++ {
 				if len(matches[i].str) > 0 && matches[i].str[0] != '\n' {
-					log.Println("Found", i, string(matches[i].str))
 					s.hasText = true
 				}
 			}
@@ -250,8 +248,10 @@ func (s *mdState) renderCodeBlock(lang, content []byte) []byte {
 		if ok {
 			lexer = v.(chroma.Lexer)
 		} else {
-			lexer = lexers.Get(lang)
-			lexerMap.Store(lang, lexer)
+			if l := lexers.Get(lang); l != nil {
+				lexer = l
+				lexerMap.Store(lang, lexer)
+			}
 		}
 
 	} else {

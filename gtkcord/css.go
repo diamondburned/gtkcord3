@@ -9,6 +9,7 @@ import (
 const CSS = `
 headerbar { padding: 0; }
 headerbar button { box-shadow: none; }
+textview, textview > text { background-color: transparent; }
 `
 
 var CustomCSS string
