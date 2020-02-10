@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/state"
@@ -35,7 +36,10 @@ type Application struct {
 	sbox      *gtk.Box
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
-	css       *gtk.CssProvider
+
+	busy sync.Mutex
+
+	css *gtk.CssProvider
 
 	parser *md.Parser
 
@@ -91,24 +95,24 @@ func (a *Application) UseState(s *state.State) error {
 
 	// 100 goroutines is pretty cheap (lol)
 	for _, g := range a.Guilds.Guilds {
-		go func(g *Guild) {
-			_, err := s.Channels(g.ID)
-			if err != nil {
-				logWrap(err, "Failed to pre-fetch channels")
-			}
-		}(g)
+		_, err := s.Channels(g.ID)
+		if err != nil {
+			logWrap(err, "Failed to pre-fetch channels")
+		}
 
 		if g.Folder != nil {
 			for _, g := range g.Folder.Guilds {
-				go func(g *Guild) {
-					_, err := s.Channels(g.ID)
-					if err != nil {
-						logWrap(err, "Failed to pre-fetch channels")
-					}
-				}(g)
+				_, err := s.Channels(g.ID)
+				if err != nil {
+					logWrap(err, "Failed to pre-fetch channels")
+				}
 			}
 		}
 	}
+
+	// s.AddHandler(func(m *gateway.MessageCreateEvent) {
+
+	// })
 
 	a.wait()
 
@@ -208,13 +212,20 @@ func (a *Application) loadGuild(g *Guild) {
 		a.Grid.Remove(a.Sidebar)
 	}
 
+	// Start the busy mutex early on, so we could use the shared spinner.
+	a.busy.Lock()
 	a.spinner.Start()
 	a.setChannelCol(a.sbox)
 
-	go a._loadGuild(g)
+	go func() {
+		a._loadGuild(g)
+		a.loadChannel(g, g.Current())
+	}()
 }
 
 func (a *Application) _loadGuild(g *Guild) {
+	defer a.busy.Unlock()
+
 	dg, err := a.State.Guild(g.ID)
 	if err != nil {
 		logWrap(err, "Failed to get guild")
@@ -240,13 +251,25 @@ func (a *Application) _loadGuild(g *Guild) {
 	}
 
 	must(a.Grid.ShowAll)
-
-	// Run hooks
 	a.Header.hookGuild(dg)
-	a.loadChannel(g, g.Current())
 }
 
 func (a *Application) loadChannel(g *Guild, ch *Channel) {
+	if a.Messages != nil {
+		a.Grid.Remove(a.Messages)
+	}
+
+	// Start the busy mutex early on, so we could use the shared spinner.
+	a.busy.Lock()
+	a.spinner.Start()
+	a.setMessageCol(a.sbox)
+
+	go a._loadChannel(g, ch)
+}
+
+func (a *Application) _loadChannel(g *Guild, ch *Channel) {
+	defer a.busy.Unlock()
+
 	if a.Messages != nil {
 		a.Grid.Remove(a.Messages)
 	}
@@ -268,6 +291,7 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 	must(a.setMessageCol, ch.Messages)
 	must(a.Grid.ShowAll)
 	go func() {
+		// Workaround for Gtk being crappy:
 		time.Sleep(50 * time.Millisecond)
 		must(ch.Messages.SmartScroll)
 	}()

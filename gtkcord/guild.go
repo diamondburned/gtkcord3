@@ -7,7 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/httpcache"
+	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -266,14 +266,8 @@ func (g *Guild) GoTo(s *state.State, parser *md.Parser, ch *Channel) error {
 func (g *Guild) UpdateImage(url string) {
 	var animated = url[:len(url)-4] == ".gif"
 
-	b, err := httpcache.HTTPGet(url + "?size=64")
-	if err != nil {
-		logWrap(err, "Failed to GET URL "+url)
-		return
-	}
-
 	if !animated {
-		p, err := NewPixbuf(b, PbSize(IconSize, IconSize))
+		p, err := pbpool.DownloadScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild icon")
 			return
@@ -282,7 +276,7 @@ func (g *Guild) UpdateImage(url string) {
 		g.Pixbuf = &Pixbuf{p, nil}
 		g.Pixbuf.Set(g.Image)
 	} else {
-		p, err := NewAnimator(b, PbSize(IconSize, IconSize))
+		p, err := pbpool.GetAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild animation")
 			return
