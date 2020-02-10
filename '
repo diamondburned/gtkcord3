@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -68,16 +69,16 @@ func (s *mdState) tagAttr(token []byte) {
 func (s *mdState) switchTree(i int) {
 	switch {
 	case len(s.matches[i][2].str) > 0:
-		code := string(s.renderCodeBlock(
+		s.buf.InsertMarkup(s.buf.GetEndIter(), string(s.renderCodeBlock(
 			s.matches[i][1].str,
 			s.matches[i][2].str,
-		))
-
-		s.buf.InsertMarkup(s.buf.GetEndIter(), code)
+		)))
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
-		s.insertWithTag(s.matches[i][3].str, s.state.With(AttrQuoted))
+		s.buf.InsertWithTag(
+			s.buf.GetEndIter(),
+			string(s.matches[i][3].str), s.state.With(AttrQuoted))
 
 	case len(s.matches[i][4].str) > 0:
 		// inline stuff
@@ -129,7 +130,9 @@ func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
 	if tag == nil {
 		tag = s.state.Get()
 	}
-	s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
+	glib.IdleAdd(func() {
+		s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
+	})
 }
 
 func (s *mdState) getLastIndex(currentIndex int) int32 {
@@ -143,7 +146,6 @@ func (s *mdState) getLastIndex(currentIndex int) int32 {
 func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 	found := regex.FindAllSubmatchIndex(input, -1)
 
-	s.buf = buf
 	s.last = 0
 	s.prev = s.prev[:0]
 	s.hasText = false

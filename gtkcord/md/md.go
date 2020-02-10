@@ -1,7 +1,6 @@
 package md
 
 import (
-	"bytes"
 	"log"
 	"regexp"
 	"strings"
@@ -18,14 +17,12 @@ var regexes = []string{
 	`(?:^\x60\x60\x60 *(\w*)([\s\S]*?)\n?\x60\x60\x60$)`,
 	// blockquote
 	`((?:(?:^|\n)^>\s+.*)+)\n`,
-	// Bullet points, but there's no capture group (disabled)
-	`(?:(?:^|\n)(?:[>*+-]|\d+\.)\s+.*)+`,
 	// This is actually inline code
-	`(?:\x60([^\x60].*?)\x60)`,
+	// `(?:\x60([^\x60].*?)\x60)`,
 	// Inline markup stuff
-	`(__|\*\*\*|\*\*|[_*]|~~|\|\|)`,
+	`(__|\x60|\*\*\*|\*\*|[_*]|~~|\|\|)`,
 	// Hyperlinks
-	`(https?:\/\S+(?:\.|:)\S+)`,
+	`<?(https?:\/\S+(?:\.|:)[^>\s]+)>?`,
 	// User mentions
 	`(?:<@!?(\d+)>)`,
 	// Role mentions
@@ -61,6 +58,7 @@ type Parser struct {
 }
 
 func NewParser(s *state.State) *Parser {
+	log.Println("Regex", strings.Join(regexes, "|"))
 	i, err := gtk.IconThemeGetDefault()
 	if err != nil {
 		// We can panic here, as nothing would work if this ever panics.
@@ -85,77 +83,33 @@ func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
 
 func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer) {
 	s := p.pool.Get().(*mdState)
-	defer func() {
-		go func() {
-			s.iterWg.Wait()
-			p.pool.Put(s)
-		}()
-	}()
 
-	s.submatch(regex, md)
+	s.state.Use(buf)
+	s.use(buf, md)
 
 	var tree func(i int)
 	if s == nil || m == nil {
-		tree = s.switchTree(buf)
+		tree = s.switchTree
 	} else {
-		tree = s.switchTreeMessage(buf, m)
+		tree = s.switchTreeMessage(m)
 	}
+
+	s.iterMu.Lock()
 
 	for i := 0; i < len(s.matches); i++ {
 		s.prev = md[s.last:s.matches[i][0].from]
 		s.last = s.getLastIndex(i)
-		s.chunk = s.chunk[:0] // reset chunk
 
+		s.insertWithTag(s.prev, nil)
 		tree(i)
-
-		if b := append(escape(s.prev), s.chunk...); len(b) > 0 {
-			s.iterMu.Lock()
-			log.Println("vvv", string(b))
-			buf.InsertMarkup(buf.GetEndIter(), string(b))
-			s.iterMu.Unlock()
-		}
 	}
 
-	s.iterMu.Lock()
-	defer s.iterMu.Unlock()
+	s.insertWithTag(md[s.last:], nil)
 
-	iter := buf.GetEndIter()
+	s.iterMu.Unlock()
 
-	log.Println("last", string(md[s.last:]))
-	buf.InsertMarkup(iter, string(md[s.last:]))
+	s.iterWg.Wait()
 
-	// Flush:
-	for len(s.context) > 0 {
-		buf.InsertMarkup(iter, string(s.tag(s.context[len(s.context)-1])))
-	}
-}
-
-func renderBlockquote(body []byte) []byte {
-	return bytes.Join([][]byte{quoteSpan[0], escape(body), quoteSpan[1]}, nil)
-}
-
-func escape(thing []byte) []byte {
-	if len(thing) == 0 {
-		return nil
-	}
-
-	// escaped := thing[:0]
-	escaped := make([]byte, 0, len(thing))
-
-	for i := 0; i < len(thing); i++ {
-		switch thing[i] {
-		case '&':
-			escaped = append(escaped, escapes[0]...)
-		case '\'':
-			escaped = append(escaped, escapes[1]...)
-		case '<':
-			escaped = append(escaped, escapes[2]...)
-		case '>':
-			escaped = append(escaped, escapes[3]...)
-		default:
-			escaped = append(escaped, thing[i])
-		}
-	}
-
-	return escaped
+	s.buf = nil
+	p.pool.Put(s)
 }

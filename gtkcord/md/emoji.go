@@ -1,7 +1,10 @@
 package md
 
 import (
-	"github.com/diamondburned/gtkcord3/httpcache"
+	"io/ioutil"
+	"log"
+	"net/http"
+
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -23,27 +26,20 @@ var (
 	LargeSize  = 48
 )
 
-func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) error {
+func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) {
 	var sz = InlineSize
 	if !s.hasText {
 		sz = LargeSize
 	}
 
-	i, err := s.p.theme.LoadIcon(
-		"user-available-symbolic",
-		sz, gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
-	if err != nil {
-		return errors.Wrap(err, "Failed to get user-available-symbolic icon")
-	}
-
-	// Lock the iter mutex:
-	s.iterMu.Lock()
-	defer s.iterMu.Unlock()
-
 	iter := buf.GetEndIter()
 
-	// Pre-insert s.prev:
-	buf.InsertMarkup(iter, string(escape(s.prev)))
+	i, err := s.p.theme.LoadIcon("user-available-symbolic", sz, gtk.ICON_LOOKUP_FORCE_SIZE)
+	if err != nil {
+		buf.Insert(iter, "[broken emoji]")
+		log.Println("Markdown: Failed to get user-available-symbolic icon:", err)
+		return
+	}
 
 	// Preserve position:
 	lastIndex := iter.GetLineIndex()
@@ -52,19 +48,22 @@ func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) error {
 	// Insert Pixbuf after s.prev:
 	buf.InsertPixbuf(iter, i)
 
-	// Clear so the buffers don't get added again:
-	s.chunk = s.chunk[:0]
-	s.prev = s.prev[:0]
-
 	// Add to the waitgroup, so we know when to put the state back.
 	s.iterWg.Add(1)
 
 	go func() {
 		defer s.iterWg.Done()
 
-		b, err := httpcache.HTTPGet(url + "?size=64")
+		r, err := http.DefaultClient.Get(url + "?size=64")
 		if err != nil {
 			s.p.Error(errors.Wrap(err, "Failed to GET "+url))
+			return
+		}
+		defer r.Body.Close()
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.p.Error(errors.Wrap(err, "Failed to download "+url))
 			return
 		}
 
@@ -100,6 +99,4 @@ func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) error {
 			buf.InsertPixbuf(lastIter, pixbuf)
 		})
 	}()
-
-	return nil
 }
