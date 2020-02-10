@@ -108,8 +108,9 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.iterMu.Unlock()
 
-	s.iterWg.Wait()
-
-	s.buf = nil
-	p.pool.Put(s)
+	go func() {
+		s.iterWg.Wait()
+		s.buf = nil
+		p.pool.Put(s)
+	}()
 }

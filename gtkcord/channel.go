@@ -7,7 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/httpcache"
+	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -21,7 +21,7 @@ const (
 )
 
 type Channels struct {
-	gtk.IWidget
+	SensitiveWidget
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -91,9 +91,9 @@ func (g *Guild) loadChannels(
 	must(cs.Add, main)
 
 	g.Channels = &Channels{
-		IWidget: cs,
-		Scroll:  cs,
-		Main:    main,
+		SensitiveWidget: cs,
+		Scroll:          cs,
+		Main:            main,
 	}
 
 	/*
@@ -213,13 +213,7 @@ func newDMChannel(ch discord.Channel) (*Channel, error) {
 }
 
 func (g *Guild) UpdateBanner(url string) {
-	b, err := httpcache.HTTPGet(url + "?size=512")
-	if err != nil {
-		logWrap(err, "Failed to GET URL "+url)
-		return
-	}
-
-	p, err := NewPixbuf(b, PbSize(ChannelsWidth, BannerHeight))
+	p, err := pbpool.DownloadScaled(url+"?size=512", ChannelsWidth, BannerHeight)
 	if err != nil {
 		logWrap(err, "Failed to get the pixbuf guild icon")
 		return

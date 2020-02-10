@@ -80,7 +80,7 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 	f := &Guild{
 		// Iter:  store.Append(nil),
 		// Store: store,
-		IWidget: mainEv,
+		SensitiveWidget: mainEv,
 		Folder: &GuildFolder{
 			Revealer: folderRev,
 			List:     guildList,
@@ -108,7 +108,7 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 		)
 
 		f.Folder.Guilds = append(f.Folder.Guilds, r)
-		guildList.Add(r.IWidget)
+		guildList.Add(r)
 	}
 
 	return f, nil

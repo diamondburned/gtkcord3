@@ -29,20 +29,8 @@ type Guilds struct {
 }
 
 type Guild struct {
-	gtk.IWidget
+	SensitiveWidget
 	Row *gtk.ListBoxRow
-
-	/* Tree logic
-
-	*gtk.TreeIter
-	Folder *GuildFolder // can be non-nil
-
-	Parent *gtk.TreeIter
-	Iter   *gtk.TreeIter
-	Path   *gtk.TreePath
-	Store  *gtk.TreeStore
-
-	*/
 
 	Folder *GuildFolder
 
@@ -158,12 +146,11 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 	ctx.AddClass("guild")
 
 	for _, r := range rows {
-		must(l.Add, r.IWidget)
+		must(l.Add, r)
 	}
 
 	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := rows[r.GetIndex()]
-
 		if row.Folder == nil {
 			// Collapse all revealers:
 			for _, r := range rows {
@@ -210,18 +197,14 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get image-loading icon")
 	}
-	// i.SetTooltipText(guild.Name)
 
 	must(r.Add, i)
 
 	g := &Guild{
-		IWidget: r,
-		Row:     r,
-		ID:      guild.ID,
-		Image:   i,
-		// Iter:       store.Append(parent),
-		// Store:      store,
-		// Parent:     parent,
+		SensitiveWidget: r,
+		Row:             r,
+		ID:              guild.ID,
+		Image:           i,
 	}
 
 	var url = guild.IconURL()
@@ -276,7 +259,7 @@ func (g *Guild) UpdateImage(url string) {
 		g.Pixbuf = &Pixbuf{p, nil}
 		g.Pixbuf.Set(g.Image)
 	} else {
-		p, err := pbpool.GetAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
+		p, err := pbpool.DownloadAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild animation")
 			return

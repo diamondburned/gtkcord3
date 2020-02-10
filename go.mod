@@ -12,6 +12,7 @@ require (
 	github.com/gotk3/gotk3 v0.0.0-20200129211157-69caac910e50
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/pkg/errors v0.8.1
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

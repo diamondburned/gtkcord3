@@ -1,11 +1,10 @@
 package md
 
 import (
-	"io/ioutil"
 	"log"
-	"net/http"
 
-	"github.com/gotk3/gotk3/gdk"
+	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -26,17 +25,17 @@ var (
 	LargeSize  = 48
 )
 
-func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) {
+func (s *mdState) InsertAsyncPixbuf(url string) {
 	var sz = InlineSize
 	if !s.hasText {
 		sz = LargeSize
 	}
 
-	iter := buf.GetEndIter()
+	iter := s.buf.GetEndIter()
 
 	i, err := s.p.theme.LoadIcon("user-available-symbolic", sz, gtk.ICON_LOOKUP_FORCE_SIZE)
 	if err != nil {
-		buf.Insert(iter, "[broken emoji]")
+		s.buf.Insert(iter, "[broken emoji]")
 		log.Println("Markdown: Failed to get user-available-symbolic icon:", err)
 		return
 	}
@@ -46,57 +45,34 @@ func (s *mdState) InsertAsyncPixbuf(buf *gtk.TextBuffer, url string) {
 	lastLine := iter.GetLine()
 
 	// Insert Pixbuf after s.prev:
-	buf.InsertPixbuf(iter, i)
+	s.buf.InsertPixbuf(iter, i)
 
 	// Add to the waitgroup, so we know when to put the state back.
-	s.iterWg.Add(1)
+	s.iterWg.Add(2)
 
-	go func() {
+	semaphore.Go(func() {
 		defer s.iterWg.Done()
 
-		r, err := http.DefaultClient.Get(url + "?size=64")
+		pixbuf, err := pbpool.GetScaled(url+"?size=64", sz, sz)
 		if err != nil {
 			s.p.Error(errors.Wrap(err, "Failed to GET "+url))
 			return
 		}
-		defer r.Body.Close()
-
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			s.p.Error(errors.Wrap(err, "Failed to download "+url))
-			return
-		}
-
-		l, err := gdk.PixbufLoaderNew()
-		if err != nil {
-			s.p.Error(errors.Wrap(err, "Failed to create a new pixbuf loader"))
-			return
-		}
-
-		l.SetSize(sz, sz)
-
-		if _, err := l.Write(b); err != nil {
-			s.p.Error(errors.Wrap(err, "Failed to set image to pixbuf"))
-			return
-		}
-
-		pixbuf, err := l.GetPixbuf()
-		if err != nil {
-			s.p.Error(errors.Wrap(err, "Failed to create pixbuf"))
-			return
-		}
 
 		// Try and replace the last inserted pixbuf with ours:
-		glib.IdleAdd(func() {
+		glib.IdleAdd(func(s *mdState) bool {
 			s.iterMu.Lock()
 			defer s.iterMu.Unlock()
+			defer s.iterWg.Done()
 
-			lastIter := buf.GetIterAtLineIndex(lastLine, lastIndex)
-			lastIterFwd := buf.GetIterAtLineIndex(lastLine, lastIndex)
+			lastIter := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
+			lastIterFwd := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
 			lastIterFwd.ForwardChar()
 
-			buf.Delete(lastIter, lastIterFwd)
-			buf.InsertPixbuf(lastIter, pixbuf)
-		})
-	}()
+			s.buf.Delete(lastIter, lastIterFwd)
+			s.buf.InsertPixbuf(lastIter, pixbuf)
+
+			return false
+		}, s)
+	})
 }

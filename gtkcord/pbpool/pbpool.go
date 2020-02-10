@@ -85,13 +85,9 @@ func getScaled(
 		return nil, errors.Wrap(err, "Failed to create a new pixbuf loader")
 	}
 
-	if _, err := l.Write(b); err != nil {
-		return nil, errors.Wrap(err, "Failed to set image to pixbuf")
-	}
-
-	p, err := l.GetPixbuf()
+	p, err := l.WriteAndReturnPixbuf(b)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get the pixbuf icon")
+		return nil, errors.Wrap(err, "Failed to set image to pixbuf")
 	}
 
 	if len(b) <= MaxCacheSize && cache {
@@ -154,13 +150,9 @@ func getAnimationScaled(
 		return nil, errors.Wrap(err, "Failed to create a new pixbuf loader")
 	}
 
-	if _, err := l.Write(b); err != nil {
-		return nil, errors.Wrap(err, "Failed to set image to pixbuf")
-	}
-
-	p, err := l.GetAnimation()
+	p, err := l.WriteAndReturnPixbufAnimation(b)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get the pixbuf icon")
+		return nil, errors.Wrap(err, "Failed to set image to pixbuf")
 	}
 
 	if len(b) <= MaxCacheSize && cache {

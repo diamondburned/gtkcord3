@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/state"
@@ -19,6 +19,11 @@ var (
 	}
 )
 
+type SensitiveWidget interface {
+	gtk.IWidget
+	SetSensitive(bool)
+}
+
 type Application struct {
 	State  *state.State
 	Window *gtk.Window
@@ -26,8 +31,8 @@ type Application struct {
 	Grid   *gtk.Grid
 
 	// Dynamic sidebars and main pages
-	Sidebar  gtk.IWidget
-	Messages gtk.IWidget
+	Sidebar  SensitiveWidget
+	Messages SensitiveWidget
 
 	// Stuff
 	Guilds *Guilds
@@ -37,12 +42,10 @@ type Application struct {
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
 
-	busy sync.Mutex
-
-	css *gtk.CssProvider
-
+	css    *gtk.CssProvider
 	parser *md.Parser
 
+	busy atomic.Value
 	done chan struct{}
 }
 
@@ -198,11 +201,11 @@ func (a *Application) close() {
 	}
 }
 
-func (a *Application) setChannelCol(w gtk.IWidget) {
+func (a *Application) setChannelCol(w SensitiveWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
-func (a *Application) setMessageCol(w gtk.IWidget) {
+func (a *Application) setMessageCol(w SensitiveWidget) {
 	a.Messages = w
 	a.Grid.Attach(w, 4, 0, 1, 1)
 }
@@ -212,19 +215,15 @@ func (a *Application) loadGuild(g *Guild) {
 		a.Grid.Remove(a.Sidebar)
 	}
 
-	// Start the busy mutex early on, so we could use the shared spinner.
-	a.busy.Lock()
+	a.Guilds.SetSensitive(false)
 	a.spinner.Start()
 	a.setChannelCol(a.sbox)
 
-	go func() {
-		a._loadGuild(g)
-		a.loadChannel(g, g.Current())
-	}()
+	go a._loadGuild(g)
 }
 
 func (a *Application) _loadGuild(g *Guild) {
-	defer a.busy.Unlock()
+	defer a.Guilds.SetSensitive(true)
 
 	dg, err := a.State.Guild(g.ID)
 	if err != nil {
@@ -239,7 +238,7 @@ func (a *Application) _loadGuild(g *Guild) {
 
 	must(a.spinner.Stop)
 	must(a.Grid.Remove, a.sbox)
-	must(a.setChannelCol, g.Channels.IWidget)
+	must(a.setChannelCol, g.Channels)
 
 	if a.Sidebar == nil {
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
@@ -252,6 +251,7 @@ func (a *Application) _loadGuild(g *Guild) {
 
 	must(a.Grid.ShowAll)
 	a.Header.hookGuild(dg)
+	a.loadChannel(g, g.Current())
 }
 
 func (a *Application) loadChannel(g *Guild, ch *Channel) {
@@ -259,8 +259,7 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 		a.Grid.Remove(a.Messages)
 	}
 
-	// Start the busy mutex early on, so we could use the shared spinner.
-	a.busy.Lock()
+	g.Channels.Main.SetSensitive(false)
 	a.spinner.Start()
 	a.setMessageCol(a.sbox)
 
@@ -268,11 +267,7 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 }
 
 func (a *Application) _loadChannel(g *Guild, ch *Channel) {
-	defer a.busy.Unlock()
-
-	if a.Messages != nil {
-		a.Grid.Remove(a.Messages)
-	}
+	defer g.Channels.Main.SetSensitive(true)
 
 	dch, err := a.State.Channel(ch.ID)
 	if err != nil {
@@ -288,8 +283,12 @@ func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 		return
 	}
 
+	must(a.spinner.Stop)
+	must(a.Grid.Remove, a.sbox)
 	must(a.setMessageCol, ch.Messages)
+
 	must(a.Grid.ShowAll)
+
 	go func() {
 		// Workaround for Gtk being crappy:
 		time.Sleep(50 * time.Millisecond)

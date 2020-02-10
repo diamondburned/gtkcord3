@@ -77,7 +77,7 @@ func (s *mdState) switchTree(i int) {
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
-		s.insertWithTag(s.matches[i][3].str, s.state.With(AttrQuoted))
+		s.insertWithTag(append(s.matches[i][3].str, '\n'), s.state.With(AttrQuoted))
 
 	case len(s.matches[i][4].str) > 0:
 		// inline stuff
@@ -90,8 +90,7 @@ func (s *mdState) switchTree(i int) {
 	case len(s.matches[i][9].str) > 0:
 		// Emojis
 		var animated = len(s.matches[i][10].str) > 0
-		s.InsertAsyncPixbuf(s.buf,
-			EmojiURL(string(s.matches[i][11].str), animated))
+		s.InsertAsyncPixbuf(EmojiURL(string(s.matches[i][11].str), animated))
 
 	case bytes.Count(s.prev, []byte(`\`))%2 != 0:
 		// Escaped:
@@ -182,7 +181,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 		// If we still don't know if there are texts:
 		if !s.hasText {
 			// We know 1-10 are not emojis:
-			for i := 1; i < len(matches) && i < 10; i++ {
+			for i := 1; i < len(matches) && i < 9; i++ {
 				if len(matches[i].str) > 0 && matches[i].str[0] != '\n' {
 					s.hasText = true
 				}

@@ -9,17 +9,19 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 const (
-	DefaultFetch = 25
-	AvatarSize   = 42 // gtk.ICON_SIZE_DND
+	DefaultFetch  = 25
+	AvatarSize    = 42 // gtk.ICON_SIZE_DND
+	AvatarPadding = 10
 )
 
 type Messages struct {
-	gtk.IWidget
+	SensitiveWidget
 	Main      *gtk.Box
 	Scroll    *gtk.ScrolledWindow
 	Viewport  *gtk.Viewport
@@ -53,7 +55,7 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 			return errors.Wrap(err, "Failed to create channel scroller")
 		}
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
-		m.IWidget = s
+		m.SensitiveWidget = s
 		m.Scroll = s
 
 		must(s.Add, v)
@@ -144,9 +146,11 @@ func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Mess
 		return
 	}
 	if update.Content != "" {
-		go target.UpdateContent(update)
+		target.UpdateContent(update)
 	}
-	go target.UpdateExtras(update)
+	semaphore.Go(func() {
+		target.UpdateExtras(update)
+	})
 }
 
 func (m *Messages) SmartScroll() {
@@ -207,31 +211,16 @@ func newMessage(s *state.State, parser *md.Parser, m discord.Message) (*Message,
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create main box")
 	}
-	margin(&main.Widget, 15)
-
-	//
-	//
-
-	avatar, err := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_DND)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create avatar user-info")
-	}
-	avatar.SetSizeRequest(AvatarSize, AvatarSize)
-	avatar.SetProperty("yalign", 0.0)
-	avatar.SetMarginEnd(10)
-	main.Add(avatar)
-
-	//
-	//
 
 	right, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create right box")
 	}
-	must(main.Add, right)
 
-	//
-	//
+	avatar, err := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_DND)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create avatar user-info")
+	}
 
 	rtop, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	if err != nil {
@@ -242,16 +231,6 @@ func newMessage(s *state.State, parser *md.Parser, m discord.Message) (*Message,
 		return nil, errors.Wrap(err, "Failed to create right bottom box")
 	}
 
-	must(func() {
-		right.Add(rtop)
-
-		rbottom.SetHExpand(true)
-		right.Add(rbottom)
-	})
-
-	//
-	//
-
 	author, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create author label")
@@ -260,20 +239,6 @@ func newMessage(s *state.State, parser *md.Parser, m discord.Message) (*Message,
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create timestamp label")
 	}
-
-	must(func() {
-		author.SetMarkup(bold(m.Author.Username))
-		rtop.Add(author)
-
-		timestamp.SetMarkup(
-			`<span font_size="smaller">` + m.Timestamp.Format(time.Kitchen) + "</span>")
-		timestamp.SetOpacity(0.75)
-		timestamp.SetMarginStart(10)
-		rtop.Add(timestamp)
-	})
-
-	//
-	//
 
 	ttt, err := gtk.TextTagTableNew()
 	if err != nil {
@@ -284,9 +249,31 @@ func newMessage(s *state.State, parser *md.Parser, m discord.Message) (*Message,
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a text buffer")
 	}
-	// must(msgTb.SetText, m.Content)
 
-	must(func() {
+	// What the fuck?
+	must(func() bool {
+		margin(&main.Widget, 15)
+
+		avatar.SetSizeRequest(AvatarSize, AvatarSize)
+		avatar.SetProperty("yalign", 0.0)
+		avatar.SetMarginEnd(AvatarPadding)
+		main.Add(avatar)
+
+		main.Add(right)
+
+		right.Add(rtop)
+		rbottom.SetHExpand(true)
+		right.Add(rbottom)
+
+		author.SetMarkup(bold(m.Author.Username))
+		rtop.Add(author)
+
+		timestamp.SetMarkup(
+			`<span font_size="smaller">` + m.Timestamp.Format(time.Kitchen) + "</span>")
+		timestamp.SetOpacity(0.75)
+		timestamp.SetMarginStart(10)
+		rtop.Add(timestamp)
+
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
 			panic("Die: " + err.Error())
@@ -295,6 +282,8 @@ func newMessage(s *state.State, parser *md.Parser, m discord.Message) (*Message,
 		msgTv.SetCursorVisible(false)
 		msgTv.SetEditable(false)
 		rbottom.Add(msgTv)
+
+		return false
 	})
 
 	message := Message{
