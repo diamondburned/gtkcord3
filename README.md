@@ -18,7 +18,7 @@ GtkCord:
 
 The developer of GtkCord is currently working on a login, so that you no longer need to set the TOKEN variable.
 
-#### 1. Set the TOKEN variable to your Discord key
+### 1. Set the TOKEN variable to your Discord key
 
 You can find this key by:
 - Press F12 in when Discord is open
@@ -29,12 +29,12 @@ You can find this key by:
 EXPORT TOKEN=your-discord-key
 ```
 
-#### 2. Compile and run GtkCord
+### 2. Compile and run GtkCord
 ```bash
 run go run .
 ```
 
-### Current features
+## Current features
 - [X] See a list with Discord servers
 - [X] See a list of channels
 - [X] See the messages of the selected channel
