@@ -14,7 +14,7 @@ GtkCord:
 - Uses your prefered GTK theme
 
 ## Build GtkCord
-**Required:** _go_ and _gtk_
+**Required:** go, gtk
 
 The developer of GtkCord is currently working on a login, so that you no longer need to set the TOKEN variable.
 
@@ -23,7 +23,7 @@ The developer of GtkCord is currently working on a login, so that you no longer 
 You can find this key by:
 - Press F12 in when Discord is open
 - Press F5 to refresh the page and go to the network tab
-- Search 'api guild' and search for Authorisation in the right column
+- Search 'api library' and search for Authorization in the right column
 
 ```bash
 EXPORT TOKEN=your-discord-key
@@ -38,6 +38,9 @@ run go run .
 - [X] See a list with Discord servers
 - [X] See a list of channels
 - [X] See the messages of the selected channel
+- [ ] Send messages
+- [ ] React to messages
 - [ ] Graphical login
 - [ ] Options menu with the same options which discord has
 - [ ] Change the visibility of your online state (invisible, away, online)
+- [ ] Voice chat support
