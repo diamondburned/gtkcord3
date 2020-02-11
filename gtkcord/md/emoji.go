@@ -6,7 +6,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
@@ -33,10 +32,10 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 
 	iter := s.buf.GetEndIter()
 
-	i, err := s.p.theme.LoadIcon("user-available-symbolic", sz, gtk.ICON_LOOKUP_FORCE_SIZE)
-	if err != nil {
+	i := s.p.GetIcon("image-missing", sz)
+	if i == nil {
 		s.buf.Insert(iter, "[broken emoji]")
-		log.Println("Markdown: Failed to get user-available-symbolic icon:", err)
+		log.Println("Markdown: Failed to get image-missing icon")
 		return
 	}
 

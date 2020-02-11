@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -25,10 +26,21 @@ var logError = func(err error) {
 		file3, line3, file2, line2, file1, line1, err)
 }
 
-func must(fn interface{}, args ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	file = filepath.Base(file)
+func debugMust(enable bool) func() {
+	if !enable {
+		return func() {}
+	}
 
+	_, file, line, _ := runtime.Caller(2)
+	pos := filepath.Base(file) + ":" + strconv.Itoa(line)
+
+	return func() {
+		log.Println("IdleAdd @ " + pos)
+	}
+}
+
+func must(fn interface{}, args ...interface{}) {
+	var debug = debugMust(true)
 	var err error
 
 	switch len(args) {
@@ -38,7 +50,7 @@ func must(fn interface{}, args ...interface{}) {
 			_, err = glib.IdleAdd(fn)
 		case func():
 			_, err = glib.IdleAdd(func() bool {
-				log.Println("IdleAdd @", file+":", line)
+				debug()
 				fn.(func())()
 				return false
 			})
@@ -51,7 +63,7 @@ func must(fn interface{}, args ...interface{}) {
 		argV := reflect.ValueOf(args[0])
 
 		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
-			log.Println("IdleAdd @", file+":", line)
+			debug()
 			values[0].Call([]reflect.Value{values[1]})
 			return false
 		}, [2]reflect.Value{fnV, argV})

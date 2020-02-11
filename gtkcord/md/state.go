@@ -52,17 +52,29 @@ type mdState struct {
 	buffer *bytes.Buffer
 }
 
-func (s *mdState) tagAttr(token []byte) {
+func (s *mdState) tagAttr(token []byte) []byte {
 	attr := TagAttribute(token)
 	if attr == 0 {
-		return
+		return token
 	}
 
 	if s.state.Attr().Has(attr) {
 		s.state.Remove(attr)
-	} else {
-		s.state.Add(attr)
+		return nil
 	}
+
+	// If the current token starts inline code, we don't want anything else.
+	if attr == AttrMonospace {
+		s.state.Reset()
+	}
+	// If the state is already an inline code, we don't want any markup. Treat
+	// tokens as plain text.
+	if s.state.Attr().Has(AttrMonospace) {
+		return token
+	}
+
+	s.state.Add(attr)
+	return nil
 }
 
 func (s *mdState) switchTree(i int) {
@@ -81,7 +93,9 @@ func (s *mdState) switchTree(i int) {
 
 	case len(s.matches[i][4].str) > 0:
 		// inline stuff
-		s.tagAttr(s.matches[i][4].str)
+		if token := s.tagAttr(s.matches[i][4].str); token != nil {
+			s.insertWithTag(token, nil)
+		}
 
 	case len(s.matches[i][5].str) > 0:
 		// TODO URLs

@@ -301,8 +301,6 @@ func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 	must(a.setMessageCol, ch.Messages)
 
 	must(ch.Messages.ShowAll)
-
-	ch.Messages.SmartScroll()
 }
 
 func (a *Application) wait() {

@@ -35,6 +35,8 @@ func TagAttribute(tag []byte) Attribute {
 		return AttrBold | AttrItalics
 	case bytes.Equal(tag, []byte("~~")):
 		return AttrStrikethrough
+	case bytes.Equal(tag, []byte("`")):
+		return AttrMonospace
 	}
 	return 0
 }
@@ -101,7 +103,7 @@ func ColorTag(buf *gtk.TextBuffer, name string, attr Attribute, color string) *g
 		attrs["foreground"] = "#808080"
 	}
 	if attr.Has(AttrMonospace) {
-		attrs["family"] = "Monospace"
+		attrs["family"] = "monospace"
 	}
 
 	return buf.CreateTag(name, attrs)
@@ -127,7 +129,8 @@ func (s *TagState) Use(buf *gtk.TextBuffer) {
 	s.buf = buf
 	s.attr = 0
 	s.counter = 0
-	s.tag = Tag(s.buf, s.incrCounter(), s.attr)
+	s.color = ""
+	s.tag = ColorTag(s.buf, s.incrCounter(), s.attr, s.color)
 }
 
 func (s *TagState) Attr() Attribute {
@@ -137,14 +140,21 @@ func (s *TagState) Attr() Attribute {
 func (s *TagState) Add(attr Attribute) *gtk.TextTag {
 	if s.attr != s.attr|attr {
 		s.attr |= attr
-		s.tag = Tag(s.buf, s.incrCounter(), s.attr)
+		s.tag = ColorTag(s.buf, s.incrCounter(), s.attr, s.color)
 	}
 	return s.tag
 }
 
 func (s *TagState) Remove(attr Attribute) *gtk.TextTag {
 	s.attr &= ^attr
-	s.tag = Tag(s.buf, s.incrCounter(), s.attr)
+	s.tag = ColorTag(s.buf, s.incrCounter(), s.attr, s.color)
+	return s.tag
+}
+
+func (s *TagState) Reset() *gtk.TextTag {
+	s.attr = 0
+	s.color = ""
+	s.tag = ColorTag(s.buf, s.incrCounter(), s.attr, s.color)
 	return s.tag
 }
 
@@ -164,7 +174,7 @@ func (s *TagState) SetAttrAndColor(attr Attribute, color string) *gtk.TextTag {
 }
 
 func (s *TagState) With(attr Attribute) *gtk.TextTag {
-	return Tag(s.buf, s.incrCounter(), s.attr|attr)
+	return ColorTag(s.buf, s.incrCounter(), s.attr|attr, s.color)
 }
 
 func (s *TagState) WithColor(color string) *gtk.TextTag {

@@ -3,12 +3,14 @@ package md
 import (
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/alecthomas/chroma"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -55,6 +57,7 @@ type Parser struct {
 	Error func(err error)
 
 	theme *gtk.IconTheme
+	icons sync.Map
 }
 
 func NewParser(s *state.State) *Parser {
@@ -75,6 +78,22 @@ func NewParser(s *state.State) *Parser {
 	p.pool = newPool(p)
 
 	return p
+}
+
+func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
+	var key = name + "#" + strconv.Itoa(size)
+
+	if v, ok := p.icons.Load(key); ok {
+		return v.(*gdk.Pixbuf)
+	}
+
+	pb, err := p.theme.LoadIcon(name, size, gtk.ICON_LOOKUP_FORCE_SIZE)
+	if err != nil {
+		return nil
+	}
+
+	p.icons.Store(key, pb)
+	return pb
 }
 
 func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
