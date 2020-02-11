@@ -22,7 +22,9 @@ func (f *Formatter) Format(w io.Writer, iterator chroma.Iterator) error {
 	lines := chroma.SplitTokensIntoLines(tokens)
 	highlightIndex := 0
 
-	w.Write([]byte(`<span font_family="monospace" ` + f.styleAttr(chroma.Background) + ">"))
+	w.Write([]byte(
+		`<span font_family="monospace" font_size="smaller" ` +
+			f.styleAttr(chroma.Background) + ">"))
 
 	highlightIndex = 0
 	for index, tokens := range lines {

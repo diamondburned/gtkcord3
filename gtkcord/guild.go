@@ -7,7 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/httpcache"
+	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -29,20 +29,8 @@ type Guilds struct {
 }
 
 type Guild struct {
-	gtk.IWidget
+	ExtendedWidget
 	Row *gtk.ListBoxRow
-
-	/* Tree logic
-
-	*gtk.TreeIter
-	Folder *GuildFolder // can be non-nil
-
-	Parent *gtk.TreeIter
-	Iter   *gtk.TreeIter
-	Path   *gtk.TreePath
-	Store  *gtk.TreeStore
-
-	*/
 
 	Folder *GuildFolder
 
@@ -158,12 +146,12 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 	ctx.AddClass("guild")
 
 	for _, r := range rows {
-		must(l.Add, r.IWidget)
+		must(l.Add, r)
+		must(r.Show)
 	}
 
 	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := rows[r.GetIndex()]
-
 		if row.Folder == nil {
 			// Collapse all revealers:
 			for _, r := range rows {
@@ -183,8 +171,6 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 
 		onGuild(row)
 	})
-
-	must(l.ShowAll)
 
 	g := &Guilds{
 		ListBox: l,
@@ -210,18 +196,14 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get image-loading icon")
 	}
-	// i.SetTooltipText(guild.Name)
 
 	must(r.Add, i)
 
 	g := &Guild{
-		IWidget: r,
-		Row:     r,
-		ID:      guild.ID,
-		Image:   i,
-		// Iter:       store.Append(parent),
-		// Store:      store,
-		// Parent:     parent,
+		ExtendedWidget: r,
+		Row:            r,
+		ID:             guild.ID,
+		Image:          i,
 	}
 
 	var url = guild.IconURL()
@@ -266,14 +248,8 @@ func (g *Guild) GoTo(s *state.State, parser *md.Parser, ch *Channel) error {
 func (g *Guild) UpdateImage(url string) {
 	var animated = url[:len(url)-4] == ".gif"
 
-	b, err := httpcache.HTTPGet(url + "?size=64")
-	if err != nil {
-		logWrap(err, "Failed to GET URL "+url)
-		return
-	}
-
 	if !animated {
-		p, err := NewPixbuf(b, PbSize(IconSize, IconSize))
+		p, err := pbpool.DownloadScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild icon")
 			return
@@ -282,7 +258,7 @@ func (g *Guild) UpdateImage(url string) {
 		g.Pixbuf = &Pixbuf{p, nil}
 		g.Pixbuf.Set(g.Image)
 	} else {
-		p, err := NewAnimator(b, PbSize(IconSize, IconSize))
+		p, err := pbpool.DownloadAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild animation")
 			return

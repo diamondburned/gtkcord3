@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/state"
@@ -18,6 +20,13 @@ var (
 	}
 )
 
+type ExtendedWidget interface {
+	gtk.IWidget
+	SetSensitive(bool)
+	Show()
+	ShowAll()
+}
+
 type Application struct {
 	State  *state.State
 	Window *gtk.Window
@@ -25,20 +34,23 @@ type Application struct {
 	Grid   *gtk.Grid
 
 	// Dynamic sidebars and main pages
-	Sidebar  gtk.IWidget
-	Messages gtk.IWidget
+	Sidebar  ExtendedWidget
+	Messages ExtendedWidget
 
 	// Stuff
 	Guilds *Guilds
+	Guild  *Guild
 
 	// nil after finalize()
 	sbox      *gtk.Box
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
-	css       *gtk.CssProvider
 
+	css    *gtk.CssProvider
 	parser *md.Parser
 
+	// used for events
+	busy sync.Mutex
 	done chan struct{}
 }
 
@@ -91,25 +103,22 @@ func (a *Application) UseState(s *state.State) error {
 
 	// 100 goroutines is pretty cheap (lol)
 	for _, g := range a.Guilds.Guilds {
-		go func(g *Guild) {
-			_, err := s.Channels(g.ID)
-			if err != nil {
-				logWrap(err, "Failed to pre-fetch channels")
-			}
-		}(g)
+		_, err := s.Channels(g.ID)
+		if err != nil {
+			logWrap(err, "Failed to pre-fetch channels")
+		}
 
 		if g.Folder != nil {
 			for _, g := range g.Folder.Guilds {
-				go func(g *Guild) {
-					_, err := s.Channels(g.ID)
-					if err != nil {
-						logWrap(err, "Failed to pre-fetch channels")
-					}
-				}(g)
+				_, err := s.Channels(g.ID)
+				if err != nil {
+					logWrap(err, "Failed to pre-fetch channels")
+				}
 			}
 		}
 	}
 
+	a.hookEvents()
 	a.wait()
 
 	return nil
@@ -175,7 +184,10 @@ func (a *Application) init() error {
 	a.spinner = s
 
 	w.ShowAll()
-	go gtk.Main()
+	go func() {
+		runtime.LockOSThread()
+		gtk.Main()
+	}()
 
 	return nil
 }
@@ -194,20 +206,23 @@ func (a *Application) close() {
 	}
 }
 
-func (a *Application) setChannelCol(w gtk.IWidget) {
+func (a *Application) setChannelCol(w ExtendedWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
-func (a *Application) setMessageCol(w gtk.IWidget) {
+func (a *Application) setMessageCol(w ExtendedWidget) {
 	a.Messages = w
 	a.Grid.Attach(w, 4, 0, 1, 1)
 }
 
 func (a *Application) loadGuild(g *Guild) {
+	a.busy.Lock()
+
 	if a.Sidebar != nil {
 		a.Grid.Remove(a.Sidebar)
 	}
 
+	a.Guilds.SetSensitive(false)
 	a.spinner.Start()
 	a.setChannelCol(a.sbox)
 
@@ -215,6 +230,15 @@ func (a *Application) loadGuild(g *Guild) {
 }
 
 func (a *Application) _loadGuild(g *Guild) {
+	defer a.busy.Unlock()
+	defer a.Guilds.SetSensitive(true)
+	defer must(func() {
+		a.spinner.Stop()
+		a.Grid.Remove(a.sbox)
+		a.setChannelCol(g.Channels)
+		g.Channels.ShowAll()
+	})
+
 	dg, err := a.State.Guild(g.ID)
 	if err != nil {
 		logWrap(err, "Failed to get guild")
@@ -226,9 +250,7 @@ func (a *Application) _loadGuild(g *Guild) {
 		return
 	}
 
-	must(a.spinner.Stop)
-	must(a.Grid.Remove, a.sbox)
-	must(a.setChannelCol, g.Channels.IWidget)
+	a.Guild = g
 
 	if a.Sidebar == nil {
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
@@ -239,17 +261,33 @@ func (a *Application) _loadGuild(g *Guild) {
 		}
 	}
 
-	must(a.Grid.ShowAll)
-
-	// Run hooks
 	a.Header.hookGuild(dg)
-	a.loadChannel(g, g.Current())
+	go a.loadChannel(g, g.Current())
 }
 
 func (a *Application) loadChannel(g *Guild, ch *Channel) {
+	a.busy.Lock()
+
 	if a.Messages != nil {
 		a.Grid.Remove(a.Messages)
 	}
+
+	g.Channels.Main.SetSensitive(false)
+	a.spinner.Start()
+	a.setMessageCol(a.sbox)
+
+	go a._loadChannel(g, ch)
+}
+
+func (a *Application) _loadChannel(g *Guild, ch *Channel) {
+	defer a.busy.Unlock()
+	defer g.Channels.Main.SetSensitive(true)
+	defer must(func() {
+		a.spinner.Stop()
+		a.Grid.Remove(a.sbox)
+		a.setMessageCol(ch.Messages)
+		ch.Messages.ShowAll()
+	})
 
 	dch, err := a.State.Channel(ch.ID)
 	if err != nil {
@@ -264,13 +302,6 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 		logWrap(err, "Failed to go to channel")
 		return
 	}
-
-	must(a.setMessageCol, ch.Messages)
-	must(a.Grid.ShowAll)
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		must(ch.Messages.SmartScroll)
-	}()
 }
 
 func (a *Application) wait() {

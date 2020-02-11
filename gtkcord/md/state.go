@@ -52,17 +52,29 @@ type mdState struct {
 	buffer *bytes.Buffer
 }
 
-func (s *mdState) tagAttr(token []byte) {
+func (s *mdState) tagAttr(token []byte) []byte {
 	attr := TagAttribute(token)
 	if attr == 0 {
-		return
+		return token
 	}
 
 	if s.state.Attr().Has(attr) {
 		s.state.Remove(attr)
-	} else {
-		s.state.Add(attr)
+		return nil
 	}
+
+	// If the current token starts inline code, we don't want anything else.
+	if attr == AttrMonospace {
+		s.state.Reset()
+	}
+	// If the state is already an inline code, we don't want any markup. Treat
+	// tokens as plain text.
+	if s.state.Attr().Has(AttrMonospace) {
+		return token
+	}
+
+	s.state.Add(attr)
+	return nil
 }
 
 func (s *mdState) switchTree(i int) {
@@ -77,11 +89,13 @@ func (s *mdState) switchTree(i int) {
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
-		s.insertWithTag(s.matches[i][3].str, s.state.With(AttrQuoted))
+		s.insertWithTag(append(s.matches[i][3].str, '\n'), s.state.With(AttrQuoted))
 
 	case len(s.matches[i][4].str) > 0:
 		// inline stuff
-		s.tagAttr(s.matches[i][4].str)
+		if token := s.tagAttr(s.matches[i][4].str); token != nil {
+			s.insertWithTag(token, nil)
+		}
 
 	case len(s.matches[i][5].str) > 0:
 		// TODO URLs
@@ -90,8 +104,7 @@ func (s *mdState) switchTree(i int) {
 	case len(s.matches[i][9].str) > 0:
 		// Emojis
 		var animated = len(s.matches[i][10].str) > 0
-		s.InsertAsyncPixbuf(s.buf,
-			EmojiURL(string(s.matches[i][11].str), animated))
+		s.InsertAsyncPixbuf(EmojiURL(string(s.matches[i][11].str), animated))
 
 	case bytes.Count(s.prev, []byte(`\`))%2 != 0:
 		// Escaped:
@@ -182,7 +195,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 		// If we still don't know if there are texts:
 		if !s.hasText {
 			// We know 1-10 are not emojis:
-			for i := 1; i < len(matches) && i < 10; i++ {
+			for i := 1; i < len(matches) && i < 9; i++ {
 				if len(matches[i].str) > 0 && matches[i].str[0] != '\n' {
 					s.hasText = true
 				}

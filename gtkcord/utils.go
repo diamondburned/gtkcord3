@@ -3,7 +3,9 @@ package gtkcord
 import (
 	"log"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"strconv"
 
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -24,15 +26,53 @@ var logError = func(err error) {
 		file3, line3, file2, line2, file1, line1, err)
 }
 
-func must(fn interface{}, args ...interface{}) {
-	// _, file, line, _ := runtime.Caller(1)
-	// log.Println("IdleAdd @", file+":", line)
+func debugMust(enable bool) func() {
+	if !enable {
+		return func() {}
+	}
 
-	if len(args) > 1 {
+	_, file, line, _ := runtime.Caller(2)
+	pos := filepath.Base(file) + ":" + strconv.Itoa(line)
+
+	return func() {
+		log.Println("IdleAdd @ " + pos)
+	}
+}
+
+func must(fn interface{}, args ...interface{}) {
+	var debug = debugMust(true)
+	var err error
+
+	switch len(args) {
+	case 0:
+		switch fn.(type) {
+		case func() bool:
+			_, err = glib.IdleAdd(fn)
+		case func():
+			_, err = glib.IdleAdd(func() bool {
+				debug()
+				fn.(func())()
+				return false
+			})
+		default:
+			panic("Unknown callback type")
+		}
+
+	case 1:
+		fnV := reflect.ValueOf(fn)
+		argV := reflect.ValueOf(args[0])
+
+		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
+			debug()
+			values[0].Call([]reflect.Value{values[1]})
+			return false
+		}, [2]reflect.Value{fnV, argV})
+
+	default:
 		panic("BUG!")
 	}
 
-	if _, err := glib.IdleAdd(fn, args...); err != nil {
+	if err != nil {
 		logError(errors.Wrap(err, "FATAL: IdleAdd in must()"))
 	}
 }
