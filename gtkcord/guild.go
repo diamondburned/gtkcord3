@@ -29,7 +29,7 @@ type Guilds struct {
 }
 
 type Guild struct {
-	SensitiveWidget
+	ExtendedWidget
 	Row *gtk.ListBoxRow
 
 	Folder *GuildFolder
@@ -147,6 +147,7 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 
 	for _, r := range rows {
 		must(l.Add, r)
+		must(r.Show)
 	}
 
 	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -170,8 +171,6 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 
 		onGuild(row)
 	})
-
-	must(l.ShowAll)
 
 	g := &Guilds{
 		ListBox: l,
@@ -201,10 +200,10 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 	must(r.Add, i)
 
 	g := &Guild{
-		SensitiveWidget: r,
-		Row:             r,
-		ID:              guild.ID,
-		Image:           i,
+		ExtendedWidget: r,
+		Row:            r,
+		ID:             guild.ID,
+		Image:          i,
 	}
 
 	var url = guild.IconURL()

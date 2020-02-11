@@ -27,6 +27,7 @@ var logError = func(err error) {
 
 func must(fn interface{}, args ...interface{}) {
 	_, file, line, _ := runtime.Caller(1)
+	file = filepath.Base(file)
 
 	var err error
 
@@ -48,6 +49,7 @@ func must(fn interface{}, args ...interface{}) {
 	case 1:
 		fnV := reflect.ValueOf(fn)
 		argV := reflect.ValueOf(args[0])
+
 		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
 			log.Println("IdleAdd @", file+":", line)
 			values[0].Call([]reflect.Value{values[1]})

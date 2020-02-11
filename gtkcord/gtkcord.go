@@ -4,7 +4,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync/atomic"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/state"
@@ -19,9 +20,11 @@ var (
 	}
 )
 
-type SensitiveWidget interface {
+type ExtendedWidget interface {
 	gtk.IWidget
 	SetSensitive(bool)
+	Show()
+	ShowAll()
 }
 
 type Application struct {
@@ -31,11 +34,12 @@ type Application struct {
 	Grid   *gtk.Grid
 
 	// Dynamic sidebars and main pages
-	Sidebar  SensitiveWidget
-	Messages SensitiveWidget
+	Sidebar  ExtendedWidget
+	Messages ExtendedWidget
 
 	// Stuff
 	Guilds *Guilds
+	Guild  *Guild
 
 	// nil after finalize()
 	sbox      *gtk.Box
@@ -45,7 +49,8 @@ type Application struct {
 	css    *gtk.CssProvider
 	parser *md.Parser
 
-	busy atomic.Value
+	// used for events
+	busy sync.Mutex
 	done chan struct{}
 }
 
@@ -113,10 +118,7 @@ func (a *Application) UseState(s *state.State) error {
 		}
 	}
 
-	// s.AddHandler(func(m *gateway.MessageCreateEvent) {
-
-	// })
-
+	a.hookEvents()
 	a.wait()
 
 	return nil
@@ -182,7 +184,10 @@ func (a *Application) init() error {
 	a.spinner = s
 
 	w.ShowAll()
-	go gtk.Main()
+	go func() {
+		runtime.LockOSThread()
+		gtk.Main()
+	}()
 
 	return nil
 }
@@ -201,16 +206,18 @@ func (a *Application) close() {
 	}
 }
 
-func (a *Application) setChannelCol(w SensitiveWidget) {
+func (a *Application) setChannelCol(w ExtendedWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
-func (a *Application) setMessageCol(w SensitiveWidget) {
+func (a *Application) setMessageCol(w ExtendedWidget) {
 	a.Messages = w
 	a.Grid.Attach(w, 4, 0, 1, 1)
 }
 
 func (a *Application) loadGuild(g *Guild) {
+	a.busy.Lock()
+
 	if a.Sidebar != nil {
 		a.Grid.Remove(a.Sidebar)
 	}
@@ -224,6 +231,7 @@ func (a *Application) loadGuild(g *Guild) {
 
 func (a *Application) _loadGuild(g *Guild) {
 	defer a.Guilds.SetSensitive(true)
+	defer a.busy.Unlock()
 
 	dg, err := a.State.Guild(g.ID)
 	if err != nil {
@@ -239,6 +247,9 @@ func (a *Application) _loadGuild(g *Guild) {
 	must(a.spinner.Stop)
 	must(a.Grid.Remove, a.sbox)
 	must(a.setChannelCol, g.Channels)
+	must(g.Channels.ShowAll)
+
+	a.Guild = g
 
 	if a.Sidebar == nil {
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
@@ -249,12 +260,13 @@ func (a *Application) _loadGuild(g *Guild) {
 		}
 	}
 
-	must(a.Grid.ShowAll)
 	a.Header.hookGuild(dg)
-	a.loadChannel(g, g.Current())
+	go a.loadChannel(g, g.Current())
 }
 
 func (a *Application) loadChannel(g *Guild, ch *Channel) {
+	a.busy.Lock()
+
 	if a.Messages != nil {
 		a.Grid.Remove(a.Messages)
 	}
@@ -268,6 +280,7 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 
 func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 	defer g.Channels.Main.SetSensitive(true)
+	defer a.busy.Unlock()
 
 	dch, err := a.State.Channel(ch.ID)
 	if err != nil {
@@ -287,13 +300,9 @@ func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 	must(a.Grid.Remove, a.sbox)
 	must(a.setMessageCol, ch.Messages)
 
-	must(a.Grid.ShowAll)
+	must(ch.Messages.ShowAll)
 
-	go func() {
-		// Workaround for Gtk being crappy:
-		time.Sleep(50 * time.Millisecond)
-		must(ch.Messages.SmartScroll)
-	}()
+	ch.Messages.SmartScroll()
 }
 
 func (a *Application) wait() {

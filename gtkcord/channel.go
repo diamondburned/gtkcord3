@@ -21,7 +21,7 @@ const (
 )
 
 type Channels struct {
-	SensitiveWidget
+	ExtendedWidget
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -91,9 +91,9 @@ func (g *Guild) loadChannels(
 	must(cs.Add, main)
 
 	g.Channels = &Channels{
-		SensitiveWidget: cs,
-		Scroll:          cs,
-		Main:            main,
+		ExtendedWidget: cs,
+		Scroll:         cs,
+		Main:           main,
 	}
 
 	/*

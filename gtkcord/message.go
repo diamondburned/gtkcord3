@@ -21,7 +21,7 @@ const (
 )
 
 type Messages struct {
-	SensitiveWidget
+	ExtendedWidget
 	Main      *gtk.Box
 	Scroll    *gtk.ScrolledWindow
 	Viewport  *gtk.Viewport
@@ -55,14 +55,14 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 			return errors.Wrap(err, "Failed to create channel scroller")
 		}
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
-		m.SensitiveWidget = s
+		m.ExtendedWidget = s
 		m.Scroll = s
 
 		must(s.Add, v)
 	}
 
 	for _, w := range m.Messages {
-		must(m.Main.Remove, w.IWidget)
+		must(m.Main.Remove, w)
 	}
 
 	// Order: latest is first.
@@ -90,7 +90,6 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 	m.Messages = newMessages
 
 	must(m.Main.ShowAll)
-	must(m.SmartScroll)
 
 	go func() {
 		// Revert to latest is last, earliest is first.
@@ -104,34 +103,38 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 			message.UpdateAuthor(discordm.Author)
 			message.UpdateExtras(discordm)
 
-			must(m.Main.ShowAll)
-			must(m.SmartScroll)
+			must(message.ShowAll)
 		}
+
+		m.SmartScroll()
 	}()
+
+	m.SmartScroll()
 	return nil
 }
 
 func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Message) error {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
 	w, err := newMessage(s, parser, message)
 	if err != nil {
 		return errors.Wrap(err, "Failed to render message")
 	}
+
+	semaphore.Go(func() {
+		w.UpdateAuthor(message.Author)
+		w.UpdateExtras(message)
+	})
 
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
 	must(m.Main.Add, w)
 	must(m.Main.ShowAll)
-	must(m.Viewport.ShowAll)
-	must(m.SmartScroll)
 	m.Messages = append(m.Messages, w)
+	m.SmartScroll()
 	return nil
 }
 
-func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Message, async bool) {
+func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Message) {
 	var target *Message
 
 	m.guard.Lock()
@@ -153,27 +156,49 @@ func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Mess
 	})
 }
 
+func (m *Messages) Delete(id discord.Snowflake) bool {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	for i, message := range m.Messages {
+		if message.ID != id {
+			continue
+		}
+
+		m.Messages = append(m.Messages[:i], m.Messages[i+1:]...)
+		m.Main.Remove(message)
+		return true
+	}
+
+	return false
+}
+
 func (m *Messages) SmartScroll() {
-	adj, err := m.Viewport.GetVAdjustment()
-	if err != nil {
-		logWrap(err, "Failed to get viewport")
-		return
-	}
+	// Fuck GTK, world is a fuck.
+	time.Sleep(15 * time.Millisecond)
 
-	max := adj.GetUpper()
-	cur := adj.GetValue()
+	must(func() {
+		adj, err := m.Viewport.GetVAdjustment()
+		if err != nil {
+			logWrap(err, "Failed to get viewport")
+			return
+		}
 
-	// If the user has scrolled past 10% from the bottom:
-	if (max-cur)/max < 0.1 {
-		return
-	}
+		max := adj.GetUpper()
+		cur := adj.GetValue()
 
-	adj.SetValue(max)
-	m.Viewport.SetVAdjustment(adj)
+		// If the user has scrolled past 10% from the bottom:
+		if (max-cur)/max < 0.1 {
+			return
+		}
+
+		adj.SetValue(max)
+		m.Viewport.SetVAdjustment(adj)
+	})
 }
 
 type Message struct {
-	gtk.IWidget
+	ExtendedWidget
 
 	ID    discord.Snowflake
 	Guild discord.Snowflake
@@ -287,19 +312,19 @@ func newMessage(s *state.State, parser *md.Parser, m discord.Message) (*Message,
 	})
 
 	message := Message{
-		ID:          m.ID,
-		Guild:       m.GuildID,
-		IWidget:     main,
-		State:       s,
-		Parser:      parser,
-		Main:        main,
-		Avatar:      avatar,
-		Right:       right,
-		RightTop:    rtop,
-		Author:      author,
-		Timestamp:   timestamp,
-		RightBottom: rbottom,
-		Content:     msgTb,
+		ID:             m.ID,
+		Guild:          m.GuildID,
+		ExtendedWidget: main,
+		State:          s,
+		Parser:         parser,
+		Main:           main,
+		Avatar:         avatar,
+		Right:          right,
+		RightTop:       rtop,
+		Author:         author,
+		Timestamp:      timestamp,
+		RightBottom:    rbottom,
+		Content:        msgTb,
 	}
 
 	message.UpdateContent(m)
