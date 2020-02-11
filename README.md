@@ -1,6 +1,7 @@
 # GtkCord
 ![Screenshot of gtkcord](.readme-resources/images/screenshot1.png)
-A discord client which uses the GTK for the user interface.
+
+A lightweight Discord client which uses the GTK for the user interface.
 
 ## It's time to ditch the Discord Electron application.
 
@@ -12,11 +13,11 @@ GtkCord:
 - Uses your prefered GTK theme
 
 ### Build GtkCord
-Required: go and gtk
+**Required:** _go_ and _gtk_
 
-The developer of GtkCord is currentl working on a login, so that you no longer need to set the TOKEN variable.
+The developer of GtkCord is currently working on a login, so that you no longer need to set the TOKEN variable.
 
-1. Set the TOKEN variable to your Discord key
+#### 1. Set the TOKEN variable to your Discord key
 
 You can find this key by:
 - Press F12 in when Discord is open
@@ -26,12 +27,12 @@ You can find this key by:
 ``shell
 EXPORT TOKEN=your-discord-key
 ``
-2. `run go run .`
+#### 2. `run go run .`
 
 ### Current features
-[X] See a list with Discord servers
-[X] See a list of channels
-[X] See the messages of the selected channel
-[] Graphical login
-[] Options menu with the same options which discord has
-[] Change the visibility of your online state (invisible, away, online)
+- [X] See a list with Discord servers
+- [X] See a list of channels
+- [X] See the messages of the selected channel
+- [ ] Graphical login
+- [ ] Options menu with the same options which discord has
+- [ ] Change the visibility of your online state (invisible, away, online)
