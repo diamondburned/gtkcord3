@@ -1,7 +1,8 @@
 # GtkCord
-![Screenshot of gtkcord](.readme-resources/images/screenshot1.png)
 
-A lightweight Discord client which uses the GTK for the user interface.
+A lightweight Discord client which uses GTK for the user interface.
+
+![Screenshot of gtkcord](.readme-resources/images/screenshot1.png)
 
 ## It's time to ditch the Discord Electron application.
 
@@ -24,10 +25,14 @@ You can find this key by:
 - Press F5 to refresh the page and go to the network tab
 - Search 'api guild' and search for Authorisation in the right column
 
-``shell
+```bash
 EXPORT TOKEN=your-discord-key
-``
-#### 2. `run go run .`
+```
+
+#### 2. Compile and run GtkCord
+```bash
+run go run .
+```
 
 ### Current features
 - [X] See a list with Discord servers
