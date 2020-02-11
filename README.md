@@ -13,7 +13,7 @@ GtkCord:
 - Is just as easy to use as the official Discord application
 - Uses your prefered GTK theme
 
-### Build GtkCord
+## Build GtkCord
 **Required:** _go_ and _gtk_
 
 The developer of GtkCord is currently working on a login, so that you no longer need to set the TOKEN variable.
