@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"runtime"
 
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
@@ -16,9 +15,6 @@ func main() {
 	if token == "" {
 		log.Fatalln("No tokens given!")
 	}
-
-	// LOOL FUCK ME HAHAHFAHFHUADFJADHFFLYFHFH:F:LFHfldhfdsfsd...
-	runtime.GOMAXPROCS(1)
 
 	a, err := gtkcord.New()
 	if err != nil {

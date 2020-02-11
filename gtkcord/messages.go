@@ -1,7 +1,6 @@
 package gtkcord
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -78,30 +77,50 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
-	// Reset the slice to empty.
-	m.Messages = m.Messages[:0]
+	// Allocate a new empty slice. This is a trade-off to re-using the old
+	// slice to re-use messages.
+	var newMessages = make([]*Message, 0, DefaultFetch)
 
 	// Iterate from earliest to latest.
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
 
-		w, err := newMessage(s, parser, message)
-		if err != nil {
-			return errors.Wrap(err, "Failed to render message")
+		var msg *Message
+
+		// See if we could find the message in our old list:
+		for _, w := range m.Messages {
+			if w.ID == message.ID {
+				msg = w
+				break
+			}
 		}
 
-		if m.ShouldCondense(message) {
-			must(w.SetCondensed, true)
+		if msg == nil {
+			w, err := newMessage(s, parser, message)
+			if err != nil {
+				return errors.Wrap(err, "Failed to render message")
+			}
+			msg = w
+		}
+
+		if shouldCondense(newMessages, message) {
+			must(msg.SetCondensed, true)
 		}
 
 		must(func() {
-			m.Main.Add(w)
-			w.ShowAll()
+			m.Main.Add(msg)
+			msg.ShowAll()
 		})
 
 		// Messages are added, earliest first.
-		m.Messages = append(m.Messages, w)
+		newMessages = append(newMessages, msg)
 	}
+
+	// Set the new slice.
+	m.Messages = newMessages
+
+	// Hack around the mutex
+	copiedMsg := append([]*Message{}, newMessages...)
 
 	go func() {
 		// Revert to latest is last, earliest is first.
@@ -110,8 +129,8 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 		}
 
 		// Iterate in reverse, so latest first.
-		for i := len(m.Messages) - 1; i >= 0; i-- {
-			message, discordm := m.Messages[i], messages[i]
+		for i := len(copiedMsg) - 1; i >= 0; i-- {
+			message, discordm := copiedMsg[i], messages[i]
 			message.UpdateAuthor(s, discordm.Author)
 			message.UpdateExtras(parser, discordm)
 		}
@@ -124,11 +143,15 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 }
 
 func (m *Messages) ShouldCondense(msg discord.Message) bool {
-	if len(m.Messages) == 0 {
+	return shouldCondense(m.Messages, msg)
+}
+
+func shouldCondense(msgs []*Message, msg discord.Message) bool {
+	if len(msgs) == 0 {
 		return false
 	}
 
-	var last = m.Messages[len(m.Messages)-1]
+	var last = msgs[len(msgs)-1]
 
 	return last.AuthorID == msg.Author.ID &&
 		msg.Timestamp.Time().Sub(last.Timestamp) < 5*time.Minute
@@ -149,7 +172,6 @@ func (m *Messages) onSizeAlloc() {
 
 	// If the scroll is not close to the bottom and we're not loading messages:
 	if max-cur > 2500 && !loading {
-		log.Println("Scroll was at", max, "-", cur, "> 450, not scrolling")
 		// Then we don't scroll.
 		return
 	}

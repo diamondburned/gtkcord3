@@ -139,11 +139,17 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		avatar.SetMarginEnd(AvatarPadding)
 
 		author.SetMarkup(bold(m.Author.Username))
-		timestamp.SetMarkup(m.Timestamp.Format(time.Kitchen))
-		timestamp.SetOpacity(0.5)
-		timestamp.SetYAlign(0.0)
+		author.SetSingleLineMode(true)
+
 		timestampSize := AvatarSize + AvatarPadding*2 - 1
 		timestamp.SetSizeRequest(timestampSize, -1)
+		timestamp.SetOpacity(0.5)
+		timestamp.SetYAlign(0.0)
+		timestamp.SetSingleLineMode(true)
+		timestamp.SetMarginTop(2)
+		timestamp.SetMarkup(`<span size="smaller">` +
+			m.Timestamp.Format(time.Kitchen) +
+			`</span>`)
 
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
@@ -164,7 +170,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		avatar.SetMarginTop(10)
 		right.SetMarginTop(10)
 
-		message.SetCondensed(false)
+		message.setCondensed()
 
 		return false
 	})
@@ -175,9 +181,15 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 }
 
 func (m *Message) SetCondensed(condensed bool) {
+	if m.Condensed == condensed {
+		return
+	}
 	m.Condensed = condensed
+	m.setCondensed()
+}
 
-	if condensed {
+func (m *Message) setCondensed() {
+	if m.Condensed {
 		m.main.SetMarginTop(2)
 		m.timestamp.SetMarginStart(AvatarPadding)
 		m.timestamp.SetXAlign(0.5) // center align
