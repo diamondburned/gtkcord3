@@ -16,11 +16,9 @@ import (
 
 var regexes = []string{
 	// codeblock
-	`(?:^\x60\x60\x60 *(\w*)([\s\S]*?)\n?\x60\x60\x60$)`,
+	`(?:^\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60$)`,
 	// blockquote
 	`((?:(?:^|\n)^>\s+.*)+)\n`,
-	// This is actually inline code
-	// `(?:\x60([^\x60].*?)\x60)`,
 	// Inline markup stuff
 	`(__|\x60|\*\*\*|\*\*|[_*]|~~|\|\|)`,
 	// Hyperlinks
@@ -35,7 +33,7 @@ var regexes = []string{
 	`(<(a?):\w+:(\d+)>)`,
 }
 
-var HighlightStyle = "solarized-dark"
+var HighlightStyle = "monokai"
 
 var (
 	style    = (*chroma.Style)(nil)

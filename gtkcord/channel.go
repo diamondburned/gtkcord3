@@ -198,6 +198,7 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 	l.SetXAlign(0)
 	l.SetMarginStart(8)
 	l.SetUseMarkup(true)
+	l.SetOpacity(0.75) // TODO: read state
 
 	must(r.Add, l)
 	return &Channel{

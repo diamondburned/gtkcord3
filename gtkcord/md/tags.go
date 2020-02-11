@@ -104,6 +104,7 @@ func ColorTag(buf *gtk.TextBuffer, name string, attr Attribute, color string) *g
 	}
 	if attr.Has(AttrMonospace) {
 		attrs["family"] = "monospace"
+		attrs["size"] = "smaller"
 	}
 
 	return buf.CreateTag(name, attrs)

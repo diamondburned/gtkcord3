@@ -2,7 +2,6 @@ package gtkcord
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -59,8 +58,6 @@ type MessageExtras struct {
 }
 
 func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, error) {
-	log.Println(m.Author.ID, m.Content)
-
 	main, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create main box")
@@ -138,12 +135,12 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 		avatar.SetSizeRequest(AvatarSize, AvatarSize)
 		avatar.SetProperty("yalign", 0.0)
-		avatar.SetMarginStart(AvatarPadding)
+		avatar.SetMarginStart(AvatarPadding * 2)
 		avatar.SetMarginEnd(AvatarPadding)
 
 		author.SetMarkup(bold(m.Author.Username))
 		timestamp.SetMarkup(m.Timestamp.Format(time.Kitchen))
-		timestamp.SetOpacity(0.75)
+		timestamp.SetOpacity(0.5)
 		timestamp.SetYAlign(0.0)
 		timestampSize := AvatarSize + AvatarPadding*2 - 1
 		timestamp.SetSizeRequest(timestampSize, -1)
@@ -152,6 +149,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		if err != nil {
 			panic("Die: " + err.Error())
 		}
+		msgTv.SetMarginEnd(AvatarPadding)
 		msgTv.SetWrapMode(gtk.WRAP_WORD)
 		msgTv.SetCursorVisible(false)
 		msgTv.SetEditable(false)
@@ -181,7 +179,7 @@ func (m *Message) SetCondensed(condensed bool) {
 
 	if condensed {
 		m.main.SetMarginTop(2)
-		m.timestamp.SetMarginStart(0)
+		m.timestamp.SetMarginStart(AvatarPadding)
 		m.timestamp.SetXAlign(0.5) // center align
 		m.mainStyle.AddClass("condensed")
 

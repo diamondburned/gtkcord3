@@ -1,6 +1,7 @@
 package gtkcord
 
 import (
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -115,7 +116,7 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 			message.UpdateExtras(parser, discordm)
 		}
 
-		// we're done loading:
+		// We're done resetting, set this to false.
 		m.Resetting.Store(false)
 	}()
 
@@ -147,7 +148,8 @@ func (m *Messages) onSizeAlloc() {
 	var loading = ok && v
 
 	// If the scroll is not close to the bottom and we're not loading messages:
-	if max-cur > 450 && !loading {
+	if max-cur > 2500 && !loading {
+		log.Println("Scroll was at", max, "-", cur, "> 450, not scrolling")
 		// Then we don't scroll.
 		return
 	}
@@ -170,8 +172,15 @@ func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Mes
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	must(m.Main.Add, w)
-	must(m.Main.ShowAll)
+	if m.ShouldCondense(message) {
+		must(w.SetCondensed, true)
+	}
+
+	must(func() {
+		must(m.Main.Add, w)
+		must(m.Main.ShowAll)
+	})
+
 	m.Messages = append(m.Messages, w)
 	return nil
 }

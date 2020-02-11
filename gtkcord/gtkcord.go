@@ -230,8 +230,14 @@ func (a *Application) loadGuild(g *Guild) {
 }
 
 func (a *Application) _loadGuild(g *Guild) {
-	defer a.Guilds.SetSensitive(true)
 	defer a.busy.Unlock()
+	defer a.Guilds.SetSensitive(true)
+	defer must(func() {
+		a.spinner.Stop()
+		a.Grid.Remove(a.sbox)
+		a.setChannelCol(g.Channels)
+		g.Channels.ShowAll()
+	})
 
 	dg, err := a.State.Guild(g.ID)
 	if err != nil {
@@ -243,11 +249,6 @@ func (a *Application) _loadGuild(g *Guild) {
 		logWrap(err, "Failed to load channels")
 		return
 	}
-
-	must(a.spinner.Stop)
-	must(a.Grid.Remove, a.sbox)
-	must(a.setChannelCol, g.Channels)
-	must(g.Channels.ShowAll)
 
 	a.Guild = g
 
@@ -279,8 +280,14 @@ func (a *Application) loadChannel(g *Guild, ch *Channel) {
 }
 
 func (a *Application) _loadChannel(g *Guild, ch *Channel) {
-	defer g.Channels.Main.SetSensitive(true)
 	defer a.busy.Unlock()
+	defer g.Channels.Main.SetSensitive(true)
+	defer must(func() {
+		a.spinner.Stop()
+		a.Grid.Remove(a.sbox)
+		a.setMessageCol(ch.Messages)
+		ch.Messages.ShowAll()
+	})
 
 	dch, err := a.State.Channel(ch.ID)
 	if err != nil {
@@ -295,12 +302,6 @@ func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 		logWrap(err, "Failed to go to channel")
 		return
 	}
-
-	must(a.spinner.Stop)
-	must(a.Grid.Remove, a.sbox)
-	must(a.setMessageCol, ch.Messages)
-
-	must(ch.Messages.ShowAll)
 }
 
 func (a *Application) wait() {
