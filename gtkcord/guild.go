@@ -2,8 +2,10 @@ package gtkcord
 
 import (
 	"html"
+	"log"
 	"sort"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
@@ -51,30 +53,28 @@ func newGuildsFromFolders() ([]*Guild, error) {
 	var folders = s.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
 
+	spew.Dump(folders)
+
 	for _, f := range folders {
-		switch len(f.GuildIDs) {
-		case 0: // ???
-			continue
-		case 1:
+		if len(f.GuildIDs) == 1 && f.Name == "" {
 			g, err := s.Guild(f.GuildIDs[0])
 			if err != nil {
-				return nil,
-					errors.Wrap(err, "Failed to get guild in folder "+f.Name)
+				log.Println("Failed to get guild", f.GuildIDs[0], err)
+				continue
+				// return nil, errors.Wrap(err, "Failed to get guild "+f.GuildIDs[0].String())
 			}
 
 			r, err := newGuildRow(*g)
 			if err != nil {
-				return nil,
-					errors.Wrap(err, "Failed to load guild "+g.Name)
+				return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
 			}
 
 			rows = append(rows, r)
 
-		default:
+		} else {
 			e, err := newGuildFolder(s, f)
 			if err != nil {
-				return nil,
-					errors.Wrap(err, "Failed to create a new folder "+f.Name)
+				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
 			}
 
 			rows = append(rows, e)
@@ -185,7 +185,14 @@ func newGuilds(onGuild func(*Guild)) (*Guilds, error) {
 	return g, nil
 }
 
-func newGuildRow(guild discord.Guild) (*Guild, error) {
+func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
+	g, err := App.State.Guild(guildID)
+	if err != nil {
+		// We're taking a different approach in logging:
+		log.Println()
+		return nil, errors.Wrap(err, "Failed to get guild ID "+guildID.String())
+	}
+
 	r, err := gtk.ListBoxRowNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a list row")
@@ -194,7 +201,7 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
 	r.SetHAlign(gtk.ALIGN_CENTER)
 	r.SetVAlign(gtk.ALIGN_CENTER)
-	r.SetTooltipMarkup(bold(guild.Name))
+	r.SetTooltipMarkup(bold(g.Name))
 	r.SetActivatable(true)
 
 	i, err := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
