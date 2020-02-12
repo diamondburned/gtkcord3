@@ -18,6 +18,8 @@ var (
 	HTTPClient = http.Client{
 		Timeout: 10 * time.Second,
 	}
+
+	App *application
 )
 
 func init() {
@@ -32,7 +34,7 @@ type ExtendedWidget interface {
 	ShowAll()
 }
 
-type Application struct {
+type application struct {
 	State  *state.State
 	Window *gtk.Window
 	Header *Header
@@ -59,24 +61,24 @@ type Application struct {
 	done chan struct{}
 }
 
-func New() (*Application, error) {
-	a := new(Application)
-	a.done = make(chan struct{})
+func Init() error {
+	App = new(application)
+	App.done = make(chan struct{})
 
-	if err := a.init(); err != nil {
-		return nil, errors.Wrap(err, "Failed to start Gtk")
+	if err := App.init(); err != nil {
+		return errors.Wrap(err, "Failed to start Gtk")
 	}
 
 	// Things beyond this point must use must() or gdk.IdleAdd.
-	return a, nil
+	return nil
 }
 
-func (a *Application) UseState(s *state.State) error {
-	a.State = s
-	a.Window.Remove(a.sbox)
-	a.parser = md.NewParser(s)
+func UseState(s *state.State) error {
+	App.State = s
+	App.Window.Remove(App.sbox)
+	App.parser = md.NewParser(s)
 
-	if err := a.Header.Hamburger.Refresh(s); err != nil {
+	if err := App.Header.Hamburger.Refresh(s); err != nil {
 		return errors.Wrap(err, "Failed to refresh hamburger")
 	}
 
@@ -87,27 +89,27 @@ func (a *Application) UseState(s *state.State) error {
 		}
 		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
-		gs, err := newGuilds(s, a.loadGuild)
+		gs, err := newGuilds(App.loadGuild)
 		if err != nil {
 			return errors.Wrap(err, "Failed to make guilds view")
 		}
-		a.Guilds = gs
+		App.Guilds = gs
 
 		must(gw.Add, gs.ListBox)
-		must(a.Grid.Add, gw)
+		must(App.Grid.Add, gw)
 
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 		if err != nil {
 			return errors.Wrap(err, "Failed to create separator")
 		}
-		must(a.Grid.Add, s)
+		must(App.Grid.Add, s)
 	}
 
 	// Finalize the window:
-	a.finalize()
+	App.finalize()
 
 	// 100 goroutines is pretty cheap (lol)
-	for _, g := range a.Guilds.Guilds {
+	for _, g := range App.Guilds.Guilds {
 		_, err := s.Channels(g.ID)
 		if err != nil {
 			logWrap(err, "Failed to pre-fetch channels")
@@ -123,13 +125,13 @@ func (a *Application) UseState(s *state.State) error {
 		}
 	}
 
-	a.hookEvents()
-	a.wait()
+	App.hookEvents()
+	App.wait()
 
 	return nil
 }
 
-func (a *Application) init() error {
+func (a *application) init() error {
 	gtk.Init(nil)
 
 	if err := a.loadCSS(); err != nil {
@@ -197,51 +199,55 @@ func (a *Application) init() error {
 	return nil
 }
 
-func (a *Application) finalize() {
-	must(a.Window.Remove, a.spinner)
-	must(a.Window.Add, a.Grid)
-	must(a.Window.ShowAll)
-	a.spinner.Stop()
-	a.sbox.SetSizeRequest(ChannelsWidth, -1)
+func (a *application) finalize() {
+	must(func() {
+		a.Window.Remove(a.spinner)
+		a.Window.Add(a.Grid)
+		a.Window.ShowAll()
+		a.spinner.Stop()
+		a.sbox.SetSizeRequest(ChannelsWidth, -1)
+	})
 }
 
-func (a *Application) close() {
+func (a *application) close() {
 	if err := a.State.Close(); err != nil {
 		logError(errors.Wrap(err, "Failed to close Discord"))
 	}
 }
 
-func (a *Application) setChannelCol(w ExtendedWidget) {
+func (a *application) setChannelCol(w ExtendedWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
-func (a *Application) setMessageCol(w ExtendedWidget) {
+func (a *application) setMessageCol(w ExtendedWidget) {
 	a.Messages = w
 	a.Grid.Attach(w, 4, 0, 1, 1)
 }
 
-func (a *Application) loadGuild(g *Guild) {
+func (a *application) loadGuild(g *Guild) {
 	a.busy.Lock()
 
-	if a.Sidebar != nil {
-		a.Grid.Remove(a.Sidebar)
-	}
+	must(func() {
+		if a.Sidebar != nil {
+			a.Grid.Remove(a.Sidebar)
+		}
 
-	a.Guilds.SetSensitive(false)
-	a.spinner.Start()
-	a.setChannelCol(a.sbox)
+		a.Guilds.SetSensitive(false)
+		a.spinner.Start()
+		a.setChannelCol(a.sbox)
 
-	go a._loadGuild(g)
+		go a._loadGuild(g)
+	})
 }
 
-func (a *Application) _loadGuild(g *Guild) {
+func (a *application) _loadGuild(g *Guild) {
 	defer a.busy.Unlock()
-	defer a.Guilds.SetSensitive(true)
 	defer must(func() {
 		a.spinner.Stop()
 		a.Grid.Remove(a.sbox)
 		a.setChannelCol(g.Channels)
 		g.Channels.ShowAll()
+		a.Guilds.SetSensitive(true)
 	})
 
 	dg, err := a.State.Guild(g.ID)
@@ -266,32 +272,34 @@ func (a *Application) _loadGuild(g *Guild) {
 		}
 	}
 
-	a.Header.hookGuild(dg)
+	a.Header.UpdateGuild(dg)
 	go a.loadChannel(g, g.Current())
 }
 
-func (a *Application) loadChannel(g *Guild, ch *Channel) {
+func (a *application) loadChannel(g *Guild, ch *Channel) {
 	a.busy.Lock()
 
-	if a.Messages != nil {
-		a.Grid.Remove(a.Messages)
-	}
+	must(func() {
+		if a.Messages != nil {
+			a.Grid.Remove(a.Messages)
+		}
 
-	g.Channels.Main.SetSensitive(false)
-	a.spinner.Start()
-	a.setMessageCol(a.sbox)
+		g.Channels.Main.SetSensitive(false)
+		a.spinner.Start()
+		a.setMessageCol(a.sbox)
 
-	go a._loadChannel(g, ch)
+		go a._loadChannel(g, ch)
+	})
 }
 
-func (a *Application) _loadChannel(g *Guild, ch *Channel) {
+func (a *application) _loadChannel(g *Guild, ch *Channel) {
 	defer a.busy.Unlock()
-	defer g.Channels.Main.SetSensitive(true)
 	defer must(func() {
 		a.spinner.Stop()
 		a.Grid.Remove(a.sbox)
 		a.setMessageCol(ch.Messages)
 		ch.Messages.ShowAll()
+		g.Channels.Main.SetSensitive(true)
 	})
 
 	dch, err := a.State.Channel(ch.ID)
@@ -301,7 +309,7 @@ func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 	}
 
 	// Run hook
-	a.Header.hookChannel(dch)
+	a.Header.UpdateChannel(dch)
 
 	if err := g.GoTo(a.State, a.parser, ch); err != nil {
 		logWrap(err, "Failed to go to channel")
@@ -309,7 +317,7 @@ func (a *Application) _loadChannel(g *Guild, ch *Channel) {
 	}
 }
 
-func (a *Application) wait() {
+func (a *application) wait() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
 

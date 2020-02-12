@@ -19,10 +19,10 @@ const (
 
 type Message struct {
 	ExtendedWidget
+	Messages *Messages
 
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
-	GuildID  discord.Snowflake
 
 	Timestamp time.Time
 	Edited    time.Time
@@ -108,7 +108,6 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 	message := Message{
 		ID:        m.ID,
-		GuildID:   m.GuildID,
 		AuthorID:  m.Author.ID,
 		Timestamp: m.Timestamp.Time(),
 		Edited:    m.EditedTimestamp.Time(),
@@ -223,14 +222,14 @@ func (m *Message) setCondensed() {
 }
 
 func (m *Message) UpdateAuthor(state *state.State, user discord.User) {
-	if m.GuildID.Valid() {
+	if guildID := App.Guild.ID; guildID.Valid() {
 		var name = user.Username
 
-		n, err := state.MemberDisplayName(m.GuildID, user.ID)
+		n, err := state.MemberDisplayName(guildID, user.ID)
 		if err == nil {
 			name = bold(escape(n))
 
-			if color := state.MemberColor(m.GuildID, user.ID); color > 0 {
+			if color := state.MemberColor(guildID, user.ID); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
 		}

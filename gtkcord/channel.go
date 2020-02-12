@@ -6,7 +6,6 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -22,6 +21,7 @@ const (
 
 type Channels struct {
 	ExtendedWidget
+	Guild *Guild
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -32,12 +32,11 @@ type Channels struct {
 	// Channel list
 	ChList   *gtk.ListBox
 	Channels []*Channel
-
-	GuildID discord.Snowflake
 }
 
 type Channel struct {
 	gtk.IWidget
+	Channels *Channels
 
 	Row   *gtk.ListBoxRow
 	Label *gtk.Label
@@ -46,20 +45,7 @@ type Channel struct {
 	Category bool
 
 	Messages *Messages
-}
-
-func (ch *Channel) loadMessages(s *state.State, parser *md.Parser) error {
-	if ch.Messages == nil {
-		ch.Messages = &Messages{
-			ChannelID: ch.ID,
-		}
-	}
-
-	if err := ch.Messages.Reset(s, parser); err != nil {
-		return errors.Wrap(err, "Failed to reset messages in channel")
-	}
-
-	return nil
+	Input    *MessageInput
 }
 
 func (g *Guild) loadChannels(
@@ -185,6 +171,7 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 		Category: true,
 	}, nil
 }
+
 func newChannelRow(ch discord.Channel) (*Channel, error) {
 	r, err := gtk.ListBoxRowNew()
 	if err != nil {

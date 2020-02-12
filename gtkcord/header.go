@@ -112,7 +112,7 @@ func newHeader() (*Header, error) {
 	}, nil
 }
 
-func (h *Header) hookGuild(g *discord.Guild) {
+func (h *Header) UpdateGuild(g *discord.Guild) {
 	if g == nil {
 		h.GuildName.SetMarkup("")
 		return
@@ -121,7 +121,7 @@ func (h *Header) hookGuild(g *discord.Guild) {
 	must(h.GuildName.SetMarkup, bold(g.Name))
 }
 
-func (h *Header) hookChannel(ch *discord.Channel) {
+func (h *Header) UpdateChannel(ch *discord.Channel) {
 	if ch == nil {
 		h.ChannelName.SetMarkup("")
 		h.ChannelTopic.SetText("")

@@ -20,7 +20,7 @@ var CustomCSS = os.Getenv("GTKCORD_CUSTOM_CSS")
 // I don't like this:
 // list row:selected { box-shadow: inset 2px 0 0 0 white; }
 
-func (a *Application) loadCSS() error {
+func (a *application) loadCSS() error {
 	css, err := gtk.CssProviderNew()
 	if err != nil {
 		return errors.Wrap(err, "Failed to make a CSS provider")

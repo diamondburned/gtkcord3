@@ -17,17 +17,26 @@ const DefaultFetch = 25
 
 type Messages struct {
 	ExtendedWidget
-	Main      *gtk.Box
-	Scroll    *gtk.ScrolledWindow
-	Viewport  *gtk.Viewport
-	ChannelID discord.Snowflake
-	Messages  []*Message
-	guard     sync.Mutex
+	Channel *Channel
+
+	Main     *gtk.Box
+	Scroll   *gtk.ScrolledWindow
+	Viewport *gtk.Viewport
+	Messages []*Message
+	guard    sync.Mutex
 
 	Resetting atomic.Value
 }
 
-func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
+func (ch *Channel) loadMessages() error {
+	if ch.Messages == nil {
+		ch.Messages = &Messages{
+			Channel: ch,
+		}
+	}
+
+	m := ch.Messages
+
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
@@ -72,7 +81,7 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 	}
 
 	// Order: latest is first.
-	messages, err := s.Messages(m.ChannelID)
+	messages, err := App.State.Messages(ch.ID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
@@ -96,7 +105,7 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 		}
 
 		if msg == nil {
-			w, err := newMessage(s, parser, message)
+			w, err := newMessage(App.State, App.parser, message)
 			if err != nil {
 				return errors.Wrap(err, "Failed to render message")
 			}
@@ -131,8 +140,8 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 		// Iterate in reverse, so latest first.
 		for i := len(copiedMsg) - 1; i >= 0; i-- {
 			message, discordm := copiedMsg[i], messages[i]
-			message.UpdateAuthor(s, discordm.Author)
-			message.UpdateExtras(parser, discordm)
+			message.UpdateAuthor(App.State, discordm.Author)
+			message.UpdateExtras(App.parser, discordm)
 		}
 
 		// We're done resetting, set this to false.
