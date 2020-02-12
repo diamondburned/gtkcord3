@@ -19,10 +19,10 @@ const (
 
 type Message struct {
 	ExtendedWidget
+	Messages *Messages
 
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
-	GuildID  discord.Snowflake
 
 	Timestamp time.Time
 	Edited    time.Time
@@ -50,7 +50,8 @@ type Message struct {
 	content     *gtk.TextBuffer  // view declared implicitly
 	extras      []*MessageExtras // embeds, images, etc
 
-	Condensed bool
+	Condensed  bool
+	NonRegular bool
 }
 
 type MessageExtras struct {
@@ -108,7 +109,6 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 	message := Message{
 		ID:        m.ID,
-		GuildID:   m.GuildID,
 		AuthorID:  m.Author.ID,
 		Timestamp: m.Timestamp.Time(),
 		Edited:    m.EditedTimestamp.Time(),
@@ -139,11 +139,17 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		avatar.SetMarginEnd(AvatarPadding)
 
 		author.SetMarkup(bold(m.Author.Username))
-		timestamp.SetMarkup(m.Timestamp.Format(time.Kitchen))
-		timestamp.SetOpacity(0.5)
-		timestamp.SetYAlign(0.0)
+		author.SetSingleLineMode(true)
+
 		timestampSize := AvatarSize + AvatarPadding*2 - 1
 		timestamp.SetSizeRequest(timestampSize, -1)
+		timestamp.SetOpacity(0.5)
+		timestamp.SetYAlign(0.0)
+		timestamp.SetSingleLineMode(true)
+		timestamp.SetMarginTop(2)
+		timestamp.SetMarkup(`<span size="smaller">` +
+			m.Timestamp.Format(time.Kitchen) +
+			`</span>`)
 
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
@@ -164,24 +170,73 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		avatar.SetMarginTop(10)
 		right.SetMarginTop(10)
 
-		message.SetCondensed(false)
+		message.setCondensed()
 
 		return false
 	})
 
-	message.UpdateContent(p, m)
+	var messageText string
+
+	switch m.Type {
+	case discord.GuildMemberJoinMessage:
+		messageText = "joined the server."
+	case discord.CallMessage:
+		messageText = "is calling you."
+	case discord.ChannelIconChangeMessage:
+		messageText = m.Author.Username + " changed the channel icon."
+	case discord.ChannelNameChangeMessage:
+		messageText = m.Author.Username + " changed the channel name to " + m.Content + "."
+	case discord.ChannelPinnedMessage:
+		messageText = m.Author.Username + " pinned message " + m.ID.String() + "."
+	case discord.RecipientAddMessage:
+		messageText = m.Author.Username + " added " + m.Mentions[0].Username + " to the group."
+	case discord.RecipientRemoveMessage:
+		messageText = m.Author.Username + " removed " + m.Mentions[0].Username + " from the group."
+	case discord.NitroBoostMessage:
+		messageText = m.Author.Username + " boosted the server!"
+	case discord.NitroTier1Message:
+		messageText = "The server is now Nitro Boosted to Tier 1."
+	case discord.NitroTier2Message:
+		messageText = "The server is now Nitro Boosted to Tier 2."
+	case discord.NitroTier3Message:
+		messageText = "The server is now Nitro Boosted to Tier 3."
+	default:
+	}
+
+	if messageText == "" {
+		message.UpdateContent(m)
+	} else {
+		// var name = bold(App.State.AuthorDisplayName(m))
+		// if color := App.State.AuthorColor(m); color > 0 {
+		// 	name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
+		// }
+
+		message.updateContent(messageText)
+		message.NonRegular = true
+		message.SetCondensed(true)
+	}
 
 	return &message, nil
 }
 
 func (m *Message) SetCondensed(condensed bool) {
+	if m.Condensed == condensed {
+		return
+	}
 	m.Condensed = condensed
+	m.setCondensed()
+}
 
-	if condensed {
-		m.main.SetMarginTop(2)
-		m.timestamp.SetMarginStart(AvatarPadding)
-		m.timestamp.SetXAlign(0.5) // center align
-		m.mainStyle.AddClass("condensed")
+func (m *Message) setCondensed() {
+	if m.Condensed {
+		if !m.NonRegular {
+			m.main.SetMarginTop(2)
+			m.timestamp.SetMarginStart(AvatarPadding)
+			m.timestamp.SetXAlign(0.5) // center align
+			m.mainStyle.AddClass("condensed")
+		} else {
+			m.main.SetMarginTop(5)
+		}
 
 		m.main.Remove(m.avatar)
 		m.main.Remove(m.right)
@@ -210,15 +265,17 @@ func (m *Message) SetCondensed(condensed bool) {
 	m.rightTop.Add(m.timestamp)
 }
 
-func (m *Message) UpdateAuthor(state *state.State, user discord.User) {
-	if m.GuildID.Valid() {
-		var name = user.Username
+func (m *Message) UpdateAuthor(user discord.User) {
+	state := App.State
 
-		n, err := state.MemberDisplayName(m.GuildID, user.ID)
+	if guildID := App.Guild.ID; guildID.Valid() {
+		var name = escape(user.Username)
+
+		n, err := state.MemberDisplayName(guildID, user.ID)
 		if err == nil {
 			name = bold(escape(n))
 
-			if color := state.MemberColor(m.GuildID, user.ID); color > 0 {
+			if color := state.MemberColor(guildID, user.ID); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
 		}
@@ -255,12 +312,16 @@ func (m *Message) UpdateAuthor(state *state.State, user discord.User) {
 	}
 }
 
-func (m *Message) UpdateContent(parser *md.Parser, update discord.Message) {
-	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
-	parser.ParseMessage(&update, []byte(update.Content), m.content)
+func (m *Message) updateContent(s string) {
+	m.content.InsertMarkup(m.content.GetEndIter(), s)
 }
 
-func (m *Message) UpdateExtras(parser *md.Parser, update discord.Message) {
+func (m *Message) UpdateContent(update discord.Message) {
+	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
+	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+}
+
+func (m *Message) UpdateExtras(update discord.Message) {
 	// TODO
 	// must(m.ShowAll)
 }

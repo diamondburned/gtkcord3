@@ -19,9 +19,6 @@ const (
 )
 
 type Guilds struct {
-	// *gtk.TreeView
-	// Store *gtk.TreeStore
-
 	*gtk.ListBox
 
 	Friends *gtk.TreeIter // TODO
@@ -30,6 +27,8 @@ type Guilds struct {
 
 type Guild struct {
 	ExtendedWidget
+	Guilds *Guilds
+
 	Row *gtk.ListBoxRow
 
 	Folder *GuildFolder
@@ -46,7 +45,9 @@ type Guild struct {
 	current  *Channel
 }
 
-func newGuildsFromFolders(s *state.State) ([]*Guild, error) {
+func newGuildsFromFolders() ([]*Guild, error) {
+	s := App.State
+
 	var folders = s.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
 
@@ -83,7 +84,9 @@ func newGuildsFromFolders(s *state.State) ([]*Guild, error) {
 	return rows, nil
 }
 
-func newGuildsLegacy(s *state.State) ([]*Guild, error) {
+func newGuildsLegacy() ([]*Guild, error) {
+	s := App.State
+
 	gs, err := s.Guilds()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get guilds")
@@ -119,14 +122,14 @@ func newGuildsLegacy(s *state.State) ([]*Guild, error) {
 	return rows, nil
 }
 
-func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
+func newGuilds(onGuild func(*Guild)) (*Guilds, error) {
 	var rows []*Guild
 	var err error
 
-	if len(s.Ready.Settings.GuildPositions) > 0 {
-		rows, err = newGuildsFromFolders(s)
+	if len(App.State.Ready.Settings.GuildPositions) > 0 {
+		rows, err = newGuildsFromFolders()
 	} else {
-		rows, err = newGuildsLegacy(s)
+		rows, err = newGuildsLegacy()
 	}
 
 	if err != nil {
@@ -145,9 +148,16 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 	}
 	ctx.AddClass("guild")
 
+	g := &Guilds{
+		ListBox: l,
+		Guilds:  rows,
+	}
+
 	for _, r := range rows {
-		must(l.Add, r)
-		must(r.Show)
+		must(func(r *Guild) {
+			l.Add(r)
+			r.ShowAll()
+		}, r)
 	}
 
 	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -171,11 +181,6 @@ func newGuilds(s *state.State, onGuild func(*Guild)) (*Guilds, error) {
 
 		onGuild(row)
 	})
-
-	g := &Guilds{
-		ListBox: l,
-		Guilds:  rows,
-	}
 
 	return g, nil
 }
@@ -238,7 +243,7 @@ func (g *Guild) Current() *Channel {
 func (g *Guild) GoTo(s *state.State, parser *md.Parser, ch *Channel) error {
 	g.current = ch
 
-	if err := ch.loadMessages(s, parser); err != nil {
+	if err := ch.loadMessages(); err != nil {
 		return errors.Wrap(err, "Failed to load messages")
 	}
 

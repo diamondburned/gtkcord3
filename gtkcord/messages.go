@@ -1,7 +1,6 @@
 package gtkcord
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,26 +17,47 @@ const DefaultFetch = 25
 
 type Messages struct {
 	ExtendedWidget
-	Main      *gtk.Box
-	Scroll    *gtk.ScrolledWindow
-	Viewport  *gtk.Viewport
-	ChannelID discord.Snowflake
-	Messages  []*Message
-	guard     sync.Mutex
+	Channel *Channel
+
+	Main *gtk.Box
+
+	Scroll   *gtk.ScrolledWindow
+	Viewport *gtk.Viewport
+	Messages *gtk.Box
+
+	messages []*Message
+	guard    sync.Mutex
 
 	Resetting atomic.Value
+
+	Input *MessageInput
 }
 
-func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
+func (ch *Channel) loadMessages() error {
+	if ch.Messages == nil {
+		ch.Messages = &Messages{
+			Channel: ch,
+		}
+	}
+
+	m := ch.Messages
+
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
 	if m.Main == nil {
+		main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		if err != nil {
+			return errors.Wrap(err, "Failed to make box")
+		}
+		m.Main = main
+		m.ExtendedWidget = main
+
 		b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		if err != nil {
 			return errors.Wrap(err, "Failed to make box")
 		}
-		m.Main = b
+		m.Messages = b
 
 		v, err := gtk.ViewportNew(nil, nil)
 		if err != nil {
@@ -49,7 +69,6 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 		if err != nil {
 			return errors.Wrap(err, "Failed to create channel scroller")
 		}
-		m.ExtendedWidget = s
 		m.Scroll = s
 
 		must(func() {
@@ -62,46 +81,67 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 			v.Connect("size-allocate", m.onSizeAlloc)
 			v.Add(b)
 			s.Add(v)
+			main.Add(s)
 		})
 	}
 
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
 
-	for _, w := range m.Messages {
-		must(m.Main.Remove, w)
+	for _, w := range m.messages {
+		must(m.Messages.Remove, w)
 	}
 
 	// Order: latest is first.
-	messages, err := s.Messages(m.ChannelID)
+	messages, err := App.State.Messages(ch.ID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
-	// Reset the slice to empty.
-	m.Messages = m.Messages[:0]
+	// Allocate a new empty slice. This is a trade-off to re-using the old
+	// slice to re-use messages.
+	var newMessages = make([]*Message, 0, DefaultFetch)
 
 	// Iterate from earliest to latest.
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
 
-		w, err := newMessage(s, parser, message)
-		if err != nil {
-			return errors.Wrap(err, "Failed to render message")
+		var msg *Message
+
+		// See if we could find the message in our old list:
+		for _, w := range m.messages {
+			if w.ID == message.ID {
+				msg = w
+				break
+			}
 		}
 
-		if m.ShouldCondense(message) {
-			must(w.SetCondensed, true)
+		if msg == nil {
+			w, err := newMessage(App.State, App.parser, message)
+			if err != nil {
+				return errors.Wrap(err, "Failed to render message")
+			}
+			msg = w
+		}
+
+		if shouldCondense(newMessages, message) {
+			must(msg.SetCondensed, true)
 		}
 
 		must(func() {
-			m.Main.Add(w)
-			w.ShowAll()
+			m.Messages.Add(msg)
+			msg.ShowAll()
 		})
 
 		// Messages are added, earliest first.
-		m.Messages = append(m.Messages, w)
+		newMessages = append(newMessages, msg)
 	}
+
+	// Set the new slice.
+	m.messages = newMessages
+
+	// Hack around the mutex
+	copiedMsg := append([]*Message{}, newMessages...)
 
 	go func() {
 		// Revert to latest is last, earliest is first.
@@ -110,10 +150,10 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 		}
 
 		// Iterate in reverse, so latest first.
-		for i := len(m.Messages) - 1; i >= 0; i-- {
-			message, discordm := m.Messages[i], messages[i]
-			message.UpdateAuthor(s, discordm.Author)
-			message.UpdateExtras(parser, discordm)
+		for i := len(copiedMsg) - 1; i >= 0; i-- {
+			message, discordm := copiedMsg[i], messages[i]
+			message.UpdateAuthor(discordm.Author)
+			message.UpdateExtras(discordm)
 		}
 
 		// We're done resetting, set this to false.
@@ -124,11 +164,15 @@ func (m *Messages) Reset(s *state.State, parser *md.Parser) error {
 }
 
 func (m *Messages) ShouldCondense(msg discord.Message) bool {
-	if len(m.Messages) == 0 {
+	return shouldCondense(m.messages, msg)
+}
+
+func shouldCondense(msgs []*Message, msg discord.Message) bool {
+	if len(msgs) == 0 {
 		return false
 	}
 
-	var last = m.Messages[len(m.Messages)-1]
+	var last = msgs[len(msgs)-1]
 
 	return last.AuthorID == msg.Author.ID &&
 		msg.Timestamp.Time().Sub(last.Timestamp) < 5*time.Minute
@@ -149,7 +193,6 @@ func (m *Messages) onSizeAlloc() {
 
 	// If the scroll is not close to the bottom and we're not loading messages:
 	if max-cur > 2500 && !loading {
-		log.Println("Scroll was at", max, "-", cur, "> 450, not scrolling")
 		// Then we don't scroll.
 		return
 	}
@@ -165,8 +208,8 @@ func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Mes
 	}
 
 	semaphore.Go(func() {
-		w.UpdateAuthor(s, message.Author)
-		w.UpdateExtras(parser, message)
+		w.UpdateAuthor(message.Author)
+		w.UpdateExtras(message)
 	})
 
 	m.guard.Lock()
@@ -177,11 +220,11 @@ func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Mes
 	}
 
 	must(func() {
-		must(m.Main.Add, w)
-		must(m.Main.ShowAll)
+		m.Messages.Add(w)
+		w.ShowAll()
 	})
 
-	m.Messages = append(m.Messages, w)
+	m.messages = append(m.messages, w)
 	return nil
 }
 
@@ -189,7 +232,7 @@ func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Mess
 	var target *Message
 
 	m.guard.Lock()
-	for _, message := range m.Messages {
+	for _, message := range m.messages {
 		if message.ID == update.ID {
 			target = message
 		}
@@ -200,10 +243,10 @@ func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Mess
 		return
 	}
 	if update.Content != "" {
-		target.UpdateContent(parser, update)
+		target.UpdateContent(update)
 	}
 	semaphore.Go(func() {
-		target.UpdateExtras(parser, update)
+		target.UpdateExtras(update)
 	})
 }
 
@@ -211,13 +254,13 @@ func (m *Messages) Delete(id discord.Snowflake) bool {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	for i, message := range m.Messages {
+	for i, message := range m.messages {
 		if message.ID != id {
 			continue
 		}
 
-		m.Messages = append(m.Messages[:i], m.Messages[i+1:]...)
-		m.Main.Remove(message)
+		m.messages = append(m.messages[:i], m.messages[i+1:]...)
+		must(m.Messages.Remove, message)
 		return true
 	}
 

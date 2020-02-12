@@ -6,7 +6,6 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -22,6 +21,7 @@ const (
 
 type Channels struct {
 	ExtendedWidget
+	Guild *Guild
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -32,12 +32,11 @@ type Channels struct {
 	// Channel list
 	ChList   *gtk.ListBox
 	Channels []*Channel
-
-	GuildID discord.Snowflake
 }
 
 type Channel struct {
-	gtk.IWidget
+	ExtendedWidget
+	Channels *Channels
 
 	Row   *gtk.ListBoxRow
 	Label *gtk.Label
@@ -46,20 +45,6 @@ type Channel struct {
 	Category bool
 
 	Messages *Messages
-}
-
-func (ch *Channel) loadMessages(s *state.State, parser *md.Parser) error {
-	if ch.Messages == nil {
-		ch.Messages = &Messages{
-			ChannelID: ch.ID,
-		}
-	}
-
-	if err := ch.Messages.Reset(s, parser); err != nil {
-		return errors.Wrap(err, "Failed to reset messages in channel")
-	}
-
-	return nil
 }
 
 func (g *Guild) loadChannels(
@@ -130,7 +115,7 @@ func (g *Guild) loadChannels(
 	}
 
 	for _, ch := range g.Channels.Channels {
-		must(cl.Add, ch.IWidget)
+		must(cl.Add, ch)
 	}
 
 	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -178,13 +163,14 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 
 	must(r.Add, l)
 	return &Channel{
-		IWidget:  r,
-		Row:      r,
-		Label:    l,
-		ID:       ch.ID,
-		Category: true,
+		ExtendedWidget: r,
+		Row:            r,
+		Label:          l,
+		ID:             ch.ID,
+		Category:       true,
 	}, nil
 }
+
 func newChannelRow(ch discord.Channel) (*Channel, error) {
 	r, err := gtk.ListBoxRowNew()
 	if err != nil {
@@ -202,11 +188,11 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 
 	must(r.Add, l)
 	return &Channel{
-		IWidget:  r,
-		Row:      r,
-		Label:    l,
-		ID:       ch.ID,
-		Category: false,
+		ExtendedWidget: r,
+		Row:            r,
+		Label:          l,
+		ID:             ch.ID,
+		Category:       false,
 	}, nil
 }
 func newDMChannel(ch discord.Channel) (*Channel, error) {

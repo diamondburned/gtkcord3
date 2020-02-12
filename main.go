@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"runtime"
 
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
@@ -17,11 +16,7 @@ func main() {
 		log.Fatalln("No tokens given!")
 	}
 
-	// LOOL FUCK ME HAHAHFAHFHUADFJADHFFLYFHFH:F:LFHfldhfdsfsd...
-	runtime.GOMAXPROCS(1)
-
-	a, err := gtkcord.New()
-	if err != nil {
+	if err := gtkcord.Init(); err != nil {
 		log.Fatalln("Can't create a Gtk3 window:", err)
 	}
 
@@ -43,7 +38,7 @@ func main() {
 		return ok
 	})
 
-	if err := a.UseState(s); err != nil {
+	if err := gtkcord.UseState(s); err != nil {
 		log.Fatalln("Can't initiate the Gtk3 window:", err)
 	}
 }
