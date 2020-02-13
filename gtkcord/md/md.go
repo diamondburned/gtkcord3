@@ -1,7 +1,6 @@
 package md
 
 import (
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"github.com/alecthomas/chroma"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -52,26 +52,22 @@ type Parser struct {
 	RolePressed    func(id discord.Snowflake)
 	URLPressed     func(url string)
 
-	Error func(err error)
-
 	theme *gtk.IconTheme
 	icons sync.Map
 }
 
 func NewParser(s *state.State) *Parser {
-	log.Println("Regex", strings.Join(regexes, "|"))
+	log.Debugln("REGEX:", strings.Join(regexes, "|"))
+
 	i, err := gtk.IconThemeGetDefault()
 	if err != nil {
 		// We can panic here, as nothing would work if this ever panics.
-		panic("Can't get GTK Icon Theme: " + err.Error())
+		log.Panicln("Couldn't get default GTK Icon Theme:", err)
 	}
 
 	p := &Parser{
 		State: s,
 		theme: i,
-		Error: func(err error) {
-			log.Println("Markdown:", err)
-		},
 	}
 	p.pool = newPool(p)
 
@@ -87,6 +83,7 @@ func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
 
 	pb, err := p.theme.LoadIcon(name, size, gtk.ICON_LOOKUP_FORCE_SIZE)
 	if err != nil {
+		log.Errorln("Markdown: Failed to load icon", name+":", err)
 		return nil
 	}
 

@@ -1,12 +1,10 @@
 package md
 
 import (
-	"log"
-
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
-	"github.com/pkg/errors"
 )
 
 func EmojiURL(emojiID string, animated bool) string {
@@ -34,8 +32,8 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 
 	i := s.p.GetIcon("image-missing", sz)
 	if i == nil {
-		s.buf.Insert(iter, "[broken emoji]")
-		log.Println("Markdown: Failed to get image-missing icon")
+		s.buf.Insert(iter, "[?]")
+		log.Errorln("Markdown: Failed to get image-missing icon")
 		return
 	}
 
@@ -54,7 +52,7 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 
 		pixbuf, err := pbpool.GetScaled(url+"?size=64", sz, sz)
 		if err != nil {
-			s.p.Error(errors.Wrap(err, "Failed to GET "+url))
+			log.Errorln("Markdown: Failed to GET " + url)
 			return
 		}
 

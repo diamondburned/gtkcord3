@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -201,8 +199,8 @@ func (m *Messages) onSizeAlloc() {
 	m.Viewport.SetVAdjustment(adj)
 }
 
-func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Message) error {
-	w, err := newMessage(s, parser, message)
+func (m *Messages) Insert(message discord.Message) error {
+	w, err := newMessage(App.State, App.parser, message)
 	if err != nil {
 		return errors.Wrap(err, "Failed to render message")
 	}
@@ -228,7 +226,7 @@ func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Mes
 	return nil
 }
 
-func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Message) {
+func (m *Messages) Update(update discord.Message) {
 	var target *Message
 
 	m.guard.Lock()

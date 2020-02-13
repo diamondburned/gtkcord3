@@ -91,14 +91,9 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 	}
 
 	for _, id := range folder.GuildIDs {
-		g, err := s.Guild(id)
+		r, err := newGuildRow(id)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to get guild ID"+id.String())
-		}
-
-		r, err := newGuildRow(*g)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
+			return nil, errors.Wrap(err, "Failed to load guild "+id.String())
 		}
 		r.Row.SetSizeRequest(
 			// We need to mult 4 div 3, since if we do full *2, the child

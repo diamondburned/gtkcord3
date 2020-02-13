@@ -5,9 +5,8 @@ import (
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -38,7 +37,8 @@ type Guild struct {
 	// nil if not downloaded
 	Pixbuf *Pixbuf
 
-	ID discord.Snowflake
+	ID   discord.Snowflake
+	Name string
 
 	// nil if Folder
 	Channels *Channels
@@ -52,29 +52,18 @@ func newGuildsFromFolders() ([]*Guild, error) {
 	var rows = make([]*Guild, 0, len(folders))
 
 	for _, f := range folders {
-		switch len(f.GuildIDs) {
-		case 0: // ???
-			continue
-		case 1:
-			g, err := s.Guild(f.GuildIDs[0])
+		if len(f.GuildIDs) == 1 && f.Name == "" {
+			r, err := newGuildRow(f.GuildIDs[0])
 			if err != nil {
-				return nil,
-					errors.Wrap(err, "Failed to get guild in folder "+f.Name)
-			}
-
-			r, err := newGuildRow(*g)
-			if err != nil {
-				return nil,
-					errors.Wrap(err, "Failed to load guild "+g.Name)
+				return nil, errors.Wrap(err, "Failed to load guild "+f.GuildIDs[0].String())
 			}
 
 			rows = append(rows, r)
 
-		default:
+		} else {
 			e, err := newGuildFolder(s, f)
 			if err != nil {
-				return nil,
-					errors.Wrap(err, "Failed to create a new folder "+f.Name)
+				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
 			}
 
 			rows = append(rows, e)
@@ -110,10 +99,9 @@ func newGuildsLegacy() ([]*Guild, error) {
 	})
 
 	for _, g := range gs {
-		r, err := newGuildRow(g)
+		r, err := newGuildRow(g.ID)
 		if err != nil {
-			return nil,
-				errors.Wrap(err, "Failed to load guild "+g.Name)
+			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
 		}
 
 		rows = append(rows, r)
@@ -122,7 +110,7 @@ func newGuildsLegacy() ([]*Guild, error) {
 	return rows, nil
 }
 
-func newGuilds(onGuild func(*Guild)) (*Guilds, error) {
+func newGuilds() (*Guilds, error) {
 	var rows []*Guild
 	var err error
 
@@ -179,13 +167,22 @@ func newGuilds(onGuild func(*Guild)) (*Guilds, error) {
 			row = row.Folder.Guilds[index]
 		}
 
-		onGuild(row)
+		App.loadGuild(row)
 	})
 
 	return g, nil
 }
 
-func newGuildRow(guild discord.Guild) (*Guild, error) {
+func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
+	g, fetcherr := App.State.Guild(guildID)
+	if fetcherr != nil {
+		log.Errorln("Failed to get guild ID " + guildID.String() + ", using a placeholder...")
+		g = &discord.Guild{
+			ID:   guildID,
+			Name: "Unavailable",
+		}
+	}
+
 	r, err := gtk.ListBoxRowNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a list row")
@@ -194,7 +191,7 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
 	r.SetHAlign(gtk.ALIGN_CENTER)
 	r.SetVAlign(gtk.ALIGN_CENTER)
-	r.SetTooltipMarkup(bold(guild.Name))
+	r.SetTooltipMarkup(bold(g.Name))
 	r.SetActivatable(true)
 
 	i, err := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
@@ -204,21 +201,32 @@ func newGuildRow(guild discord.Guild) (*Guild, error) {
 
 	must(r.Add, i)
 
-	g := &Guild{
+	guild := &Guild{
 		ExtendedWidget: r,
-		Row:            r,
-		ID:             guild.ID,
-		Image:          i,
+
+		Row:   r,
+		ID:    g.ID,
+		Name:  g.Name,
+		Image: i,
 	}
 
-	var url = guild.IconURL()
+	// Check if the guild is unavailable:
+	if fetcherr != nil {
+		guild.SetUnavailable(true)
+	}
+
+	var url = g.IconURL()
 	if url == "" {
 		// Guild doesn't have an icon, exit:
-		return g, nil
+		return guild, nil
 	}
 
-	go g.UpdateImage(url)
-	return g, nil
+	go guild.UpdateImage(url)
+	return guild, nil
+}
+
+func (g *Guild) SetUnavailable(unavailable bool) {
+	must(g.Row.SetSensitive, !unavailable)
 }
 
 func (g *Guild) Current() *Channel {
@@ -240,7 +248,7 @@ func (g *Guild) Current() *Channel {
 	return g.current
 }
 
-func (g *Guild) GoTo(s *state.State, parser *md.Parser, ch *Channel) error {
+func (g *Guild) GoTo(ch *Channel) error {
 	g.current = ch
 
 	if err := ch.loadMessages(); err != nil {
@@ -256,7 +264,7 @@ func (g *Guild) UpdateImage(url string) {
 	if !animated {
 		p, err := pbpool.DownloadScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
-			logWrap(err, "Failed to get the pixbuf guild icon")
+			log.Errorln("Failed to update the pixbuf guild icon:", err)
 			return
 		}
 
@@ -265,7 +273,7 @@ func (g *Guild) UpdateImage(url string) {
 	} else {
 		p, err := pbpool.DownloadAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
-			logWrap(err, "Failed to get the pixbuf guild animation")
+			log.Errorln("Ffailed to update the pixbuf guild animation:", err)
 			return
 		}
 

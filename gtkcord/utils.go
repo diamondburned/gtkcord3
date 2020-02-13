@@ -1,46 +1,15 @@
 package gtkcord
 
 import (
-	"log"
-	"path/filepath"
 	"reflect"
-	"runtime"
-	"strconv"
 
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
 )
 
-var logError = func(err error) {
-	_, file1, line1, _ := runtime.Caller(1)
-	_, file2, line2, _ := runtime.Caller(2)
-	_, file3, line3, _ := runtime.Caller(3)
-
-	file1 = filepath.Base(file1)
-	file2 = filepath.Base(file2)
-	file3 = filepath.Base(file3)
-
-	log.Printf(
-		"%s:%d > %s:%d > %s:%d > gtkcord error: %v\n",
-		file3, line3, file2, line2, file1, line1, err)
-}
-
-func debugMust(enable bool) func() {
-	if !enable {
-		return func() {}
-	}
-
-	_, file, line, _ := runtime.Caller(2)
-	pos := filepath.Base(file) + ":" + strconv.Itoa(line)
-
-	return func() {
-		log.Println("IdleAdd @ " + pos)
-	}
-}
-
 func must(fn interface{}, args ...interface{}) {
-	var debug = debugMust(true)
+	var trace = log.Trace(1)
 	var err error
 
 	switch len(args) {
@@ -50,12 +19,13 @@ func must(fn interface{}, args ...interface{}) {
 			_, err = glib.IdleAdd(fn)
 		case func():
 			_, err = glib.IdleAdd(func() bool {
-				debug()
+				log.Debugln(trace, "IdleAdd() called.")
+
 				fn.(func())()
 				return false
 			})
 		default:
-			panic("Unknown callback type")
+			log.Panicln("Unknown callback type")
 		}
 
 	case 1:
@@ -63,17 +33,18 @@ func must(fn interface{}, args ...interface{}) {
 		argV := reflect.ValueOf(args[0])
 
 		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
-			debug()
+			log.Debugln(trace, "IdleAdd() called.")
+
 			values[0].Call([]reflect.Value{values[1]})
 			return false
 		}, [2]reflect.Value{fnV, argV})
 
 	default:
-		panic("BUG!")
+		log.Panicln("BUG: >1 arguments given to must()")
 	}
 
 	if err != nil {
-		logError(errors.Wrap(err, "FATAL: IdleAdd in must()"))
+		log.Errorln(trace, "IdleAdd in must()", err)
 	}
 }
 
@@ -86,7 +57,7 @@ func logWrap(err error, str string) {
 		return
 	}
 
-	logError(errors.Wrap(err, str))
+	log.Errorln(str+":", err)
 }
 
 func margin4(w *gtk.Widget, top, bottom, left, right int) {

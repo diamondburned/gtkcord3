@@ -67,7 +67,6 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get main box's style context")
 	}
-	mstyle.AddClass("message")
 
 	right, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
@@ -130,8 +129,10 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	// What the fuck?
 	must(func() bool {
 		main.SetMarginBottom(2)
+		mstyle.AddClass("message")
 
 		rbottom.SetHExpand(true)
+		rbottom.SetMarginEnd(AvatarPadding)
 
 		avatar.SetSizeRequest(AvatarSize, AvatarSize)
 		avatar.SetProperty("yalign", 0.0)
@@ -155,8 +156,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		if err != nil {
 			panic("Die: " + err.Error())
 		}
-		msgTv.SetMarginEnd(AvatarPadding)
-		msgTv.SetWrapMode(gtk.WRAP_WORD)
+		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 		msgTv.SetCursorVisible(false)
 		msgTv.SetEditable(false)
 

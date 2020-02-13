@@ -1,10 +1,10 @@
 package gtkcord
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -113,7 +113,7 @@ func (m *HeaderMenu) UpdateAvatar(url string) {
 	defer r.Body.Close()
 
 	if r.StatusCode < 200 || r.StatusCode > 299 {
-		logError(fmt.Errorf("Bad status code %d for %s", r.StatusCode, url))
+		log.Errorf("Bad status code %d for %s\n", r.StatusCode, url)
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
