@@ -1,6 +1,7 @@
 package gtkcord
 
 import (
+	"math/rand"
 	"reflect"
 
 	"github.com/diamondburned/gtkcord3/log"
@@ -74,4 +75,17 @@ func margin2(w *gtk.Widget, top, left int) {
 
 func margin(w *gtk.Widget, sz int) {
 	margin2(w, sz, sz)
+}
+
+func randString() string {
+	const randLen = 20
+	const alphabet = "abcdefghijklmnopqrstuvwxyz" +
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, randLen)
+	for i := range b {
+		b[i] = alphabet[rand.Intn(len(alphabet))]
+	}
+
+	return string(b)
 }

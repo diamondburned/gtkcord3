@@ -69,14 +69,11 @@ func (g *Guild) loadChannels() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to create channel scroller")
 	}
-	cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
 	main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create main box")
 	}
-	main.SetSizeRequest(ChannelsWidth, -1)
-	must(cs.Add, main)
 
 	g.Channels = &Channels{
 		ExtendedWidget: cs,
@@ -93,11 +90,8 @@ func (g *Guild) loadChannels() error {
 		if err != nil {
 			return errors.Wrap(err, "Failed to create banner image")
 		}
-		banner.SetSizeRequest(ChannelsWidth, BannerHeight)
 
-		must(main.Add, banner)
 		g.Channels.BannerImage = banner
-
 		go g.UpdateBanner(guild.BannerURL())
 	}
 
@@ -109,16 +103,9 @@ func (g *Guild) loadChannels() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to create channel list")
 	}
-	cl.SetVExpand(true)
-	cl.SetActivateOnSingleClick(true)
-	must(main.Add, cl)
 
 	if err := transformChannels(g.Channels, chs); err != nil {
 		return errors.Wrap(err, "Failed to transform channels")
-	}
-
-	for _, ch := range g.Channels.Channels {
-		must(cl.Add, ch)
 	}
 
 	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -126,9 +113,24 @@ func (g *Guild) loadChannels() error {
 		App.loadChannel(g, row)
 	})
 
-	/*
-	 * === Messages ===
-	 */
+	must(func() {
+		cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		main.SetSizeRequest(ChannelsWidth, -1)
+		cs.Add(main)
+
+		if banner := g.Channels.BannerImage; banner != nil {
+			banner.SetSizeRequest(ChannelsWidth, BannerHeight)
+			main.Add(banner)
+		}
+
+		cl.SetVExpand(true)
+		cl.SetActivateOnSingleClick(true)
+		main.Add(cl)
+
+		for _, ch := range g.Channels.Channels {
+			cl.Add(ch)
+		}
+	})
 
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -21,6 +22,7 @@ type Message struct {
 	ExtendedWidget
 	Messages *Messages
 
+	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
 
@@ -107,6 +109,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	}
 
 	message := Message{
+		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
 		Timestamp: m.Timestamp.Time(),
@@ -154,7 +157,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
-			panic("Die: " + err.Error())
+			log.Panicln("Die: " + err.Error())
 		}
 		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 		msgTv.SetCursorVisible(false)
@@ -171,6 +174,12 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		right.SetMarginTop(10)
 
 		message.setCondensed()
+
+		// Message without a valid ID is probably a sending message. Either way,
+		// it's unavailable.
+		if !m.ID.Valid() {
+			main.SetSensitive(false)
+		}
 
 		return false
 	})

@@ -1,6 +1,7 @@
 package gtkcord
 
 import (
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -8,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/log"
@@ -31,12 +33,15 @@ func init() {
 type ExtendedWidget interface {
 	gtk.IWidget
 	SetSensitive(bool)
+	GetSensitive() bool
 	Show()
 	ShowAll()
 }
 
 type application struct {
-	State  *state.State
+	State *state.State
+	Me    *discord.User
+
 	Window *gtk.Window
 	Header *Header
 	Grid   *gtk.Grid
@@ -63,6 +68,8 @@ type application struct {
 }
 
 func Init() error {
+	rand.Seed(time.Now().UnixNano())
+
 	App = new(application)
 	App.done = make(chan struct{})
 
@@ -79,7 +86,13 @@ func UseState(s *state.State) error {
 	App.Window.Remove(App.sbox)
 	App.parser = md.NewParser(s)
 
-	if err := App.Header.Hamburger.Refresh(s); err != nil {
+	u, err := s.Me()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get current user")
+	}
+	App.Me = u
+
+	if err := App.Header.Hamburger.Refresh(); err != nil {
 		return errors.Wrap(err, "Failed to refresh hamburger")
 	}
 
@@ -130,6 +143,21 @@ func UseState(s *state.State) error {
 	App.wait()
 
 	return nil
+}
+
+func (a *application) GuildID() discord.Snowflake {
+	if a.Guild == nil {
+		return 0
+	}
+	return a.Guild.ID
+}
+
+func (a *application) ChannelID() discord.Snowflake {
+	mw, ok := App.Messages.(*Messages)
+	if !ok {
+		return 0
+	}
+	return mw.Channel.ID
 }
 
 func (a *application) init() error {
@@ -299,6 +327,15 @@ func (a *application) _loadChannel(g *Guild, ch *Channel) {
 
 	// Run hook
 	a.Header.UpdateChannel(ch.Name, ch.Topic)
+
+	if a.Messages == nil {
+		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+		if err != nil {
+			logWrap(err, "Failed to make a separator")
+		} else {
+			must(a.Grid.Add, s)
+		}
+	}
 
 	if err := g.GoTo(ch); err != nil {
 		logWrap(err, "Failed to go to channel")

@@ -3,7 +3,6 @@ package gtkcord
 import (
 	"io/ioutil"
 
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -87,16 +86,13 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	return hm, nil
 }
 
-func (m *HeaderMenu) Refresh(s *state.State) error {
-	u, err := s.Me()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get myself")
-	}
+func (m *HeaderMenu) Refresh() error {
+	me := App.Me
 
-	m.Name.SetMarkup(escape(u.Username + "#" + u.Discriminator))
+	m.Name.SetMarkup(escape(me.Username + "#" + me.Discriminator))
 
-	if u.Avatar != "" {
-		go m.UpdateAvatar(u.AvatarURL())
+	if me.Avatar != "" {
+		go m.UpdateAvatar(me.AvatarURL())
 	}
 
 	return nil
