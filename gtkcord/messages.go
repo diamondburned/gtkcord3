@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -200,6 +201,8 @@ func (m *Messages) onSizeAlloc() {
 		// Then we don't scroll.
 		return
 	}
+
+	log.Debugln("Scrolling because", max, "-", cur, "> 2500, and loading =", loading)
 
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)

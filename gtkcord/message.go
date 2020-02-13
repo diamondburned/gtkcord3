@@ -52,8 +52,7 @@ type Message struct {
 	content     *gtk.TextBuffer  // view declared implicitly
 	extras      []*MessageExtras // embeds, images, etc
 
-	Condensed  bool
-	NonRegular bool
+	Condensed bool
 }
 
 type MessageExtras struct {
@@ -151,6 +150,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		timestamp.SetYAlign(0.0)
 		timestamp.SetSingleLineMode(true)
 		timestamp.SetMarginTop(2)
+		timestamp.SetMarginStart(AvatarPadding)
 		timestamp.SetMarkup(`<span size="smaller">` +
 			m.Timestamp.Format(time.Kitchen) +
 			`</span>`)
@@ -188,21 +188,21 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 	switch m.Type {
 	case discord.GuildMemberJoinMessage:
-		messageText = "joined the server."
+		messageText = "Joined the server."
 	case discord.CallMessage:
-		messageText = "is calling you."
+		messageText = "Calling you."
 	case discord.ChannelIconChangeMessage:
-		messageText = m.Author.Username + " changed the channel icon."
+		messageText = "Changed the channel icon."
 	case discord.ChannelNameChangeMessage:
-		messageText = m.Author.Username + " changed the channel name to " + m.Content + "."
+		messageText = "Changed the channel name to " + m.Content + "."
 	case discord.ChannelPinnedMessage:
-		messageText = m.Author.Username + " pinned message " + m.ID.String() + "."
+		messageText = "Pinned message " + m.ID.String() + "."
 	case discord.RecipientAddMessage:
-		messageText = m.Author.Username + " added " + m.Mentions[0].Username + " to the group."
+		messageText = "Added " + m.Mentions[0].Username + " to the group."
 	case discord.RecipientRemoveMessage:
-		messageText = m.Author.Username + " removed " + m.Mentions[0].Username + " from the group."
+		messageText = "Removed " + m.Mentions[0].Username + " from the group."
 	case discord.NitroBoostMessage:
-		messageText = m.Author.Username + " boosted the server!"
+		messageText = "Boosted the server!"
 	case discord.NitroTier1Message:
 		messageText = "The server is now Nitro Boosted to Tier 1."
 	case discord.NitroTier2Message:
@@ -221,8 +221,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		// }
 
 		message.updateContent(messageText)
-		message.NonRegular = true
-		message.SetCondensed(true)
+		message.rightBottom.SetOpacity(0.5)
 	}
 
 	return &message, nil
@@ -238,14 +237,8 @@ func (m *Message) SetCondensed(condensed bool) {
 
 func (m *Message) setCondensed() {
 	if m.Condensed {
-		if !m.NonRegular {
-			m.main.SetMarginTop(2)
-			m.timestamp.SetMarginStart(AvatarPadding)
-			m.timestamp.SetXAlign(0.5) // center align
-			m.mainStyle.AddClass("condensed")
-		} else {
-			m.main.SetMarginTop(5)
-		}
+		m.main.SetMarginTop(5)
+		m.timestamp.SetXAlign(0.5)
 
 		m.main.Remove(m.avatar)
 		m.main.Remove(m.right)
@@ -261,7 +254,7 @@ func (m *Message) setCondensed() {
 	}
 
 	m.main.SetMarginTop(7)
-	m.timestamp.SetMarginStart(7)
+	// m.timestamp.SetMarginStart(7)
 	m.timestamp.SetXAlign(0.0) // left align
 	m.mainStyle.RemoveClass("condensed")
 
