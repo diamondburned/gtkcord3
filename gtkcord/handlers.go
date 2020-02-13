@@ -12,19 +12,21 @@ func (a *application) hookEvents() {
 
 		switch v := v.(type) {
 		case *gateway.MessageCreateEvent:
-			a.onMessageCreate(v)
+			onMessageCreate(v)
 		case *gateway.MessageUpdateEvent:
-			a.onMessageUpdate(v)
+			onMessageUpdate(v)
 		case *gateway.MessageDeleteEvent:
-			a.onMessageDelete(v)
+			onMessageDelete(v)
+		case *gateway.GuildUpdateEvent:
+			onGuildUpdate(v)
 		case *gateway.MessageDeleteBulkEvent:
-			a.onMessageDeleteBulk(v)
+			onMessageDeleteBulk(v)
 		}
 	})
 }
 
-func (a *application) onMessageCreate(m *gateway.MessageCreateEvent) {
-	mw, ok := a.Messages.(*Messages)
+func onMessageCreate(m *gateway.MessageCreateEvent) {
+	mw, ok := App.Messages.(*Messages)
 	if !ok {
 		return
 	}
@@ -33,13 +35,13 @@ func (a *application) onMessageCreate(m *gateway.MessageCreateEvent) {
 		return
 	}
 
-	if err := mw.Insert(a.State, a.parser, discord.Message(*m)); err != nil {
+	if err := mw.Insert(discord.Message(*m)); err != nil {
 		logWrap(err, "Failed to insert message from "+m.Author.Username)
 	}
 }
 
-func (a *application) onMessageUpdate(m *gateway.MessageUpdateEvent) {
-	mw, ok := a.Messages.(*Messages)
+func onMessageUpdate(m *gateway.MessageUpdateEvent) {
+	mw, ok := App.Messages.(*Messages)
 	if !ok {
 		return
 	}
@@ -48,11 +50,11 @@ func (a *application) onMessageUpdate(m *gateway.MessageUpdateEvent) {
 		return
 	}
 
-	mw.Update(a.State, a.parser, discord.Message(*m))
+	mw.Update(discord.Message(*m))
 }
 
-func (a *application) onMessageDelete(m *gateway.MessageDeleteEvent) {
-	mw, ok := a.Messages.(*Messages)
+func onMessageDelete(m *gateway.MessageDeleteEvent) {
+	mw, ok := App.Messages.(*Messages)
 	if !ok {
 		return
 	}
@@ -64,8 +66,8 @@ func (a *application) onMessageDelete(m *gateway.MessageDeleteEvent) {
 	mw.Delete(m.ID)
 }
 
-func (a *application) onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
-	mw, ok := a.Messages.(*Messages)
+func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
+	mw, ok := App.Messages.(*Messages)
 	if !ok {
 		return
 	}
@@ -77,4 +79,7 @@ func (a *application) onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
 	for _, id := range m.IDs {
 		mw.Delete(id)
 	}
+}
+
+func onGuildUpdate(g *gateway.GuildUpdateEvent) {
 }

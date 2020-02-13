@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord"
+	"github.com/diamondburned/gtkcord3/log"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 	}
 
 	s.ErrorLog = func(err error) {
-		log.Println("State error:", err)
+		log.Errorln("Discord error:", err)
 	}
 
 	if err := s.Open(); err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -21,6 +22,7 @@ type Message struct {
 	ExtendedWidget
 	Messages *Messages
 
+	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
 
@@ -50,8 +52,7 @@ type Message struct {
 	content     *gtk.TextBuffer  // view declared implicitly
 	extras      []*MessageExtras // embeds, images, etc
 
-	Condensed  bool
-	NonRegular bool
+	Condensed bool
 }
 
 type MessageExtras struct {
@@ -67,7 +68,6 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get main box's style context")
 	}
-	mstyle.AddClass("message")
 
 	right, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
@@ -108,6 +108,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	}
 
 	message := Message{
+		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
 		Timestamp: m.Timestamp.Time(),
@@ -130,8 +131,10 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	// What the fuck?
 	must(func() bool {
 		main.SetMarginBottom(2)
+		mstyle.AddClass("message")
 
 		rbottom.SetHExpand(true)
+		rbottom.SetMarginEnd(AvatarPadding)
 
 		avatar.SetSizeRequest(AvatarSize, AvatarSize)
 		avatar.SetProperty("yalign", 0.0)
@@ -147,16 +150,16 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		timestamp.SetYAlign(0.0)
 		timestamp.SetSingleLineMode(true)
 		timestamp.SetMarginTop(2)
+		timestamp.SetMarginStart(AvatarPadding)
 		timestamp.SetMarkup(`<span size="smaller">` +
 			m.Timestamp.Format(time.Kitchen) +
 			`</span>`)
 
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
-			panic("Die: " + err.Error())
+			log.Panicln("Die: " + err.Error())
 		}
-		msgTv.SetMarginEnd(AvatarPadding)
-		msgTv.SetWrapMode(gtk.WRAP_WORD)
+		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 		msgTv.SetCursorVisible(false)
 		msgTv.SetEditable(false)
 
@@ -172,6 +175,12 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 		message.setCondensed()
 
+		// Message without a valid ID is probably a sending message. Either way,
+		// it's unavailable.
+		if !m.ID.Valid() {
+			main.SetSensitive(false)
+		}
+
 		return false
 	})
 
@@ -179,21 +188,21 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 
 	switch m.Type {
 	case discord.GuildMemberJoinMessage:
-		messageText = "joined the server."
+		messageText = "Joined the server."
 	case discord.CallMessage:
-		messageText = "is calling you."
+		messageText = "Calling you."
 	case discord.ChannelIconChangeMessage:
-		messageText = m.Author.Username + " changed the channel icon."
+		messageText = "Changed the channel icon."
 	case discord.ChannelNameChangeMessage:
-		messageText = m.Author.Username + " changed the channel name to " + m.Content + "."
+		messageText = "Changed the channel name to " + m.Content + "."
 	case discord.ChannelPinnedMessage:
-		messageText = m.Author.Username + " pinned message " + m.ID.String() + "."
+		messageText = "Pinned message " + m.ID.String() + "."
 	case discord.RecipientAddMessage:
-		messageText = m.Author.Username + " added " + m.Mentions[0].Username + " to the group."
+		messageText = "Added " + m.Mentions[0].Username + " to the group."
 	case discord.RecipientRemoveMessage:
-		messageText = m.Author.Username + " removed " + m.Mentions[0].Username + " from the group."
+		messageText = "Removed " + m.Mentions[0].Username + " from the group."
 	case discord.NitroBoostMessage:
-		messageText = m.Author.Username + " boosted the server!"
+		messageText = "Boosted the server!"
 	case discord.NitroTier1Message:
 		messageText = "The server is now Nitro Boosted to Tier 1."
 	case discord.NitroTier2Message:
@@ -212,8 +221,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		// }
 
 		message.updateContent(messageText)
-		message.NonRegular = true
-		message.SetCondensed(true)
+		message.rightBottom.SetOpacity(0.5)
 	}
 
 	return &message, nil
@@ -229,14 +237,8 @@ func (m *Message) SetCondensed(condensed bool) {
 
 func (m *Message) setCondensed() {
 	if m.Condensed {
-		if !m.NonRegular {
-			m.main.SetMarginTop(2)
-			m.timestamp.SetMarginStart(AvatarPadding)
-			m.timestamp.SetXAlign(0.5) // center align
-			m.mainStyle.AddClass("condensed")
-		} else {
-			m.main.SetMarginTop(5)
-		}
+		m.main.SetMarginTop(5)
+		m.timestamp.SetXAlign(0.5)
 
 		m.main.Remove(m.avatar)
 		m.main.Remove(m.right)
@@ -252,7 +254,7 @@ func (m *Message) setCondensed() {
 	}
 
 	m.main.SetMarginTop(7)
-	m.timestamp.SetMarginStart(7)
+	// m.timestamp.SetMarginStart(7)
 	m.timestamp.SetXAlign(0.0) // left align
 	m.mainStyle.RemoveClass("condensed")
 

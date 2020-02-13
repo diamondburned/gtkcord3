@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -71,6 +70,10 @@ func (ch *Channel) loadMessages() error {
 		}
 		m.Scroll = s
 
+		if err := m.loadMessageInput(); err != nil {
+			return errors.Wrap(err, "Failed to load message input")
+		}
+
 		must(func() {
 			b.SetVExpand(true)
 			b.SetHExpand(true)
@@ -81,6 +84,8 @@ func (ch *Channel) loadMessages() error {
 			v.Connect("size-allocate", m.onSizeAlloc)
 			v.Add(b)
 			s.Add(v)
+
+			// Main actually contains the scrolling window.
 			main.Add(s)
 		})
 	}
@@ -197,12 +202,19 @@ func (m *Messages) onSizeAlloc() {
 		return
 	}
 
+	log.Debugln("Scrolling because", max, "-", cur, "> 2500, and loading =", loading)
+
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)
 }
 
-func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Message) error {
-	w, err := newMessage(s, parser, message)
+func (m *Messages) Insert(message discord.Message) error {
+	// Are we sure this is not our message?
+	if m.Update(message) {
+		return nil
+	}
+
+	w, err := newMessage(App.State, App.parser, message)
 	if err != nil {
 		return errors.Wrap(err, "Failed to render message")
 	}
@@ -228,26 +240,33 @@ func (m *Messages) Insert(s *state.State, parser *md.Parser, message discord.Mes
 	return nil
 }
 
-func (m *Messages) Update(s *state.State, parser *md.Parser, update discord.Message) {
+func (m *Messages) Update(update discord.Message) bool {
 	var target *Message
 
 	m.guard.Lock()
 	for _, message := range m.messages {
-		if message.ID == update.ID {
+		if message.ID == update.ID || message.Nonce == update.Nonce {
 			target = message
 		}
 	}
 	m.guard.Unlock()
 
 	if target == nil {
-		return
+		return false
 	}
+
+	if target.GetSensitive() {
+		target.SetSensitive(true)
+	}
+
 	if update.Content != "" {
 		target.UpdateContent(update)
 	}
 	semaphore.Go(func() {
 		target.UpdateExtras(update)
 	})
+
+	return true
 }
 
 func (m *Messages) Delete(id discord.Snowflake) bool {
@@ -256,6 +275,23 @@ func (m *Messages) Delete(id discord.Snowflake) bool {
 
 	for i, message := range m.messages {
 		if message.ID != id {
+			continue
+		}
+
+		m.messages = append(m.messages[:i], m.messages[i+1:]...)
+		must(m.Messages.Remove, message)
+		return true
+	}
+
+	return false
+}
+
+func (m *Messages) deleteNonce(nonce string) bool {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	for i, message := range m.messages {
+		if message.Nonce != nonce {
 			continue
 		}
 

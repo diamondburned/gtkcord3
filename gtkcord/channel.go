@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -42,38 +42,38 @@ type Channel struct {
 	Label *gtk.Label
 
 	ID       discord.Snowflake
+	Name     string
+	Topic    string
 	Category bool
 
 	Messages *Messages
 }
 
-func (g *Guild) loadChannels(
-	s *state.State,
-	guild discord.Guild,
-	onChannel func(*Guild, *Channel)) error {
-
+func (g *Guild) loadChannels() error {
 	if g.Channels != nil {
 		return nil
 	}
 
-	chs, err := s.Channels(guild.ID)
+	guild, err := App.State.Guild(g.ID)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get guild "+g.ID.String())
+	}
+
+	chs, err := App.State.Channels(guild.ID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get channels")
 	}
-	chs = filterChannels(s, chs)
+	chs = filterChannels(App.State, chs)
 
 	cs, err := gtk.ScrolledWindowNew(nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create channel scroller")
 	}
-	cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
 	main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create main box")
 	}
-	main.SetSizeRequest(ChannelsWidth, -1)
-	must(cs.Add, main)
 
 	g.Channels = &Channels{
 		ExtendedWidget: cs,
@@ -90,11 +90,8 @@ func (g *Guild) loadChannels(
 		if err != nil {
 			return errors.Wrap(err, "Failed to create banner image")
 		}
-		banner.SetSizeRequest(ChannelsWidth, BannerHeight)
 
-		must(main.Add, banner)
 		g.Channels.BannerImage = banner
-
 		go g.UpdateBanner(guild.BannerURL())
 	}
 
@@ -106,26 +103,34 @@ func (g *Guild) loadChannels(
 	if err != nil {
 		return errors.Wrap(err, "Failed to create channel list")
 	}
-	cl.SetVExpand(true)
-	cl.SetActivateOnSingleClick(true)
-	must(main.Add, cl)
 
 	if err := transformChannels(g.Channels, chs); err != nil {
 		return errors.Wrap(err, "Failed to transform channels")
 	}
 
-	for _, ch := range g.Channels.Channels {
-		must(cl.Add, ch)
-	}
-
 	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := g.Channels.Channels[r.GetIndex()]
-		onChannel(g, row)
+		App.loadChannel(g, row)
 	})
 
-	/*
-	 * === Messages ===
-	 */
+	must(func() {
+		cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		main.SetSizeRequest(ChannelsWidth, -1)
+		cs.Add(main)
+
+		if banner := g.Channels.BannerImage; banner != nil {
+			banner.SetSizeRequest(ChannelsWidth, BannerHeight)
+			main.Add(banner)
+		}
+
+		cl.SetVExpand(true)
+		cl.SetActivateOnSingleClick(true)
+		main.Add(cl)
+
+		for _, ch := range g.Channels.Channels {
+			cl.Add(ch)
+		}
+	})
 
 	return nil
 }
@@ -140,7 +145,8 @@ func newChannel(ch discord.Channel) (*Channel, error) {
 		return newDMChannel(ch)
 	}
 
-	panic("Unknown channel type " + strconv.Itoa(int(ch.Type)))
+	log.Panicln("Unknown channel type " + strconv.Itoa(int(ch.Type)))
+	return nil, nil
 }
 
 func newCategory(ch discord.Channel) (*Channel, error) {
@@ -164,10 +170,13 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 	must(r.Add, l)
 	return &Channel{
 		ExtendedWidget: r,
-		Row:            r,
-		Label:          l,
-		ID:             ch.ID,
-		Category:       true,
+
+		Row:      r,
+		Label:    l,
+		ID:       ch.ID,
+		Name:     ch.Name,
+		Topic:    ch.Topic,
+		Category: true,
 	}, nil
 }
 
@@ -189,10 +198,13 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 	must(r.Add, l)
 	return &Channel{
 		ExtendedWidget: r,
-		Row:            r,
-		Label:          l,
-		ID:             ch.ID,
-		Category:       false,
+
+		Row:      r,
+		Label:    l,
+		ID:       ch.ID,
+		Name:     ch.Name,
+		Topic:    ch.Topic,
+		Category: false,
 	}, nil
 }
 func newDMChannel(ch discord.Channel) (*Channel, error) {
