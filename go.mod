@@ -4,9 +4,6 @@ go 1.13
 
 require (
 	github.com/alecthomas/chroma v0.7.1
-	github.com/bwmarrin/discordgo v0.20.2
-	github.com/d2r2/gotk3 v0.0.0-20191124065233-86f7ea85405b
-	github.com/davecgh/go-spew v1.1.1
 	github.com/diamondburned/arikawa v0.1.3-0.20200211172930-76c7760c24e9
 	github.com/disintegration/imaging v1.6.2
 	github.com/gotk3/gotk3 v0.0.0-20200129211157-69caac910e50

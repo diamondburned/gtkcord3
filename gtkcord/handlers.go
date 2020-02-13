@@ -17,6 +17,8 @@ func (a *application) hookEvents() {
 			a.onMessageUpdate(v)
 		case *gateway.MessageDeleteEvent:
 			a.onMessageDelete(v)
+		case *gateway.GuildUpdateEvent:
+			a.onGuildUpdate(v)
 		case *gateway.MessageDeleteBulkEvent:
 			a.onMessageDeleteBulk(v)
 		}
@@ -77,4 +79,7 @@ func (a *application) onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
 	for _, id := range m.IDs {
 		mw.Delete(id)
 	}
+}
+
+func (a *application) onGuildUpdate(g *gateway.GuildUpdateEvent) {
 }

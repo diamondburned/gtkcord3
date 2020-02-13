@@ -2,6 +2,7 @@ package gtkcord
 
 import (
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/pkg/errors"
 )
 
 type MessageInput struct {
@@ -16,6 +17,9 @@ type MessageInput struct {
 	Input  *gtk.TextView
 	Upload *gtk.Button
 	Emoji  *gtk.Button
+
+	// counter for nonce
+	counter uint32
 
 	// uploadButton
 	// emojiButton
@@ -35,30 +39,60 @@ type CompleterEntry struct {
 	Right *gtk.Label
 }
 
-// func (m *Messages) loadMessageInput() (*MessageInput, error) {
-// 	if m.Input == nil {
-// 		m.Input = &MessageInput{
-// 			Messages: m,
-// 		}
-// 	}
+func (messages *Messages) loadMessageInput() (*MessageInput, error) {
+	if messages.Input == nil {
+		messages.Input = &MessageInput{
+			Messages: messages,
+		}
+	}
 
-// 	if m.Input == nil {
-// 		main, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-// 		if err != nil {
-// 			return nil, errors.Wrap(err, "Failed to create main box")
-// 		}
+	m := messages.Input
 
-// 		ibox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-// 		if err != nil {
-// 			return nil, errors.Wrap(err, "Failed to create input box")
-// 		}
+	if m.Input == nil {
+		main, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create main box")
+		}
+		m.Main = main
 
-// 		// TODO completer
-// 		// comp, err := gtk.
+		ibox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create input box")
+		}
+		m.InputBox = ibox
 
-// 		input, err := gtk.TextViewNew()
-// 		if err != nil {
-// 			return nil, errors.Wrap(err, "Failed to create input textview")
-// 		}
-// 	}
+		// TODO completer
+		// comp, err := gtk.
+
+		input, err := gtk.TextViewNew()
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create input textview")
+		}
+		m.Input = input
+
+		upload, err := gtk.ButtonNewFromIconName(
+			"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create upload button")
+		}
+		m.Upload = upload
+
+		emoji, err := gtk.ButtonNewFromIconName(
+			"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create emoji button")
+		}
+		m.Emoji = emoji
+	}
+
+	return m, nil
+}
+
+// func (messages *Messages) send(content string) error {
+// 	var nonce = fmt.Sprintf("%d:%d", messages.Channel.ID, messages.counter)
+// 	messages.counter++
+
+// 	App.State.SendMessageComplex(messages.Channel.ID, api.SendMessageData{
+// 		Nonce: nonce,
+// 	})
 // }

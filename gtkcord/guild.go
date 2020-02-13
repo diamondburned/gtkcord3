@@ -2,14 +2,11 @@ package gtkcord
 
 import (
 	"html"
-	"log"
 	"sort"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -40,7 +37,8 @@ type Guild struct {
 	// nil if not downloaded
 	Pixbuf *Pixbuf
 
-	ID discord.Snowflake
+	ID   discord.Snowflake
+	Name string
 
 	// nil if Folder
 	Channels *Channels
@@ -53,20 +51,11 @@ func newGuildsFromFolders() ([]*Guild, error) {
 	var folders = s.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
 
-	spew.Dump(folders)
-
 	for _, f := range folders {
 		if len(f.GuildIDs) == 1 && f.Name == "" {
-			g, err := s.Guild(f.GuildIDs[0])
+			r, err := newGuildRow(f.GuildIDs[0])
 			if err != nil {
-				log.Println("Failed to get guild", f.GuildIDs[0], err)
-				continue
-				// return nil, errors.Wrap(err, "Failed to get guild "+f.GuildIDs[0].String())
-			}
-
-			r, err := newGuildRow(*g)
-			if err != nil {
-				return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
+				return nil, errors.Wrap(err, "Failed to load guild "+f.GuildIDs[0].String())
 			}
 
 			rows = append(rows, r)
@@ -110,10 +99,9 @@ func newGuildsLegacy() ([]*Guild, error) {
 	})
 
 	for _, g := range gs {
-		r, err := newGuildRow(g)
+		r, err := newGuildRow(g.ID)
 		if err != nil {
-			return nil,
-				errors.Wrap(err, "Failed to load guild "+g.Name)
+			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
 		}
 
 		rows = append(rows, r)
@@ -122,7 +110,7 @@ func newGuildsLegacy() ([]*Guild, error) {
 	return rows, nil
 }
 
-func newGuilds(onGuild func(*Guild)) (*Guilds, error) {
+func newGuilds() (*Guilds, error) {
 	var rows []*Guild
 	var err error
 
@@ -179,18 +167,20 @@ func newGuilds(onGuild func(*Guild)) (*Guilds, error) {
 			row = row.Folder.Guilds[index]
 		}
 
-		onGuild(row)
+		App.loadGuild(row)
 	})
 
 	return g, nil
 }
 
 func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
-	g, err := App.State.Guild(guildID)
-	if err != nil {
-		// We're taking a different approach in logging:
-		log.Println()
-		return nil, errors.Wrap(err, "Failed to get guild ID "+guildID.String())
+	g, fetcherr := App.State.Guild(guildID)
+	if fetcherr != nil {
+		log.Errorln("Failed to get guild ID " + guildID.String() + ", using a placeholder...")
+		g = &discord.Guild{
+			ID:   guildID,
+			Name: "Unavailable",
+		}
 	}
 
 	r, err := gtk.ListBoxRowNew()
@@ -211,21 +201,32 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 
 	must(r.Add, i)
 
-	g := &Guild{
+	guild := &Guild{
 		ExtendedWidget: r,
-		Row:            r,
-		ID:             guild.ID,
-		Image:          i,
+
+		Row:   r,
+		ID:    g.ID,
+		Name:  g.Name,
+		Image: i,
 	}
 
-	var url = guild.IconURL()
+	// Check if the guild is unavailable:
+	if fetcherr != nil {
+		guild.SetUnavailable(true)
+	}
+
+	var url = g.IconURL()
 	if url == "" {
 		// Guild doesn't have an icon, exit:
-		return g, nil
+		return guild, nil
 	}
 
-	go g.UpdateImage(url)
-	return g, nil
+	go guild.UpdateImage(url)
+	return guild, nil
+}
+
+func (g *Guild) SetUnavailable(unavailable bool) {
+	must(g.Row.SetSensitive, !unavailable)
 }
 
 func (g *Guild) Current() *Channel {
@@ -247,7 +248,7 @@ func (g *Guild) Current() *Channel {
 	return g.current
 }
 
-func (g *Guild) GoTo(s *state.State, parser *md.Parser, ch *Channel) error {
+func (g *Guild) GoTo(ch *Channel) error {
 	g.current = ch
 
 	if err := ch.loadMessages(); err != nil {
@@ -263,7 +264,7 @@ func (g *Guild) UpdateImage(url string) {
 	if !animated {
 		p, err := pbpool.DownloadScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
-			logWrap(err, "Failed to get the pixbuf guild icon")
+			log.Errorln("Failed to update the pixbuf guild icon:", err)
 			return
 		}
 
@@ -272,7 +273,7 @@ func (g *Guild) UpdateImage(url string) {
 	} else {
 		p, err := pbpool.DownloadAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
-			logWrap(err, "Failed to get the pixbuf guild animation")
+			log.Errorln("Ffailed to update the pixbuf guild animation:", err)
 			return
 		}
 

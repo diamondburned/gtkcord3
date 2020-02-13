@@ -1,7 +1,6 @@
 package gtkcord
 
 import (
-	"github.com/diamondburned/arikawa/discord"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
@@ -112,22 +111,15 @@ func newHeader() (*Header, error) {
 	}, nil
 }
 
-func (h *Header) UpdateGuild(g *discord.Guild) {
-	if g == nil {
-		h.GuildName.SetMarkup("")
-		return
-	}
-
-	must(h.GuildName.SetMarkup, bold(g.Name))
+func (h *Header) UpdateGuild(name string) {
+	must(h.GuildName.SetMarkup, bold(name))
 }
 
-func (h *Header) UpdateChannel(ch *discord.Channel) {
-	if ch == nil {
-		h.ChannelName.SetMarkup("")
-		h.ChannelTopic.SetText("")
-		return
+func (h *Header) UpdateChannel(name, topic string) {
+	if name != "" {
+		name = ChannelHash + name
 	}
 
-	must(h.ChannelName.SetMarkup, ChannelHash+bold(ch.Name))
-	must(h.ChannelTopic.SetText, ch.Topic)
+	must(h.ChannelName.SetMarkup, bold(name))
+	must(h.ChannelTopic.SetText, topic)
 }

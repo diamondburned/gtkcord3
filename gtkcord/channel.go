@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -42,25 +42,28 @@ type Channel struct {
 	Label *gtk.Label
 
 	ID       discord.Snowflake
+	Name     string
+	Topic    string
 	Category bool
 
 	Messages *Messages
 }
 
-func (g *Guild) loadChannels(
-	s *state.State,
-	guild discord.Guild,
-	onChannel func(*Guild, *Channel)) error {
-
+func (g *Guild) loadChannels() error {
 	if g.Channels != nil {
 		return nil
 	}
 
-	chs, err := s.Channels(guild.ID)
+	guild, err := App.State.Guild(g.ID)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get guild "+g.ID.String())
+	}
+
+	chs, err := App.State.Channels(guild.ID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get channels")
 	}
-	chs = filterChannels(s, chs)
+	chs = filterChannels(App.State, chs)
 
 	cs, err := gtk.ScrolledWindowNew(nil, nil)
 	if err != nil {
@@ -120,7 +123,7 @@ func (g *Guild) loadChannels(
 
 	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := g.Channels.Channels[r.GetIndex()]
-		onChannel(g, row)
+		App.loadChannel(g, row)
 	})
 
 	/*
@@ -140,7 +143,8 @@ func newChannel(ch discord.Channel) (*Channel, error) {
 		return newDMChannel(ch)
 	}
 
-	panic("Unknown channel type " + strconv.Itoa(int(ch.Type)))
+	log.Panicln("Unknown channel type " + strconv.Itoa(int(ch.Type)))
+	return nil, nil
 }
 
 func newCategory(ch discord.Channel) (*Channel, error) {
@@ -164,10 +168,13 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 	must(r.Add, l)
 	return &Channel{
 		ExtendedWidget: r,
-		Row:            r,
-		Label:          l,
-		ID:             ch.ID,
-		Category:       true,
+
+		Row:      r,
+		Label:    l,
+		ID:       ch.ID,
+		Name:     ch.Name,
+		Topic:    ch.Topic,
+		Category: true,
 	}, nil
 }
 
@@ -189,10 +196,13 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 	must(r.Add, l)
 	return &Channel{
 		ExtendedWidget: r,
-		Row:            r,
-		Label:          l,
-		ID:             ch.ID,
-		Category:       false,
+
+		Row:      r,
+		Label:    l,
+		ID:       ch.ID,
+		Name:     ch.Name,
+		Topic:    ch.Topic,
+		Category: false,
 	}, nil
 }
 func newDMChannel(ch discord.Channel) (*Channel, error) {

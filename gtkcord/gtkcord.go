@@ -10,6 +10,7 @@ import (
 
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -89,7 +90,7 @@ func UseState(s *state.State) error {
 		}
 		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
-		gs, err := newGuilds(App.loadGuild)
+		gs, err := newGuilds()
 		if err != nil {
 			return errors.Wrap(err, "Failed to make guilds view")
 		}
@@ -211,7 +212,7 @@ func (a *application) finalize() {
 
 func (a *application) close() {
 	if err := a.State.Close(); err != nil {
-		logError(errors.Wrap(err, "Failed to close Discord"))
+		log.Errorln("Failed to close Discord:", err)
 	}
 }
 
@@ -250,13 +251,7 @@ func (a *application) _loadGuild(g *Guild) {
 		a.Guilds.SetSensitive(true)
 	})
 
-	dg, err := a.State.Guild(g.ID)
-	if err != nil {
-		logWrap(err, "Failed to get guild")
-		return
-	}
-
-	if err := g.loadChannels(a.State, *dg, a.loadChannel); err != nil {
+	if err := g.loadChannels(); err != nil {
 		logWrap(err, "Failed to load channels")
 		return
 	}
@@ -272,7 +267,7 @@ func (a *application) _loadGuild(g *Guild) {
 		}
 	}
 
-	a.Header.UpdateGuild(dg)
+	a.Header.UpdateGuild(g.Name)
 	go a.loadChannel(g, g.Current())
 }
 
@@ -302,16 +297,10 @@ func (a *application) _loadChannel(g *Guild, ch *Channel) {
 		g.Channels.Main.SetSensitive(true)
 	})
 
-	dch, err := a.State.Channel(ch.ID)
-	if err != nil {
-		logWrap(err, "Failed to load channel "+ch.ID.String())
-		return
-	}
-
 	// Run hook
-	a.Header.UpdateChannel(dch)
+	a.Header.UpdateChannel(ch.Name, ch.Topic)
 
-	if err := g.GoTo(a.State, a.parser, ch); err != nil {
+	if err := g.GoTo(ch); err != nil {
 		logWrap(err, "Failed to go to channel")
 		return
 	}
