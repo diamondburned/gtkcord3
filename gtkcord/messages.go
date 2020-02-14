@@ -243,12 +243,16 @@ func (m *Messages) Insert(message discord.Message) error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	if m.ShouldCondense(message) {
+	var condense = m.ShouldCondense(message)
+	if condense {
 		w.setOffset(lastMessageFrom(m.messages, message.Author.ID))
-		w.SetCondensed(true)
 	}
 
 	must(func() {
+		if condense {
+			w.SetCondensed(true)
+		}
+
 		m.Messages.Add(w)
 		w.ShowAll()
 	})

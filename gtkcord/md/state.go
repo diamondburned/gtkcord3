@@ -223,7 +223,7 @@ func (s *mdState) renderCodeBlock(lang, content []byte) []byte {
 		css = styleToCSS(style)
 	}
 
-	var lexer = lexers.Fallback
+	var lexer chroma.Lexer
 
 	if len(lang) > 0 {
 		lang := string(lang)
@@ -237,9 +237,11 @@ func (s *mdState) renderCodeBlock(lang, content []byte) []byte {
 				lexerMap.Store(lang, lexer)
 			}
 		}
+	}
 
-	} else {
-		content = bytes.Join([][]byte{lang, content}, []byte("\n"))
+	if lexer == nil {
+		lexer = lexers.Fallback
+		content = append(lang, content...)
 	}
 
 	iterator, err := lexer.Tokenise(nil, string(content))
@@ -248,10 +250,11 @@ func (s *mdState) renderCodeBlock(lang, content []byte) []byte {
 	}
 
 	s.buffer.Reset()
-
+	s.buffer.WriteByte('\n')
 	if err := fmtter.Format(s.buffer, iterator); err != nil {
 		return content
 	}
+	s.buffer.WriteByte('\n')
 
 	return s.buffer.Bytes()
 }

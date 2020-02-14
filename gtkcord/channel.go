@@ -107,12 +107,16 @@ func (g *Guild) loadChannels() error {
 		return errors.Wrap(err, "Failed to transform channels")
 	}
 
-	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-		row := g.Channels.Channels[r.GetIndex()]
-		App.loadChannel(g, row)
-	})
+	/*
+	 * === Properties ===
+	 */
 
 	must(func() {
+		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+			row := g.Channels.Channels[r.GetIndex()]
+			App.loadChannel(g, row)
+		})
+
 		cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 		main.SetSizeRequest(ChannelsWidth, -1)
 		cs.Add(main)
@@ -153,20 +157,23 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create channel row")
 	}
-	r.SetSelectable(false)
-	r.SetSensitive(false)
-
 	l, err := gtk.LabelNew(
 		`<span font_size="smaller">` + escape(strings.ToUpper(ch.Name)) + "</span>")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create label")
 	}
-	l.SetUseMarkup(true)
-	l.SetXAlign(0)
-	l.SetMarginStart(15)
-	l.SetMarginTop(15)
 
-	r.Add(l)
+	must(func() {
+		r.SetSelectable(false)
+		r.SetSensitive(false)
+
+		l.SetUseMarkup(true)
+		l.SetXAlign(0)
+		l.SetMarginStart(15)
+		l.SetMarginTop(15)
+
+		r.Add(l)
+	})
 
 	return &Channel{
 		ExtendedWidget: r,
@@ -186,17 +193,19 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create channel row")
 	}
-
 	l, err := gtk.LabelNew(ChannelHash + bold(ch.Name))
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create label")
 	}
-	l.SetXAlign(0)
-	l.SetMarginStart(8)
-	l.SetUseMarkup(true)
-	l.SetOpacity(0.75) // TODO: read state
 
-	r.Add(l)
+	must(func() {
+		l.SetXAlign(0)
+		l.SetMarginStart(8)
+		l.SetUseMarkup(true)
+		l.SetOpacity(0.75) // TODO: read state
+
+		r.Add(l)
+	})
 
 	return &Channel{
 		ExtendedWidget: r,

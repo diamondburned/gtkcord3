@@ -175,8 +175,11 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 			message.setAvailable(false)
 		}
 
+		log.Println("RETURN ---")
 		return false
 	})
+
+	log.Println("MUST ---")
 
 	var messageText string
 
@@ -242,12 +245,10 @@ func (m *Message) SetCondensed(condensed bool) {
 		return
 	}
 	m.Condensed = condensed
-	must(m.setCondensed)
+	m.setCondensed()
 }
 
 func (m *Message) setCondensed() {
-	log.Debugln("Message is condensed:", m.Condensed)
-
 	if m.Condensed {
 		m.main.SetMarginTop(5)
 		m.mainStyle.AddClass("condensed")
@@ -329,7 +330,9 @@ func (m *Message) UpdateAuthor(user discord.User) {
 }
 
 func (m *Message) updateContent(s string) {
-	m.content.InsertMarkup(m.content.GetEndIter(), s)
+	must(func() {
+		m.content.InsertMarkup(m.content.GetEndIter(), s)
+	})
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
