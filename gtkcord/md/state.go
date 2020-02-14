@@ -170,6 +170,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 
 	var m = match{-1, -1, nil}
 	var matchesList = s.matches[:0]
+	var last int32 = 0
 
 	for i := 0; i < len(found); i++ {
 		var matches []match
@@ -196,13 +197,13 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 			}
 		}
 
-		// If we still don't know if there are texts:
 		if !s.hasText {
-			// We know 1-10 are not emojis:
-			for i := 1; i < len(matches) && i < 9; i++ {
-				if len(matches[i].str) > 0 && matches[i].str[0] != '\n' {
-					s.hasText = true
-				}
+			if i > 0 {
+				last = matchesList[i-1][0].to
+			}
+
+			if len(input[last:matches[0].from]) > 0 {
+				s.hasText = true
 			}
 		}
 

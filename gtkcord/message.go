@@ -104,7 +104,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		return nil, errors.Wrap(err, "Failed to create a text buffer")
 	}
 
-	message := Message{
+	message := &Message{
 		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
@@ -213,7 +213,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		message.setAvailable(false)
 	}
 
-	return &message, nil
+	return message, nil
 }
 
 func (m *Message) getAvailable() bool {
@@ -333,8 +333,10 @@ func (m *Message) updateContent(s string) {
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
-	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
-	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	must(func() {
+		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
+		go App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	})
 }
 
 func (m *Message) UpdateExtras(update discord.Message) {

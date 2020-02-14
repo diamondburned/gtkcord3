@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -119,19 +120,27 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.iterMu.Lock()
 
-	for i := 0; i < len(s.matches); i++ {
-		s.prev = md[s.last:s.matches[i][0].from]
-		s.last = s.getLastIndex(i)
+	glib.IdleAdd(func(s *mdState) bool {
+		defer s.iterMu.Unlock()
 
-		s.insertWithTag(s.prev, nil)
-		tree(i)
-	}
+		for i := 0; i < len(s.matches); i++ {
+			s.prev = md[s.last:s.matches[i][0].from]
+			s.last = s.getLastIndex(i)
 
-	s.insertWithTag(md[s.last:], nil)
+			s.insertWithTag(s.prev, nil)
+			tree(i)
+		}
 
-	s.iterMu.Unlock()
+		s.insertWithTag(md[s.last:], nil)
+
+		return false
+	}, s)
 
 	go func() {
+		// We lock here to wait for the IdleAdd callback to finish.
+		s.iterMu.Lock()
+		s.iterMu.Unlock()
+
 		s.iterWg.Wait()
 		s.buf = nil
 		p.pool.Put(s)

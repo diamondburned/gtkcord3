@@ -93,11 +93,13 @@ func (ch *Channel) loadMessages() error {
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
 
-	must(func() {
-		for _, w := range m.messages {
-			m.Messages.Remove(w)
-		}
-	})
+	if len(m.messages) > 0 {
+		must(func() {
+			for _, w := range m.messages {
+				m.Messages.Remove(w)
+			}
+		})
+	}
 
 	// Order: latest is first.
 	messages, err := App.State.Messages(ch.ID)
@@ -277,9 +279,8 @@ func (m *Messages) Update(update discord.Message) bool {
 	// Clear the nonce, if any:
 	if !target.getAvailable() {
 		target.setAvailable(true)
+		target.Nonce = ""
 	}
-
-	log.Println("New message update, nonce:", update.Nonce, target.getAvailable())
 
 	if update.Content != "" {
 		target.UpdateContent(update)
