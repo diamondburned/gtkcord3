@@ -26,6 +26,7 @@ type Message struct {
 	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
+	Author   string
 
 	Timestamp time.Time
 	Edited    time.Time
@@ -292,7 +293,10 @@ func (m *Message) UpdateAuthor(user discord.User) {
 			}
 		}
 
-		must(m.author.SetMarkup, name)
+		if m.Author != name {
+			m.Author = name
+			must(m.author.SetMarkup, name)
+		}
 	}
 
 	var url = user.AvatarURL()
@@ -326,7 +330,9 @@ func (m *Message) UpdateAuthor(user discord.User) {
 
 func (m *Message) updateContent(s string) {
 	must(func() {
-		m.content.InsertMarkup(m.content.GetEndIter(), s)
+		end := m.content.GetEndIter()
+		m.content.Delete(m.content.GetStartIter(), end)
+		m.content.InsertMarkup(end, s)
 	})
 }
 

@@ -245,7 +245,9 @@ func (g *Guild) Current() *Channel {
 	}
 
 	g.current = g.Channels.Channels[index]
-	must(g.Channels.ChList.SelectRow, g.current.Row)
+	must(func() {
+		g.Channels.ChList.SelectRow(g.current.Row)
+	})
 
 	return g.current
 }

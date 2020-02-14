@@ -296,7 +296,8 @@ func (a *application) _loadGuild(g *Guild) {
 	}
 
 	a.Header.UpdateGuild(g.Name)
-	go a.loadChannel(g, g.Current())
+	ch := g.Current()
+	go a.loadChannel(g, ch)
 }
 
 func (a *application) loadChannel(g *Guild, ch *Channel) {
@@ -330,10 +331,10 @@ func (a *application) _loadChannel(g *Guild, ch *Channel) {
 
 	if a.Messages == nil {
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		if err != nil {
-			logWrap(err, "Failed to make a separator")
-		} else {
-			must(a.Grid.Add, s)
+		if err == nil {
+			must(func() {
+				a.Grid.Add(s)
+			})
 		}
 	}
 
