@@ -11,12 +11,13 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
 var regexes = []string{
 	// codeblock
-	`(?:^\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60$)`,
+	`(?:\n?\x60\x60\x60 *(\w*\n?)([\s\S]*?)\n?\x60\x60\x60\n?)`,
 	// blockquote
 	`((?:(?:^|\n)^>\s+.*)+)\n`,
 	// Inline markup stuff
@@ -52,6 +53,7 @@ type Parser struct {
 	RolePressed    func(id discord.Snowflake)
 	URLPressed     func(url string)
 
+	table *gtk.TextTagTable
 	theme *gtk.IconTheme
 	icons sync.Map
 }
@@ -65,13 +67,23 @@ func NewParser(s *state.State) *Parser {
 		log.Panicln("Couldn't get default GTK Icon Theme:", err)
 	}
 
+	t, err := gtk.TextTagTableNew()
+	if err != nil {
+		log.Panicln("Failed to create a new text tag table:", err)
+	}
+
 	p := &Parser{
 		State: s,
 		theme: i,
+		table: t,
 	}
 	p.pool = newPool(p)
 
 	return p
+}
+
+func (p *Parser) NewTextBuffer() (*gtk.TextBuffer, error) {
+	return gtk.TextBufferNew(p.table)
 }
 
 func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
@@ -97,8 +109,6 @@ func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
 
 func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer) {
 	s := p.pool.Get().(*mdState)
-
-	s.state.Use(buf)
 	s.use(buf, md)
 
 	var tree func(i int)
@@ -110,19 +120,27 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.iterMu.Lock()
 
-	for i := 0; i < len(s.matches); i++ {
-		s.prev = md[s.last:s.matches[i][0].from]
-		s.last = s.getLastIndex(i)
+	glib.IdleAdd(func(s *mdState) bool {
+		defer s.iterMu.Unlock()
 
-		s.insertWithTag(s.prev, nil)
-		tree(i)
-	}
+		for i := 0; i < len(s.matches); i++ {
+			s.prev = md[s.last:s.matches[i][0].from]
+			s.last = s.getLastIndex(i)
 
-	s.insertWithTag(md[s.last:], nil)
+			s.insertWithTag(s.prev, nil)
+			tree(i)
+		}
 
-	s.iterMu.Unlock()
+		s.insertWithTag(md[s.last:], nil)
+
+		return false
+	}, s)
 
 	go func() {
+		// We lock here to wait for the IdleAdd callback to finish.
+		s.iterMu.Lock()
+		s.iterMu.Unlock()
+
 		s.iterWg.Wait()
 		s.buf = nil
 		p.pool.Put(s)

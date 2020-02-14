@@ -5,13 +5,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/pkg/errors"
 )
 
 var pool sync.Map
-var Client = http.DefaultClient
+var Client = &http.Client{
+	Timeout: 5 * time.Second,
+}
 
 var MaxCacheSize = 1 * 1024 * 1024 // 4MB
 

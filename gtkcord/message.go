@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -52,7 +53,8 @@ type Message struct {
 	content     *gtk.TextBuffer  // view declared implicitly
 	extras      []*MessageExtras // embeds, images, etc
 
-	Condensed bool
+	Condensed      bool
+	CondenseOffset time.Duration
 }
 
 type MessageExtras struct {
@@ -97,22 +99,17 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		return nil, errors.Wrap(err, "Failed to create timestamp label")
 	}
 
-	ttt, err := gtk.TextTagTableNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Faield to create a text tag table")
-	}
-
-	msgTb, err := gtk.TextBufferNew(ttt)
+	msgTb, err := App.parser.NewTextBuffer()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a text buffer")
 	}
 
-	message := Message{
+	message := &Message{
 		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
-		Timestamp: m.Timestamp.Time(),
-		Edited:    m.EditedTimestamp.Time(),
+		Timestamp: m.Timestamp.Time().Local(),
+		Edited:    m.EditedTimestamp.Time().Local(),
 
 		ExtendedWidget: main,
 		Condensed:      false,
@@ -151,9 +148,6 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		timestamp.SetSingleLineMode(true)
 		timestamp.SetMarginTop(2)
 		timestamp.SetMarginStart(AvatarPadding)
-		timestamp.SetMarkup(`<span size="smaller">` +
-			m.Timestamp.Format(time.Kitchen) +
-			`</span>`)
 
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
@@ -178,11 +172,14 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		// Message without a valid ID is probably a sending message. Either way,
 		// it's unavailable.
 		if !m.ID.Valid() {
-			main.SetSensitive(false)
+			message.setAvailable(false)
 		}
 
+		log.Println("RETURN ---")
 		return false
 	})
+
+	log.Println("MUST ---")
 
 	var messageText string
 
@@ -215,16 +212,32 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	if messageText == "" {
 		message.UpdateContent(m)
 	} else {
-		// var name = bold(App.State.AuthorDisplayName(m))
-		// if color := App.State.AuthorColor(m); color > 0 {
-		// 	name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
-		// }
-
-		message.updateContent(messageText)
-		message.rightBottom.SetOpacity(0.5)
+		message.updateContent(`<i>` + messageText + `</i>`)
+		message.setAvailable(false)
 	}
 
-	return &message, nil
+	return message, nil
+}
+
+func (m *Message) getAvailable() bool {
+	return m.rightBottom.GetOpacity() > 0.9
+}
+
+func (m *Message) setAvailable(available bool) {
+	if available {
+		must(m.rightBottom.SetOpacity, 1.0)
+	} else {
+		must(m.rightBottom.SetOpacity, 0.5)
+	}
+}
+
+func (m *Message) setOffset(last *Message) {
+	if last == nil {
+		return
+	}
+
+	offs := humanize.DuraCeil(m.Timestamp.Sub(last.Timestamp), time.Second)
+	m.CondenseOffset = offs
 }
 
 func (m *Message) SetCondensed(condensed bool) {
@@ -238,7 +251,9 @@ func (m *Message) SetCondensed(condensed bool) {
 func (m *Message) setCondensed() {
 	if m.Condensed {
 		m.main.SetMarginTop(5)
+		m.mainStyle.AddClass("condensed")
 		m.timestamp.SetXAlign(0.5)
+		m.timestamp.SetMarkup(smaller("+" + m.CondenseOffset.String()))
 
 		m.main.Remove(m.avatar)
 		m.main.Remove(m.right)
@@ -254,9 +269,9 @@ func (m *Message) setCondensed() {
 	}
 
 	m.main.SetMarginTop(7)
-	// m.timestamp.SetMarginStart(7)
-	m.timestamp.SetXAlign(0.0) // left align
 	m.mainStyle.RemoveClass("condensed")
+	m.timestamp.SetXAlign(0.0) // left align
+	m.timestamp.SetMarkup(smaller(humanize.TimeAgo(m.Timestamp)))
 
 	m.main.Remove(m.timestamp)
 	m.main.Remove(m.rightBottom)
@@ -315,15 +330,23 @@ func (m *Message) UpdateAuthor(user discord.User) {
 }
 
 func (m *Message) updateContent(s string) {
-	m.content.InsertMarkup(m.content.GetEndIter(), s)
+	must(func() {
+		m.content.InsertMarkup(m.content.GetEndIter(), s)
+	})
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
-	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
-	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	must(func() {
+		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
+		go App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	})
 }
 
 func (m *Message) UpdateExtras(update discord.Message) {
 	// TODO
 	// must(m.ShowAll)
+}
+
+func smaller(text string) string {
+	return `<span size="smaller">` + text + "</span>"
 }

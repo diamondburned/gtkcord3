@@ -56,9 +56,10 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 			return
 		}
 
+		s.iterMu.Lock()
+
 		// Try and replace the last inserted pixbuf with ours:
 		glib.IdleAdd(func(s *mdState) bool {
-			s.iterMu.Lock()
 			defer s.iterMu.Unlock()
 			defer s.iterWg.Done()
 

@@ -15,14 +15,16 @@ func must(fn interface{}, args ...interface{}) {
 
 	switch len(args) {
 	case 0:
-		switch fn.(type) {
+		switch fn := fn.(type) {
 		case func() bool:
-			_, err = glib.IdleAdd(fn)
+			_, err = glib.IdleAdd(func() bool {
+				log.Debugln(trace, "IdleAdd() called.")
+				return fn()
+			})
 		case func():
 			_, err = glib.IdleAdd(func() bool {
 				log.Debugln(trace, "IdleAdd() called.")
-
-				fn.(func())()
+				fn()
 				return false
 			})
 		default:
@@ -35,7 +37,6 @@ func must(fn interface{}, args ...interface{}) {
 
 		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
 			log.Debugln(trace, "IdleAdd() called.")
-
 			values[0].Call([]reflect.Value{values[1]})
 			return false
 		}, [2]reflect.Value{fnV, argV})
@@ -62,11 +63,10 @@ func logWrap(err error, str string) {
 }
 
 func margin4(w *gtk.Widget, top, bottom, left, right int) {
-	must(w.SetMarginTop, top)
-	must(w.SetMarginBottom, bottom)
-
-	must(w.SetMarginStart, left)
-	must(w.SetMarginEnd, right)
+	w.SetMarginTop(top)
+	w.SetMarginBottom(bottom)
+	w.SetMarginStart(left)
+	w.SetMarginEnd(right)
 }
 
 func margin2(w *gtk.Widget, top, left int) {

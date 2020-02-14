@@ -25,10 +25,10 @@ var (
 	App *application
 )
 
-func init() {
-	runtime.LockOSThread()
-	runtime.GOMAXPROCS(1)
-}
+// func init() {
+// 	runtime.LockOSThread()
+// 	runtime.GOMAXPROCS(1)
+// }
 
 type ExtendedWidget interface {
 	gtk.IWidget

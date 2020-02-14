@@ -26,7 +26,7 @@ func main() {
 	}
 
 	s.ErrorLog = func(err error) {
-		log.Errorln("Discord error:", err)
+		log.Debugln("Discord error:", err)
 	}
 
 	if err := s.Open(); err != nil {

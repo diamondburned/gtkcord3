@@ -128,46 +128,46 @@ func newGuilds() (*Guilds, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create list")
 	}
-	l.SetActivateOnSingleClick(true)
-
 	ctx, err := l.GetStyleContext()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get guild stylecontext")
 	}
-	ctx.AddClass("guild")
 
 	g := &Guilds{
 		ListBox: l,
 		Guilds:  rows,
 	}
 
-	for _, r := range rows {
-		must(func(r *Guild) {
+	must(func() {
+		l.SetActivateOnSingleClick(true)
+		ctx.AddClass("guild")
+
+		for _, r := range rows {
 			l.Add(r)
 			r.ShowAll()
-		}, r)
-	}
-
-	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-		row := rows[r.GetIndex()]
-		if row.Folder == nil {
-			// Collapse all revealers:
-			for _, r := range rows {
-				if r.Folder != nil {
-					r.Folder.Revealer.SetRevealChild(false)
-				}
-			}
-		} else {
-			index := row.Folder.List.GetSelectedRow().GetIndex()
-			if index < 0 {
-				index = 0
-				row.Folder.List.SelectRow(row.Folder.Guilds[0].Row)
-			}
-
-			row = row.Folder.Guilds[index]
 		}
 
-		App.loadGuild(row)
+		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+			row := rows[r.GetIndex()]
+			if row.Folder == nil {
+				// Collapse all revealers:
+				for _, r := range rows {
+					if r.Folder != nil {
+						r.Folder.Revealer.SetRevealChild(false)
+					}
+				}
+			} else {
+				index := row.Folder.List.GetSelectedRow().GetIndex()
+				if index < 0 {
+					index = 0
+					row.Folder.List.SelectRow(row.Folder.Guilds[0].Row)
+				}
+
+				row = row.Folder.Guilds[index]
+			}
+
+			App.loadGuild(row)
+		})
 	})
 
 	return g, nil
@@ -187,19 +187,10 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a list row")
 	}
-	// Set paddings:
-	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
-	r.SetHAlign(gtk.ALIGN_CENTER)
-	r.SetVAlign(gtk.ALIGN_CENTER)
-	r.SetTooltipMarkup(bold(g.Name))
-	r.SetActivatable(true)
-
 	i, err := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get image-loading icon")
 	}
-
-	must(r.Add, i)
 
 	guild := &Guild{
 		ExtendedWidget: r,
@@ -210,10 +201,21 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 		Image: i,
 	}
 
-	// Check if the guild is unavailable:
-	if fetcherr != nil {
-		guild.SetUnavailable(true)
-	}
+	must(func() {
+		// Set paddings:
+		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
+		r.SetHAlign(gtk.ALIGN_CENTER)
+		r.SetVAlign(gtk.ALIGN_CENTER)
+		r.SetTooltipMarkup(bold(g.Name))
+		r.SetActivatable(true)
+
+		r.Add(i)
+
+		// Check if the guild is unavailable:
+		if fetcherr != nil {
+			guild.SetUnavailable(true)
+		}
+	})
 
 	var url = g.IconURL()
 	if url == "" {

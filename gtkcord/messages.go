@@ -93,8 +93,12 @@ func (ch *Channel) loadMessages() error {
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
 
-	for _, w := range m.messages {
-		must(m.Messages.Remove, w)
+	if len(m.messages) > 0 {
+		must(func() {
+			for _, w := range m.messages {
+				m.Messages.Remove(w)
+			}
+		})
 	}
 
 	// Order: latest is first.
@@ -130,13 +134,9 @@ func (ch *Channel) loadMessages() error {
 		}
 
 		if shouldCondense(newMessages, message) {
-			must(msg.SetCondensed, true)
+			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
+			msg.SetCondensed(true)
 		}
-
-		must(func() {
-			m.Messages.Add(msg)
-			msg.ShowAll()
-		})
 
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
@@ -144,6 +144,13 @@ func (ch *Channel) loadMessages() error {
 
 	// Set the new slice.
 	m.messages = newMessages
+
+	must(func() {
+		for _, msg := range newMessages {
+			m.Messages.Add(msg)
+			msg.ShowAll()
+		}
+	})
 
 	// Hack around the mutex
 	copiedMsg := append([]*Message{}, newMessages...)
@@ -181,6 +188,15 @@ func shouldCondense(msgs []*Message, msg discord.Message) bool {
 
 	return last.AuthorID == msg.Author.ID &&
 		msg.Timestamp.Time().Sub(last.Timestamp) < 5*time.Minute
+}
+
+func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msg := msgs[i]; msg.AuthorID == author && !msg.Condensed {
+			return msg
+		}
+	}
+	return nil
 }
 
 func (m *Messages) onSizeAlloc() {
@@ -227,11 +243,16 @@ func (m *Messages) Insert(message discord.Message) error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	if m.ShouldCondense(message) {
-		must(w.SetCondensed, true)
+	var condense = m.ShouldCondense(message)
+	if condense {
+		w.setOffset(lastMessageFrom(m.messages, message.Author.ID))
 	}
 
 	must(func() {
+		if condense {
+			w.SetCondensed(true)
+		}
+
 		m.Messages.Add(w)
 		w.ShowAll()
 	})
@@ -245,8 +266,12 @@ func (m *Messages) Update(update discord.Message) bool {
 
 	m.guard.Lock()
 	for _, message := range m.messages {
-		if message.ID == update.ID || message.Nonce == update.Nonce {
+		if false ||
+			(message.ID.Valid() && message.ID == update.ID) ||
+			(message.Nonce != "" && message.Nonce == update.Nonce) {
+
 			target = message
+			break
 		}
 	}
 	m.guard.Unlock()
@@ -255,8 +280,10 @@ func (m *Messages) Update(update discord.Message) bool {
 		return false
 	}
 
-	if target.GetSensitive() {
-		target.SetSensitive(true)
+	// Clear the nonce, if any:
+	if !target.getAvailable() {
+		target.setAvailable(true)
+		target.Nonce = ""
 	}
 
 	if update.Content != "" {
