@@ -166,7 +166,8 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 	l.SetMarginStart(15)
 	l.SetMarginTop(15)
 
-	must(r.Add, l)
+	r.Add(l)
+
 	return &Channel{
 		ExtendedWidget: r,
 
@@ -195,7 +196,8 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 	l.SetUseMarkup(true)
 	l.SetOpacity(0.75) // TODO: read state
 
-	must(r.Add, l)
+	r.Add(l)
+
 	return &Channel{
 		ExtendedWidget: r,
 

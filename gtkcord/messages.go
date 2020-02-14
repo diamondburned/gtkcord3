@@ -132,7 +132,8 @@ func (ch *Channel) loadMessages() error {
 		}
 
 		if shouldCondense(newMessages, message) {
-			must(msg.SetCondensed, true)
+			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
+			msg.SetCondensed(true)
 		}
 
 		// Messages are added, earliest first.
@@ -187,6 +188,15 @@ func shouldCondense(msgs []*Message, msg discord.Message) bool {
 		msg.Timestamp.Time().Sub(last.Timestamp) < 5*time.Minute
 }
 
+func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msg := msgs[i]; msg.AuthorID == author && !msg.Condensed {
+			return msg
+		}
+	}
+	return nil
+}
+
 func (m *Messages) onSizeAlloc() {
 	adj, err := m.Viewport.GetVAdjustment()
 	if err != nil {
@@ -232,7 +242,8 @@ func (m *Messages) Insert(message discord.Message) error {
 	defer m.guard.Unlock()
 
 	if m.ShouldCondense(message) {
-		must(w.SetCondensed, true)
+		w.setOffset(lastMessageFrom(m.messages, message.Author.ID))
+		w.SetCondensed(true)
 	}
 
 	must(func() {

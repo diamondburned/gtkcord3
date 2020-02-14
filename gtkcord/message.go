@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -52,7 +53,8 @@ type Message struct {
 	content     *gtk.TextBuffer  // view declared implicitly
 	extras      []*MessageExtras // embeds, images, etc
 
-	Condensed bool
+	Condensed      bool
+	CondenseOffset time.Duration
 }
 
 type MessageExtras struct {
@@ -146,9 +148,6 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		timestamp.SetSingleLineMode(true)
 		timestamp.SetMarginTop(2)
 		timestamp.SetMarginStart(AvatarPadding)
-		timestamp.SetMarkup(`<span size="smaller">` +
-			m.Timestamp.Format(time.Kitchen) +
-			`</span>`)
 
 		msgTv, err := gtk.TextViewNewWithBuffer(msgTb)
 		if err != nil {
@@ -229,19 +228,31 @@ func (m *Message) setAvailable(available bool) {
 	}
 }
 
+func (m *Message) setOffset(last *Message) {
+	if last == nil {
+		return
+	}
+
+	offs := humanize.DuraCeil(m.Timestamp.Sub(last.Timestamp), time.Second)
+	m.CondenseOffset = offs
+}
+
 func (m *Message) SetCondensed(condensed bool) {
 	if m.Condensed == condensed {
 		return
 	}
 	m.Condensed = condensed
-	m.setCondensed()
+	must(m.setCondensed)
 }
 
 func (m *Message) setCondensed() {
+	log.Debugln("Message is condensed:", m.Condensed)
+
 	if m.Condensed {
 		m.main.SetMarginTop(5)
-		m.timestamp.SetXAlign(0.5)
 		m.mainStyle.AddClass("condensed")
+		m.timestamp.SetXAlign(0.5)
+		m.timestamp.SetMarkup(smaller("+" + m.CondenseOffset.String()))
 
 		m.main.Remove(m.avatar)
 		m.main.Remove(m.right)
@@ -257,9 +268,9 @@ func (m *Message) setCondensed() {
 	}
 
 	m.main.SetMarginTop(7)
-	// m.timestamp.SetMarginStart(7)
-	m.timestamp.SetXAlign(0.0) // left align
 	m.mainStyle.RemoveClass("condensed")
+	m.timestamp.SetXAlign(0.0) // left align
+	m.timestamp.SetMarkup(smaller(humanize.TimeAgo(m.Timestamp)))
 
 	m.main.Remove(m.timestamp)
 	m.main.Remove(m.rightBottom)
@@ -329,4 +340,8 @@ func (m *Message) UpdateContent(update discord.Message) {
 func (m *Message) UpdateExtras(update discord.Message) {
 	// TODO
 	// must(m.ShowAll)
+}
+
+func smaller(text string) string {
+	return `<span size="smaller">` + text + "</span>"
 }

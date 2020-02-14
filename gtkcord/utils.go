@@ -9,20 +9,34 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
+var counter uint
+
+func count() func() {
+	counter++
+	return func() {
+		counter--
+		log.Debugln("IdleAdd finished. Count:", counter)
+	}
+}
+
 func must(fn interface{}, args ...interface{}) {
 	var trace = log.Trace(1)
 	var err error
 
 	switch len(args) {
 	case 0:
-		switch fn.(type) {
+		switch fn := fn.(type) {
 		case func() bool:
-			_, err = glib.IdleAdd(fn)
+			_, err = glib.IdleAdd(func() bool {
+				defer count()()
+				return fn()
+			})
 		case func():
 			_, err = glib.IdleAdd(func() bool {
+				defer count()()
 				log.Debugln(trace, "IdleAdd() called.")
 
-				fn.(func())()
+				fn()
 				return false
 			})
 		default:
@@ -34,6 +48,7 @@ func must(fn interface{}, args ...interface{}) {
 		argV := reflect.ValueOf(args[0])
 
 		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
+			defer count()()
 			log.Debugln(trace, "IdleAdd() called.")
 
 			values[0].Call([]reflect.Value{values[1]})
@@ -62,11 +77,10 @@ func logWrap(err error, str string) {
 }
 
 func margin4(w *gtk.Widget, top, bottom, left, right int) {
-	must(w.SetMarginTop, top)
-	must(w.SetMarginBottom, bottom)
-
-	must(w.SetMarginStart, left)
-	must(w.SetMarginEnd, right)
+	w.SetMarginTop(top)
+	w.SetMarginBottom(bottom)
+	w.SetMarginStart(left)
+	w.SetMarginEnd(right)
 }
 
 func margin2(w *gtk.Widget, top, left int) {

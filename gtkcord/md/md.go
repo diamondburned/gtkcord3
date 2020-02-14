@@ -16,7 +16,7 @@ import (
 
 var regexes = []string{
 	// codeblock
-	`(?:^\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60$)`,
+	`(?:\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60$)`,
 	// blockquote
 	`((?:(?:^|\n)^>\s+.*)+)\n`,
 	// Inline markup stuff
