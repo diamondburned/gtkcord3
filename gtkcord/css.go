@@ -12,7 +12,20 @@ const CSS = `
 headerbar { padding: 0; }
 headerbar button { box-shadow: none; }
 textview, textview > text { background-color: transparent; }
-.message:not(.condensed) { border-top: 1px solid rgba(0, 0, 0, 0.12); }
+
+.message:not(.condensed) {
+	border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.message-input button {
+	background: none;
+	box-shadow: none;
+	border: none;
+	opacity: 0.65;
+}
+.message-input button:hover {
+	opacity: 1;
+}
 `
 
 var CustomCSS = os.Getenv("GTKCORD_CUSTOM_CSS")

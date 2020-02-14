@@ -62,6 +62,12 @@ func Trace(n int) string {
 	)
 }
 
+func Infof(f string, v ...interface{}) {
+	logInfo.Printf(f, v...)
+}
+func Infoln(v ...interface{}) {
+	logInfo.Println(v...)
+}
 func Printf(f string, v ...interface{}) {
 	logInfo.Printf(f, v...)
 }

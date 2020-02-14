@@ -21,7 +21,6 @@ func newPool(p *Parser) sync.Pool {
 		New: func() interface{} {
 			return &mdState{
 				p:      p,
-				state:  &TagState{},
 				fmtter: &Formatter{},
 				buffer: &bytes.Buffer{},
 			}
@@ -43,7 +42,9 @@ type mdState struct {
 	prev    []byte
 	matches [][]match
 
-	state *TagState
+	tag   *gtk.TextTag
+	color string
+	attr  Attribute
 
 	// Used to determine whether or not emojis should be large:
 	hasText bool
@@ -58,22 +59,22 @@ func (s *mdState) tagAttr(token []byte) []byte {
 		return token
 	}
 
-	if s.state.Attr().Has(attr) {
-		s.state.Remove(attr)
+	if s.attr.Has(attr) {
+		s.tagRemove(attr)
 		return nil
 	}
 
 	// If the current token starts inline code, we don't want anything else.
 	if attr == AttrMonospace {
-		s.state.Reset()
+		s.tagReset()
 	}
 	// If the state is already an inline code, we don't want any markup. Treat
 	// tokens as plain text.
-	if s.state.Attr().Has(AttrMonospace) {
+	if s.attr.Has(AttrMonospace) {
 		return token
 	}
 
-	s.state.Add(attr)
+	s.tagAdd(attr)
 	return nil
 }
 
@@ -89,7 +90,7 @@ func (s *mdState) switchTree(i int) {
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
-		s.insertWithTag(append(s.matches[i][3].str, '\n'), s.state.With(AttrQuoted))
+		s.insertWithTag(append(s.matches[i][3].str, '\n'), s.tagWith(AttrQuoted))
 
 	case len(s.matches[i][4].str) > 0:
 		// inline stuff
@@ -99,7 +100,7 @@ func (s *mdState) switchTree(i int) {
 
 	case len(s.matches[i][5].str) > 0:
 		// TODO URLs
-		s.insertWithTag(s.matches[i][5].str, s.state.WithColor("cyan"))
+		s.insertWithTag(s.matches[i][5].str, s.tagWithColor("cyan"))
 
 	case len(s.matches[i][9].str) > 0:
 		// Emojis
@@ -140,7 +141,7 @@ func (s *mdState) switchTreeMessage(m *discord.Message) func(i int) {
 
 func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
 	if tag == nil {
-		tag = s.state.Get()
+		tag = s.tag
 	}
 	s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
 }
@@ -160,6 +161,9 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 	s.last = 0
 	s.prev = s.prev[:0]
 	s.hasText = false
+	s.attr = 0
+	s.color = ""
+	s.tag = s.p.ColorTag(s.attr, s.color)
 	s.fmtter.Reset()
 
 	// We're not clearing s.matches

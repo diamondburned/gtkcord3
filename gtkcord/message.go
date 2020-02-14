@@ -97,12 +97,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		return nil, errors.Wrap(err, "Failed to create timestamp label")
 	}
 
-	ttt, err := gtk.TextTagTableNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Faield to create a text tag table")
-	}
-
-	msgTb, err := gtk.TextBufferNew(ttt)
+	msgTb, err := App.parser.NewTextBuffer()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a text buffer")
 	}
@@ -111,8 +106,8 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
-		Timestamp: m.Timestamp.Time(),
-		Edited:    m.EditedTimestamp.Time(),
+		Timestamp: m.Timestamp.Time().Local(),
+		Edited:    m.EditedTimestamp.Time().Local(),
 
 		ExtendedWidget: main,
 		Condensed:      false,
@@ -178,7 +173,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		// Message without a valid ID is probably a sending message. Either way,
 		// it's unavailable.
 		if !m.ID.Valid() {
-			main.SetSensitive(false)
+			message.setAvailable(false)
 		}
 
 		return false
@@ -215,16 +210,23 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	if messageText == "" {
 		message.UpdateContent(m)
 	} else {
-		// var name = bold(App.State.AuthorDisplayName(m))
-		// if color := App.State.AuthorColor(m); color > 0 {
-		// 	name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
-		// }
-
-		message.updateContent(messageText)
-		message.rightBottom.SetOpacity(0.5)
+		message.updateContent(`<i>` + messageText + `</i>`)
+		message.setAvailable(false)
 	}
 
 	return &message, nil
+}
+
+func (m *Message) getAvailable() bool {
+	return m.rightBottom.GetOpacity() > 0.9
+}
+
+func (m *Message) setAvailable(available bool) {
+	if available {
+		must(m.rightBottom.SetOpacity, 1.0)
+	} else {
+		must(m.rightBottom.SetOpacity, 0.5)
+	}
 }
 
 func (m *Message) SetCondensed(condensed bool) {
@@ -239,6 +241,7 @@ func (m *Message) setCondensed() {
 	if m.Condensed {
 		m.main.SetMarginTop(5)
 		m.timestamp.SetXAlign(0.5)
+		m.mainStyle.AddClass("condensed")
 
 		m.main.Remove(m.avatar)
 		m.main.Remove(m.right)

@@ -61,6 +61,11 @@ func (messages *Messages) loadMessageInput() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to create main box")
 	}
+	mainStyle, err := main.GetStyleContext()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get style context for main")
+	}
+	mainStyle.AddClass("message-input")
 	i.Main = main
 	i.ExtendedWidget = main
 
@@ -99,11 +104,16 @@ func (messages *Messages) loadMessageInput() error {
 	i.InputBuf = ibuf
 
 	must(func() {
+		margin2(&ibox.Widget, 8, AvatarPadding)
+		upload.SetVAlign(gtk.ALIGN_START)
+		emoji.SetVAlign(gtk.ALIGN_START)
+
 		input, err := gtk.TextViewNewWithBuffer(ibuf)
 		if err != nil {
 			log.Panicln("Die: " + err.Error())
 		}
 		i.Input = input
+		margin2(&input.Widget, 6, 12)
 
 		input.AddEvents(int(gdk.KEY_PRESS_MASK))
 		input.Connect("key-press-event", i.keyDown)
@@ -126,12 +136,12 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return false // propagate
 	}
 
-	shift := evKey.State() == uint(gdk.GDK_SHIFT_MASK)
-	enter := evKey.KeyVal() == gdk.KEY_KP_Enter
+	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
+	shift := evKey.State()&shiftMask == shiftMask
+	enter := evKey.KeyVal() == gdk.KEY_Return
 
-	log.Println("Got shift/enter:", shift, enter)
-
-	if !shift || !enter {
+	// If Enter isn't being pressed:
+	if !enter {
 		return false // propagate
 	}
 
@@ -170,7 +180,7 @@ func (i *MessageInput) send(content string) error {
 	m := discord.Message{
 		Type:      discord.DefaultMessage,
 		ChannelID: i.Messages.Channel.ID,
-		GuildID:   i.Messages.Channel.Channels.Guild.ID,
+		GuildID:   i.Messages.Channel.Guild,
 		Author:    *App.Me,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),
@@ -181,7 +191,7 @@ func (i *MessageInput) send(content string) error {
 		log.Errorln("Failed to add message to be sent:", err)
 	}
 
-	_, err := App.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
+	s, err := App.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
 		Content: m.Content,
 		Nonce:   m.Nonce,
 	})
@@ -190,5 +200,7 @@ func (i *MessageInput) send(content string) error {
 		return errors.Wrap(err, "Failed to send message")
 	}
 
+	s.Nonce = m.Nonce
+	i.Messages.Update(*s)
 	return nil
 }

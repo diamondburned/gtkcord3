@@ -52,6 +52,7 @@ type Parser struct {
 	RolePressed    func(id discord.Snowflake)
 	URLPressed     func(url string)
 
+	table *gtk.TextTagTable
 	theme *gtk.IconTheme
 	icons sync.Map
 }
@@ -65,13 +66,23 @@ func NewParser(s *state.State) *Parser {
 		log.Panicln("Couldn't get default GTK Icon Theme:", err)
 	}
 
+	t, err := gtk.TextTagTableNew()
+	if err != nil {
+		log.Panicln("Failed to create a new text tag table:", err)
+	}
+
 	p := &Parser{
 		State: s,
 		theme: i,
+		table: t,
 	}
 	p.pool = newPool(p)
 
 	return p
+}
+
+func (p *Parser) NewTextBuffer() (*gtk.TextBuffer, error) {
+	return gtk.TextBufferNew(p.table)
 }
 
 func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
@@ -97,8 +108,6 @@ func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
 
 func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer) {
 	s := p.pool.Get().(*mdState)
-
-	s.state.Use(buf)
 	s.use(buf, md)
 
 	var tree func(i int)

@@ -21,7 +21,6 @@ const (
 
 type Channels struct {
 	ExtendedWidget
-	Guild *Guild
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -36,12 +35,12 @@ type Channels struct {
 
 type Channel struct {
 	ExtendedWidget
-	Channels *Channels
 
 	Row   *gtk.ListBoxRow
 	Label *gtk.Label
 
 	ID       discord.Snowflake
+	Guild    discord.Snowflake
 	Name     string
 	Topic    string
 	Category bool
@@ -174,6 +173,7 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 		Row:      r,
 		Label:    l,
 		ID:       ch.ID,
+		Guild:    ch.GuildID,
 		Name:     ch.Name,
 		Topic:    ch.Topic,
 		Category: true,
@@ -202,6 +202,7 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 		Row:      r,
 		Label:    l,
 		ID:       ch.ID,
+		Guild:    ch.GuildID,
 		Name:     ch.Name,
 		Topic:    ch.Topic,
 		Category: false,

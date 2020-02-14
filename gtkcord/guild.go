@@ -141,12 +141,12 @@ func newGuilds() (*Guilds, error) {
 		Guilds:  rows,
 	}
 
-	for _, r := range rows {
-		must(func(r *Guild) {
+	must(func() {
+		for _, r := range rows {
 			l.Add(r)
 			r.ShowAll()
-		}, r)
-	}
+		}
+	})
 
 	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := rows[r.GetIndex()]
@@ -198,8 +198,7 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get image-loading icon")
 	}
-
-	must(r.Add, i)
+	r.Add(i)
 
 	guild := &Guild{
 		ExtendedWidget: r,

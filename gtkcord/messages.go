@@ -93,9 +93,11 @@ func (ch *Channel) loadMessages() error {
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
 
-	for _, w := range m.messages {
-		must(m.Messages.Remove, w)
-	}
+	must(func() {
+		for _, w := range m.messages {
+			m.Messages.Remove(w)
+		}
+	})
 
 	// Order: latest is first.
 	messages, err := App.State.Messages(ch.ID)
@@ -133,17 +135,19 @@ func (ch *Channel) loadMessages() error {
 			must(msg.SetCondensed, true)
 		}
 
-		must(func() {
-			m.Messages.Add(msg)
-			msg.ShowAll()
-		})
-
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
 	}
 
 	// Set the new slice.
 	m.messages = newMessages
+
+	must(func() {
+		for _, msg := range newMessages {
+			m.Messages.Add(msg)
+			msg.ShowAll()
+		}
+	})
 
 	// Hack around the mutex
 	copiedMsg := append([]*Message{}, newMessages...)
@@ -245,8 +249,12 @@ func (m *Messages) Update(update discord.Message) bool {
 
 	m.guard.Lock()
 	for _, message := range m.messages {
-		if message.ID == update.ID || message.Nonce == update.Nonce {
+		if false ||
+			(message.ID.Valid() && message.ID == update.ID) ||
+			(message.Nonce != "" && message.Nonce == update.Nonce) {
+
 			target = message
+			break
 		}
 	}
 	m.guard.Unlock()
@@ -255,9 +263,12 @@ func (m *Messages) Update(update discord.Message) bool {
 		return false
 	}
 
-	if target.GetSensitive() {
-		target.SetSensitive(true)
+	// Clear the nonce, if any:
+	if !target.getAvailable() {
+		target.setAvailable(true)
 	}
+
+	log.Println("New message update, nonce:", update.Nonce, target.getAvailable())
 
 	if update.Content != "" {
 		target.UpdateContent(update)

@@ -18,13 +18,9 @@ type Pixbuf struct {
 func (pb *Pixbuf) Set(img *gtk.Image) {
 	switch {
 	case pb.Pixbuf != nil:
-		must(func() {
-			img.SetFromPixbuf(pb.Pixbuf)
-		})
+		must(img.SetFromPixbuf, pb.Pixbuf)
 	case pb.Animation != nil:
-		must(func() {
-			img.SetFromAnimation(pb.Animation)
-		})
+		must(img.SetFromAnimation, pb.Animation)
 	}
 }
 
