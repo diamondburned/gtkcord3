@@ -9,16 +9,6 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-var counter uint
-
-func count() func() {
-	counter++
-	return func() {
-		counter--
-		log.Debugln("IdleAdd finished. Count:", counter)
-	}
-}
-
 func must(fn interface{}, args ...interface{}) {
 	var trace = log.Trace(1)
 	var err error
@@ -28,14 +18,12 @@ func must(fn interface{}, args ...interface{}) {
 		switch fn := fn.(type) {
 		case func() bool:
 			_, err = glib.IdleAdd(func() bool {
-				defer count()()
+				log.Debugln(trace, "IdleAdd() called.")
 				return fn()
 			})
 		case func():
 			_, err = glib.IdleAdd(func() bool {
-				defer count()()
 				log.Debugln(trace, "IdleAdd() called.")
-
 				fn()
 				return false
 			})
@@ -48,9 +36,7 @@ func must(fn interface{}, args ...interface{}) {
 		argV := reflect.ValueOf(args[0])
 
 		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
-			defer count()()
 			log.Debugln(trace, "IdleAdd() called.")
-
 			values[0].Call([]reflect.Value{values[1]})
 			return false
 		}, [2]reflect.Value{fnV, argV})
