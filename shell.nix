@@ -5,6 +5,6 @@ pkgs.stdenv.mkDerivation rec {
 
 	buildInputs = with pkgs; [
 		gnome3.glib gnome3.gtk
-		pkgconfig
+		pkgconfig go gdb
 	];
 }

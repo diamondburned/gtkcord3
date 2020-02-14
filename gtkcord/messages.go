@@ -93,14 +93,6 @@ func (ch *Channel) loadMessages() error {
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
 
-	if len(m.messages) > 0 {
-		must(func() {
-			for _, w := range m.messages {
-				m.Messages.Remove(w)
-			}
-		})
-	}
-
 	// Order: latest is first.
 	messages, err := App.State.Messages(ch.ID)
 	if err != nil {
@@ -135,21 +127,26 @@ func (ch *Channel) loadMessages() error {
 
 		if shouldCondense(newMessages, message) {
 			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
-			msg.SetCondensed(true)
+			msg.Condensed = true
 		}
 
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
 	}
 
-	// Set the new slice.
-	m.messages = newMessages
-
 	must(func() {
+		for _, w := range m.messages {
+			m.Messages.Remove(w)
+		}
+
 		for _, msg := range newMessages {
+			msg.setCondensed()
 			m.Messages.Add(msg)
 			msg.ShowAll()
 		}
+
+		// Set the new slice.
+		m.messages = newMessages
 	})
 
 	// Hack around the mutex
@@ -246,13 +243,10 @@ func (m *Messages) Insert(message discord.Message) error {
 	var condense = m.ShouldCondense(message)
 	if condense {
 		w.setOffset(lastMessageFrom(m.messages, message.Author.ID))
+		must(w.SetCondensed, true)
 	}
 
 	must(func() {
-		if condense {
-			w.SetCondensed(true)
-		}
-
 		m.Messages.Add(w)
 		w.ShowAll()
 	})

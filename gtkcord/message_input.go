@@ -65,7 +65,6 @@ func (messages *Messages) loadMessageInput() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get style context for main")
 	}
-	mainStyle.AddClass("message-input")
 	i.Main = main
 	i.ExtendedWidget = main
 
@@ -104,6 +103,7 @@ func (messages *Messages) loadMessageInput() error {
 	i.InputBuf = ibuf
 
 	must(func() {
+		mainStyle.AddClass("message-input")
 		margin2(&ibox.Widget, 8, AvatarPadding)
 		upload.SetVAlign(gtk.ALIGN_START)
 		emoji.SetVAlign(gtk.ALIGN_START)

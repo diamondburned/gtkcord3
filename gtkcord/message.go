@@ -126,7 +126,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 	}
 
 	// What the fuck?
-	must(func() bool {
+	must(func() {
 		main.SetMarginBottom(2)
 		mstyle.AddClass("message")
 
@@ -174,12 +174,7 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		if !m.ID.Valid() {
 			message.setAvailable(false)
 		}
-
-		log.Println("RETURN ---")
-		return false
 	})
-
-	log.Println("MUST ---")
 
 	var messageText string
 
