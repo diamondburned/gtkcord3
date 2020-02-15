@@ -1,6 +1,7 @@
 package gtkcord
 
 import (
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -18,9 +19,9 @@ type Pixbuf struct {
 func (pb *Pixbuf) Set(img *gtk.Image) {
 	switch {
 	case pb.Pixbuf != nil:
-		must(img.SetFromPixbuf, pb.Pixbuf)
-	case pb.Animation != nil:
-		must(img.SetFromAnimation, pb.Animation)
+		semaphore.IdleMust(img.SetFromPixbuf, pb.Pixbuf)
+		// case pb.Animation != nil:
+		// semaphore.IdleMust(img.SetFromAnimation, pb.Animation)
 	}
 }
 

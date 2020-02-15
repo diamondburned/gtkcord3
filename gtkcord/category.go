@@ -5,7 +5,6 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/pkg/errors"
 )
 
 type _sortStructure struct {
@@ -108,21 +107,11 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 
 	for _, sch := range list {
 		if sch.hasParent {
-			w, err := newChannel(sch.parent)
-			if err != nil {
-				return errors.Wrap(err, "Failed to create sch.parent")
-			}
-
-			widget.Channels = append(widget.Channels, w)
+			widget.Channels = append(widget.Channels, newChannel(sch.parent))
 		}
 
 		for _, ch := range sch.children {
-			w, err := newChannel(ch)
-			if err != nil {
-				return errors.Wrap(err, "Failed to create children channel")
-			}
-
-			widget.Channels = append(widget.Channels, w)
+			widget.Channels = append(widget.Channels, newChannel(ch))
 		}
 	}
 

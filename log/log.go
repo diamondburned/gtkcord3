@@ -57,7 +57,7 @@ func Trace(n int) string {
 	file3 = filepath.Base(file3)
 
 	return fmt.Sprintf(
-		"%s:%d > %s:%d > %s:%d > ",
+		"%s:%d > %s:%d > %s:%d >",
 		file3, line3, file2, line2, file1, line1,
 	)
 }

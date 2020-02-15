@@ -64,15 +64,16 @@ func (g *Guild) loadChannels() error {
 	}
 	chs = filterChannels(App.State, chs)
 
-	cs, err := gtk.ScrolledWindowNew(nil, nil)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create channel scroller")
-	}
+	/*
+	 * === Main box ===
+	 */
 
-	main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create main box")
-	}
+	cs := must(gtk.ScrolledWindowNew, (*gtk.Adjustment)(nil), (*gtk.Adjustment)(nil)).(*gtk.ScrolledWindow)
+	must(cs.SetPolicy, gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	must(main.SetSizeRequest, ChannelsWidth, -1)
+
+	must(cs.Add, main)
 
 	g.Channels = &Channels{
 		ExtendedWidget: cs,
@@ -85,60 +86,35 @@ func (g *Guild) loadChannels() error {
 	 */
 
 	if guild.Banner != "" {
-		banner, err := gtk.ImageNew()
-		if err != nil {
-			return errors.Wrap(err, "Failed to create banner image")
-		}
-
-		g.Channels.BannerImage = banner
-		go g.UpdateBanner(guild.BannerURL())
+		go g.Channels.UpdateBanner(guild.BannerURL())
 	}
 
 	/*
 	 * === Channels list ===
 	 */
 
-	cl, err := gtk.ListBoxNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create channel list")
-	}
+	cl := must(gtk.ListBoxNew).(*gtk.ListBox)
+	must(cl.SetVExpand, true)
+	must(cl.SetActivateOnSingleClick, true)
+	must(cl.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		row := g.Channels.Channels[r.GetIndex()]
+		go App.loadChannel(g, row)
+	})
+
+	must(main.Add, cl)
 
 	if err := transformChannels(g.Channels, chs); err != nil {
 		return errors.Wrap(err, "Failed to transform channels")
 	}
 
-	/*
-	 * === Properties ===
-	 */
-
-	must(func() {
-		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			row := g.Channels.Channels[r.GetIndex()]
-			App.loadChannel(g, row)
-		})
-
-		cs.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-		main.SetSizeRequest(ChannelsWidth, -1)
-		cs.Add(main)
-
-		if banner := g.Channels.BannerImage; banner != nil {
-			banner.SetSizeRequest(ChannelsWidth, BannerHeight)
-			main.Add(banner)
-		}
-
-		cl.SetVExpand(true)
-		cl.SetActivateOnSingleClick(true)
-		main.Add(cl)
-
-		for _, ch := range g.Channels.Channels {
-			cl.Add(ch)
-		}
-	})
+	for _, ch := range g.Channels.Channels {
+		must(cl.Add, ch)
+	}
 
 	return nil
 }
 
-func newChannel(ch discord.Channel) (*Channel, error) {
+func newChannel(ch discord.Channel) *Channel {
 	switch ch.Type {
 	case discord.GuildText:
 		return newChannelRow(ch)
@@ -149,31 +125,23 @@ func newChannel(ch discord.Channel) (*Channel, error) {
 	}
 
 	log.Panicln("Unknown channel type " + strconv.Itoa(int(ch.Type)))
-	return nil, nil
+	return nil
 }
 
-func newCategory(ch discord.Channel) (*Channel, error) {
-	r, err := gtk.ListBoxRowNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create channel row")
-	}
-	l, err := gtk.LabelNew(
-		`<span font_size="smaller">` + escape(strings.ToUpper(ch.Name)) + "</span>")
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create label")
-	}
+func newCategory(ch discord.Channel) *Channel {
+	name := `<span font_size="smaller">` + escape(strings.ToUpper(ch.Name)) + "</span>"
 
-	must(func() {
-		r.SetSelectable(false)
-		r.SetSensitive(false)
+	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
+	must(r.SetSelectable, false)
+	must(r.SetSensitive, false)
 
-		l.SetUseMarkup(true)
-		l.SetXAlign(0)
-		l.SetMarginStart(15)
-		l.SetMarginTop(15)
+	l := must(gtk.LabelNew, name).(*gtk.Label)
+	must(l.SetUseMarkup, true)
+	must(l.SetXAlign, 0.0)
+	must(l.SetMarginStart, 15)
+	must(l.SetMarginTop, 15)
 
-		r.Add(l)
-	})
+	must(r.Add, l)
 
 	return &Channel{
 		ExtendedWidget: r,
@@ -185,27 +153,19 @@ func newCategory(ch discord.Channel) (*Channel, error) {
 		Name:     ch.Name,
 		Topic:    ch.Topic,
 		Category: true,
-	}, nil
+	}
 }
 
-func newChannelRow(ch discord.Channel) (*Channel, error) {
-	r, err := gtk.ListBoxRowNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create channel row")
-	}
-	l, err := gtk.LabelNew(ChannelHash + bold(ch.Name))
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create label")
-	}
+func newChannelRow(ch discord.Channel) *Channel {
+	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
 
-	must(func() {
-		l.SetXAlign(0)
-		l.SetMarginStart(8)
-		l.SetUseMarkup(true)
-		l.SetOpacity(0.75) // TODO: read state
+	l := must(gtk.LabelNew, ChannelHash+bold(escape(ch.Name))).(*gtk.Label)
+	must(l.SetUseMarkup, true)
+	must(l.SetXAlign, 0.0)
+	must(l.SetMarginStart, 8)
+	must(l.SetOpacity, 0.75) // TODO: read state
 
-		r.Add(l)
-	})
+	must(r.Add, l)
 
 	return &Channel{
 		ExtendedWidget: r,
@@ -217,20 +177,26 @@ func newChannelRow(ch discord.Channel) (*Channel, error) {
 		Name:     ch.Name,
 		Topic:    ch.Topic,
 		Category: false,
-	}, nil
+	}
 }
-func newDMChannel(ch discord.Channel) (*Channel, error) {
+func newDMChannel(ch discord.Channel) *Channel {
 	panic("Implement me")
 }
 
-func (g *Guild) UpdateBanner(url string) {
+func (chs *Channels) UpdateBanner(url string) {
+	if chs.BannerImage == nil {
+		chs.BannerImage = must(gtk.ImageNew).(*gtk.Image)
+		must(chs.BannerImage.SetSizeRequest, ChannelsWidth, BannerHeight)
+		must(chs.Main.PackStart, chs.BannerImage, false, false, 0)
+	}
+
 	p, err := pbpool.DownloadScaled(url+"?size=512", ChannelsWidth, BannerHeight)
 	if err != nil {
 		logWrap(err, "Failed to get the pixbuf guild icon")
 		return
 	}
 
-	must(g.Channels.BannerImage.SetFromPixbuf, p)
+	must(chs.BannerImage.SetFromPixbuf, p)
 }
 
 func (chs *Channels) First() int {

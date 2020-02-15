@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -41,6 +42,7 @@ type mdState struct {
 	last    int32
 	prev    []byte
 	matches [][]match
+	used    []int
 
 	tag   *gtk.TextTag
 	color string
@@ -86,7 +88,8 @@ func (s *mdState) switchTree(i int) {
 			s.matches[i][2].str,
 		))
 
-		s.buf.InsertMarkup(s.buf.GetEndIter(), code)
+		end := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
+		semaphore.IdleMust(s.buf.InsertMarkup, end, code)
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
@@ -143,7 +146,9 @@ func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
 	if tag == nil {
 		tag = s.tag
 	}
-	s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
+
+	end := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
+	semaphore.IdleMust(s.buf.InsertWithTag, end, string(content), tag)
 }
 
 func (s *mdState) getLastIndex(currentIndex int) int32 {
@@ -160,6 +165,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 	s.buf = buf
 	s.last = 0
 	s.prev = s.prev[:0]
+	s.used = s.used[:0]
 	s.hasText = false
 	s.attr = 0
 	s.color = ""
@@ -170,13 +176,30 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 
 	var m = match{-1, -1, nil}
 	var matchesList = s.matches[:0]
+
+	// used for emoji / hasText
 	var last int32 = 0
 
+	// used for optimization
+	var index = 0
+
+	var ok bool
+
 	for i := 0; i < len(found); i++ {
+		// If the match is an inline markup symbol:
+		if found[i][4*2] > -1 {
+			// If the pair isn't already matched with a pair prior, and
+			// if we could not find a next matching pair:
+			if s.used, ok = findPairs(found, i, 4, s.used); !ok {
+				continue
+			}
+		}
+
 		var matches []match
 
-		if i < len(s.matches) {
-			matches = s.matches[i][:0]
+		if index < len(s.matches) {
+			matches = s.matches[index][:0]
+			index++
 		} else {
 			matches = make([]match, 0, len(found[i])/2)
 		}
@@ -211,6 +234,27 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 	}
 
 	s.matches = matchesList
+}
+
+func findPairs(found [][]int, start, match int, used []int) ([]int, bool) {
+	for _, u := range used {
+		if u == start {
+			// seen
+			return used, true
+		}
+	}
+
+	match *= 2
+	start += 1
+
+	for j := start; j < len(found); j++ {
+		if found[j][match] > -1 {
+			used = append(used, j)
+			return used, true
+		}
+	}
+
+	return used, false
 }
 
 func (s *mdState) renderCodeBlock(lang, content []byte) []byte {

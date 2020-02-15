@@ -122,22 +122,23 @@ func UseState(s *state.State) error {
 	// Finalize the window:
 	App.finalize()
 
-	// 100 goroutines is pretty cheap (lol)
-	for _, g := range App.Guilds.Guilds {
-		_, err := s.Channels(g.ID)
-		if err != nil {
-			logWrap(err, "Failed to pre-fetch channels")
-		}
+	// semaphore.Go(func() {
+	// 	for _, g := range App.Guilds.Guilds {
+	// 		_, err := s.Channels(g.ID)
+	// 		if err != nil {
+	// 			logWrap(err, "Failed to pre-fetch channels")
+	// 		}
 
-		if g.Folder != nil {
-			for _, g := range g.Folder.Guilds {
-				_, err := s.Channels(g.ID)
-				if err != nil {
-					logWrap(err, "Failed to pre-fetch channels")
-				}
-			}
-		}
-	}
+	// 		if g.Folder != nil {
+	// 			for _, g := range g.Folder.Guilds {
+	// 				_, err := s.Channels(g.ID)
+	// 				if err != nil {
+	// 					logWrap(err, "Failed to pre-fetch channels")
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// })
 
 	App.hookEvents()
 	App.wait()
@@ -264,9 +265,9 @@ func (a *application) loadGuild(g *Guild) {
 		a.Guilds.SetSensitive(false)
 		a.spinner.Start()
 		a.setChannelCol(a.sbox)
-
-		go a._loadGuild(g)
 	})
+
+	go a._loadGuild(g)
 }
 
 func (a *application) _loadGuild(g *Guild) {
@@ -311,9 +312,9 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 		g.Channels.Main.SetSensitive(false)
 		a.spinner.Start()
 		a.setMessageCol(a.sbox)
-
-		go a._loadChannel(g, ch)
 	})
+
+	go a._loadChannel(g, ch)
 }
 
 func (a *application) _loadChannel(g *Guild, ch *Channel) {
@@ -332,9 +333,7 @@ func (a *application) _loadChannel(g *Guild, ch *Channel) {
 	if a.Messages == nil {
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 		if err == nil {
-			must(func() {
-				a.Grid.Add(s)
-			})
+			must(a.Grid.Add, s)
 		}
 	}
 

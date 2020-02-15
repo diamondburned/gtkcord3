@@ -2,6 +2,8 @@ module github.com/diamondburned/gtkcord3
 
 go 1.13
 
+replace github.com/diamondburned/arikawa => ../arikawa/
+
 require (
 	github.com/Xuanwo/go-locale v0.0.0-20191213075926-6d9bb1d98b6f
 	github.com/alecthomas/chroma v0.7.1

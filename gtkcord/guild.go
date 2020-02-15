@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	FolderSize  = 36
+	FolderSize  = 42
 	IconSize    = 52
 	IconPadding = 6
 )
@@ -34,6 +34,7 @@ type Guild struct {
 
 	Style *gtk.StyleContext
 	Image *gtk.Image
+	IURL  string
 	// nil if not downloaded
 	Pixbuf *Pixbuf
 
@@ -46,12 +47,12 @@ type Guild struct {
 }
 
 func newGuildsFromFolders() ([]*Guild, error) {
-	s := App.State
-
-	var folders = s.Ready.Settings.GuildFolders
+	var folders = App.State.Ready.Settings.GuildFolders
 	var rows = make([]*Guild, 0, len(folders))
 
-	for _, f := range folders {
+	for i := 0; i < len(folders); i++ {
+		f := folders[i]
+
 		if len(f.GuildIDs) == 1 && f.Name == "" {
 			r, err := newGuildRow(f.GuildIDs[0])
 			if err != nil {
@@ -61,7 +62,7 @@ func newGuildsFromFolders() ([]*Guild, error) {
 			rows = append(rows, r)
 
 		} else {
-			e, err := newGuildFolder(s, f)
+			e, err := newGuildFolder(App.State, f)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
 			}
@@ -124,51 +125,60 @@ func newGuilds() (*Guilds, error) {
 		return nil, errors.Wrap(err, "Failed to get guilds list")
 	}
 
-	l, err := gtk.ListBoxNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create list")
-	}
-	ctx, err := l.GetStyleContext()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get guild stylecontext")
-	}
+	l := must(gtk.ListBoxNew).(*gtk.ListBox)
+	must(l.SetActivateOnSingleClick, true)
+
+	ctx := must(l.GetStyleContext).(*gtk.StyleContext)
+	must(ctx.AddClass, "guild")
 
 	g := &Guilds{
 		ListBox: l,
 		Guilds:  rows,
 	}
 
-	must(func() {
-		l.SetActivateOnSingleClick(true)
-		ctx.AddClass("guild")
+	for i := 0; i < len(rows); i++ {
+		must(l.Add, rows[i])
+		must(rows[i].ShowAll)
+	}
 
-		for _, r := range rows {
-			l.Add(r)
-			r.ShowAll()
+	must(l.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		index := r.GetIndex()
+		row := rows[index]
+
+		// Collapse all revealers:
+		for i, r := range rows {
+			if i == index {
+				continue
+			}
+			if r.Folder != nil {
+				r.Folder.Revealer.SetRevealChild(false)
+			}
 		}
 
-		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			row := rows[r.GetIndex()]
-			if row.Folder == nil {
-				// Collapse all revealers:
-				for _, r := range rows {
-					if r.Folder != nil {
-						r.Folder.Revealer.SetRevealChild(false)
-					}
-				}
-			} else {
-				index := row.Folder.List.GetSelectedRow().GetIndex()
-				if index < 0 {
-					index = 0
-					row.Folder.List.SelectRow(row.Folder.Guilds[0].Row)
-				}
-
-				row = row.Folder.Guilds[index]
+		if row.Folder != nil {
+			index := row.Folder.List.GetSelectedRow().GetIndex()
+			if index < 0 {
+				index = 0
+				row.Folder.List.SelectRow(row.Folder.Guilds[0].Row)
 			}
 
-			App.loadGuild(row)
-		})
+			row = row.Folder.Guilds[index]
+		}
+
+		go App.loadGuild(row)
 	})
+
+	go func() {
+		for _, r := range rows {
+			r.UpdateImage()
+
+			if r.Folder != nil {
+				for _, r := range r.Folder.Guilds {
+					r.UpdateImage()
+				}
+			}
+		}
+	}()
 
 	return g, nil
 }
@@ -183,24 +193,7 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 		}
 	}
 
-	r, err := gtk.ListBoxRowNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a list row")
-	}
-	i, err := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get image-loading icon")
-	}
-
-	guild := &Guild{
-		ExtendedWidget: r,
-
-		Row:   r,
-		ID:    g.ID,
-		Name:  g.Name,
-		Image: i,
-	}
-
+	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
 	must(func() {
 		// Set paddings:
 		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
@@ -208,22 +201,26 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 		r.SetVAlign(gtk.ALIGN_CENTER)
 		r.SetTooltipMarkup(bold(g.Name))
 		r.SetActivatable(true)
-
-		r.Add(i)
-
-		// Check if the guild is unavailable:
-		if fetcherr != nil {
-			guild.SetUnavailable(true)
-		}
 	})
 
-	var url = g.IconURL()
-	if url == "" {
-		// Guild doesn't have an icon, exit:
-		return guild, nil
+	i := must(gtk.ImageNewFromIconName, "user-available", gtk.ICON_SIZE_DIALOG).(*gtk.Image)
+	must(r.Add, i)
+
+	guild := &Guild{
+		ExtendedWidget: r,
+
+		Row:   r,
+		ID:    g.ID,
+		Name:  g.Name,
+		IURL:  g.IconURL(),
+		Image: i,
 	}
 
-	go guild.UpdateImage(url)
+	// Check if the guild is unavailable:
+	if fetcherr != nil {
+		must(guild.SetUnavailable, true)
+	}
+
 	return guild, nil
 }
 
@@ -245,9 +242,7 @@ func (g *Guild) Current() *Channel {
 	}
 
 	g.current = g.Channels.Channels[index]
-	must(func() {
-		g.Channels.ChList.SelectRow(g.current.Row)
-	})
+	must(g.Channels.ChList.SelectRow, g.current.Row)
 
 	return g.current
 }
@@ -262,28 +257,32 @@ func (g *Guild) GoTo(ch *Channel) error {
 	return nil
 }
 
-func (g *Guild) UpdateImage(url string) {
-	var animated = url[:len(url)-4] == ".gif"
+func (g *Guild) UpdateImage() {
+	if g.IURL == "" {
+		return
+	}
+
+	var animated = g.IURL[:len(g.IURL)-4] == ".gif"
 
 	if !animated {
-		p, err := pbpool.DownloadScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
+		p, err := pbpool.DownloadScaled(g.IURL+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
 			log.Errorln("Failed to update the pixbuf guild icon:", err)
 			return
 		}
 
 		g.Pixbuf = &Pixbuf{p, nil}
-		g.Pixbuf.Set(g.Image)
 	} else {
-		p, err := pbpool.DownloadAnimationScaled(url+"?size=64", IconSize, IconSize, pbpool.Round)
+		p, err := pbpool.DownloadAnimationScaled(g.IURL+"?size=64", IconSize, IconSize, pbpool.Round)
 		if err != nil {
-			log.Errorln("Ffailed to update the pixbuf guild animation:", err)
+			log.Errorln("Failed to update the pixbuf guild animation:", err)
 			return
 		}
 
 		g.Pixbuf = &Pixbuf{nil, p}
-		g.Pixbuf.Set(g.Image)
 	}
+
+	g.Pixbuf.Set(g.Image)
 }
 
 func escape(str string) string {

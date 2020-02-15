@@ -2,30 +2,31 @@ package gtkcord
 
 import (
 	"math/rand"
-	"reflect"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
+var must = semaphore.IdleMust
+
+/*
 func must(fn interface{}, args ...interface{}) {
 	var trace = log.Trace(1)
-	var err error
+	// var err error
 
 	switch len(args) {
 	case 0:
 		switch fn := fn.(type) {
 		case func() bool:
-			_, err = glib.IdleAdd(func() bool {
-				log.Debugln(trace, "IdleAdd() called.")
-				return fn()
-			})
-		case func():
-			_, err = glib.IdleAdd(func() bool {
+			semaphore.IdleAdd(func() {
 				log.Debugln(trace, "IdleAdd() called.")
 				fn()
-				return false
+			})
+		case func():
+			semaphore.IdleAdd(func() {
+				log.Debugln(trace, "IdleAdd() called.")
+				fn()
 			})
 		default:
 			log.Panicln("Unknown callback type")
@@ -35,20 +36,16 @@ func must(fn interface{}, args ...interface{}) {
 		fnV := reflect.ValueOf(fn)
 		argV := reflect.ValueOf(args[0])
 
-		_, err = glib.IdleAdd(func(values [2]reflect.Value) bool {
+		semaphore.IdleAdd(func() {
 			log.Debugln(trace, "IdleAdd() called.")
-			values[0].Call([]reflect.Value{values[1]})
-			return false
-		}, [2]reflect.Value{fnV, argV})
+			fnV.Call([]reflect.Value{argV})
+		})
 
 	default:
 		log.Panicln("BUG: >1 arguments given to must()")
 	}
-
-	if err != nil {
-		log.Errorln(trace, "IdleAdd in must()", err)
-	}
 }
+*/
 
 func idleWait(fn func()) {
 	must(fn)
