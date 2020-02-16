@@ -45,29 +45,19 @@ func (ch *Channel) loadMessages() error {
 	defer m.guard.Unlock()
 
 	if m.Main == nil {
-		main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		if err != nil {
-			return errors.Wrap(err, "Failed to make box")
-		}
+		main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 		m.Main = main
 		m.ExtendedWidget = main
 
-		b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		if err != nil {
-			return errors.Wrap(err, "Failed to make box")
-		}
+		b := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 		m.Messages = b
 
-		v, err := gtk.ViewportNew(nil, nil)
-		if err != nil {
-			return errors.Wrap(err, "Failed to create viewport")
-		}
+		v := must(gtk.ViewportNew,
+			nilAdjustment(), nilAdjustment()).(*gtk.Viewport)
 		m.Viewport = v
 
-		s, err := gtk.ScrolledWindowNew(nil, nil)
-		if err != nil {
-			return errors.Wrap(err, "Failed to create channel scroller")
-		}
+		s := must(gtk.ScrolledWindowNew,
+			nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
 		m.Scroll = s
 
 		if err := m.loadMessageInput(); err != nil {
@@ -78,15 +68,21 @@ func (ch *Channel) loadMessages() error {
 			b.SetVExpand(true)
 			b.SetHExpand(true)
 			b.SetMarginBottom(15)
+			b.Show()
 
 			s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
+			s.Show()
 
 			v.Connect("size-allocate", m.onSizeAlloc)
 			v.Add(b)
+			v.Show()
+
 			s.Add(v)
+			s.Show()
 
 			// Main actually contains the scrolling window.
 			main.Add(s)
+			main.Show()
 		})
 	}
 
@@ -118,7 +114,7 @@ func (ch *Channel) loadMessages() error {
 		}
 
 		if msg == nil {
-			w, err := newMessage(App.State, App.parser, message)
+			w, err := newMessage(message)
 			if err != nil {
 				return errors.Wrap(err, "Failed to render message")
 			}
@@ -142,11 +138,11 @@ func (ch *Channel) loadMessages() error {
 		for _, msg := range newMessages {
 			msg.setCondensed()
 			m.Messages.Add(msg)
-			msg.ShowAll()
 		}
 
 		// Set the new slice.
 		m.messages = newMessages
+		m.ShowAll()
 	})
 
 	// Hack around the mutex
@@ -170,6 +166,20 @@ func (ch *Channel) loadMessages() error {
 	}()
 
 	return nil
+}
+
+func (m *Messages) Clear() {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	for _, w := range m.messages {
+		w.busy.Lock()
+		m.Messages.Remove(w)
+		w.busy.Unlock()
+	}
+
+	// Set to nil so we don't keep the capacity.
+	m.messages = nil
 }
 
 func (m *Messages) ShouldCondense(msg discord.Message) bool {
@@ -227,11 +237,15 @@ func (m *Messages) Insert(message discord.Message) error {
 		return nil
 	}
 
-	w, err := newMessage(App.State, App.parser, message)
+	w, err := newMessage(message)
 	if err != nil {
 		return errors.Wrap(err, "Failed to render message")
 	}
 
+	return m.insert(w, message)
+}
+
+func (m *Messages) insert(w *Message, message discord.Message) error {
 	semaphore.Go(func() {
 		w.UpdateAuthor(message.Author)
 		w.UpdateExtras(message)

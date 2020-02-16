@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -69,7 +69,7 @@ func (g *Guild) loadChannels() error {
 	 */
 
 	cs := must(gtk.ScrolledWindowNew,
-		(*gtk.Adjustment)(nil), (*gtk.Adjustment)(nil)).(*gtk.ScrolledWindow)
+		nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
 	must(cs.SetPolicy, gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
@@ -192,7 +192,7 @@ func (chs *Channels) UpdateBanner(url string) {
 		must(chs.Main.PackStart, chs.BannerImage, false, false, uint(0))
 	}
 
-	p, err := pbpool.DownloadScaled(url+"?size=512", ChannelsWidth, BannerHeight)
+	p, err := cache.GetImage(url+"?size=512", cache.Resize(ChannelsWidth, BannerHeight))
 	if err != nil {
 		logWrap(err, "Failed to get the pixbuf guild icon")
 		return

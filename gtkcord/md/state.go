@@ -87,8 +87,10 @@ func (s *mdState) switchTree(i int) {
 			s.matches[i][2].str,
 		))
 
-		end := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
-		semaphore.IdleMust(s.buf.InsertMarkup, end, code)
+		semaphore.IdleMust(func() {
+			end := s.buf.GetEndIter()
+			s.buf.InsertMarkup(end, code)
+		})
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
@@ -146,8 +148,10 @@ func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
 		tag = s.tag
 	}
 
-	end := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
-	semaphore.IdleMust(s.buf.InsertWithTag, end, string(content), tag)
+	semaphore.IdleMust(func() {
+		end := s.buf.GetEndIter()
+		s.buf.InsertWithTag(end, string(content), tag)
+	})
 }
 
 func (s *mdState) getLastIndex(currentIndex int) int32 {
@@ -162,12 +166,6 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 	found := regex.FindAllSubmatchIndex(input, -1)
 
 	s.buf = buf
-	s.last = 0
-	s.prev = s.prev[:0]
-	s.used = s.used[:0]
-	s.hasText = false
-	s.attr = 0
-	s.color = ""
 	s.tag = s.p.ColorTag(s.attr, s.color)
 	s.fmtter.Reset()
 

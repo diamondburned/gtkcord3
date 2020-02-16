@@ -1,4 +1,4 @@
-package pbpool
+package cache
 
 import (
 	"bytes"
@@ -79,6 +79,10 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 	return buf.Bytes()
 }
 
+var pngEncoder = png.Encoder{
+	CompressionLevel: png.BestSpeed,
+}
+
 func Process(data []byte, processors ...Processor) []byte {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -93,7 +97,7 @@ func Process(data []byte, processors ...Processor) []byte {
 	defer bufPool.Put(buf)
 	buf.Reset()
 
-	if err := png.Encode(buf, img); err != nil {
+	if err := pngEncoder.Encode(buf, img); err != nil {
 		return data
 	}
 

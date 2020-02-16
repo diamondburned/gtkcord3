@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -268,7 +268,8 @@ func (g *Guild) UpdateImage() {
 	var animated = g.IURL[:len(g.IURL)-4] == ".gif"
 
 	if !animated {
-		p, err := pbpool.DownloadScaled(g.IURL+"?size=64", IconSize, IconSize, pbpool.Round)
+		p, err := cache.GetImage(g.IURL+"?size=64",
+			cache.Resize(IconSize, IconSize), cache.Round)
 		if err != nil {
 			log.Errorln("Failed to update the pixbuf guild icon:", err)
 			return
@@ -276,7 +277,8 @@ func (g *Guild) UpdateImage() {
 
 		g.Pixbuf = &Pixbuf{p, nil}
 	} else {
-		p, err := pbpool.DownloadAnimationScaled(g.IURL+"?size=64", IconSize, IconSize, pbpool.Round)
+		p, err := cache.GetAnimation(g.IURL+"?size=64",
+			cache.Resize(IconSize, IconSize), cache.Round)
 		if err != nil {
 			log.Errorln("Failed to update the pixbuf guild animation:", err)
 			return

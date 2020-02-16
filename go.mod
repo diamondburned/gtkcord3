@@ -12,6 +12,8 @@ require (
 	github.com/gotk3/gotk3 v0.0.0-20200129211157-69caac910e50
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
 	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/peterbourgon/diskv v2.0.1+incompatible
+	github.com/peterbourgon/diskv/v3 v3.0.0
 	github.com/pkg/errors v0.8.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect

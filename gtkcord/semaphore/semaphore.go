@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
@@ -68,7 +69,7 @@ func IdleAddReturns(fn interface{}, args ...interface{}) (interface{}, error) {
 }
 */
 
-var idleAdds = make(chan *idleCall)
+var idleAdds = make(chan *idleCall, 1000)
 var recvPool = sync.Pool{
 	New: func() interface{} {
 		return make(chan []reflect.Value)
@@ -83,10 +84,11 @@ type idleCall struct {
 }
 
 func init() {
-	glib.IdleAdd(func() bool {
+	glib.IdleAdd(func(idleAdds chan *idleCall) bool {
 		select {
 		case call := <-idleAdds:
-			log.Debugln(call.trace, "IdleAdd()")
+			log.Debugln(call.trace, "IdleAdd() called.")
+			now := time.Now()
 
 			if fn, ok := call.fn.(func()); ok {
 				fn()
@@ -95,11 +97,13 @@ func init() {
 				call.done <- call.fn.(reflect.Value).Call(call.args)
 			}
 
+			log.Infoln(call.trace, "took", time.Now().Sub(now))
+
 		default:
 		}
 
 		return true
-	})
+	}, idleAdds)
 }
 
 func idleAdd(trace string, fn interface{}, v ...interface{}) []reflect.Value {

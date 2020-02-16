@@ -2,15 +2,13 @@ package gtkcord
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -50,8 +48,11 @@ type Message struct {
 
 	// Right-bottom container, has message contents:
 	rightBottom *gtk.Box
+	textView    gtk.IWidget
 	content     *gtk.TextBuffer  // view declared implicitly
 	extras      []*MessageExtras // embeds, images, etc
+
+	busy sync.Mutex
 
 	Condensed      bool
 	CondenseOffset time.Duration
@@ -61,83 +62,10 @@ type MessageExtras struct {
 	ExtendedWidget
 }
 
-func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, error) {
-	main := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
-	mstyle := must(main.GetStyleContext).(*gtk.StyleContext)
-
-	msgTb, err := App.parser.NewTextBuffer()
+func newMessage(m discord.Message) (*Message, error) {
+	message, err := newMessageCustom(m)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a text buffer")
-	}
-
-	msgTv := must(gtk.TextViewNewWithBuffer, msgTb).(*gtk.TextView)
-
-	message := &Message{
-		Nonce:     m.Nonce,
-		ID:        m.ID,
-		AuthorID:  m.Author.ID,
-		Timestamp: m.Timestamp.Time().Local(),
-		Edited:    m.EditedTimestamp.Time().Local(),
-
-		ExtendedWidget: main,
-		Condensed:      false,
-
-		main:        main,
-		mainStyle:   mstyle,
-		avatar:      must(gtk.ImageNewFromPixbuf, p.GetIcon("user-info", AvatarSize)).(*gtk.Image),
-		right:       must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
-		rightTop:    must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box),
-		author:      must(gtk.LabelNew, "").(*gtk.Label),
-		timestamp:   must(gtk.LabelNew, "").(*gtk.Label),
-		rightBottom: must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
-		content:     msgTb,
-	}
-
-	// What the fuck?
-	must(func() {
-		main.SetMarginBottom(2)
-		mstyle.AddClass("message")
-
-		message.rightBottom.SetHExpand(true)
-		message.rightBottom.SetMarginEnd(AvatarPadding)
-
-		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
-		message.avatar.SetProperty("yalign", 0.0)
-		message.avatar.SetMarginStart(AvatarPadding * 2)
-		message.avatar.SetMarginEnd(AvatarPadding)
-
-		message.author.SetMarkup(bold(m.Author.Username))
-		message.author.SetSingleLineMode(true)
-
-		message.rightTop.Add(message.author)
-
-		timestampSize := AvatarSize + AvatarPadding*2 - 1
-		message.timestamp.SetSizeRequest(timestampSize, -1)
-		message.timestamp.SetOpacity(0.5)
-		message.timestamp.SetYAlign(0.0)
-		message.timestamp.SetSingleLineMode(true)
-		message.timestamp.SetMarginTop(2)
-		message.timestamp.SetMarginStart(AvatarPadding)
-
-		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-		msgTv.SetCursorVisible(false)
-		msgTv.SetEditable(false)
-
-		// Add in what's not covered by SetCondensed.
-		message.rightBottom.Add(msgTv)
-
-		message.right.Add(message.rightTop)
-
-		message.avatar.SetMarginTop(10)
-		message.right.SetMarginTop(10)
-
-		message.setCondensed()
-	})
-
-	// Message without a valid ID is probably a sending message. Either way,
-	// it's unavailable.
-	if !m.ID.Valid() {
-		message.setAvailable(false)
+		return nil, err
 	}
 
 	var messageText string
@@ -165,13 +93,88 @@ func newMessage(s *state.State, p *md.Parser, m discord.Message) (*Message, erro
 		messageText = "The server is now Nitro Boosted to Tier 2."
 	case discord.NitroTier3Message:
 		messageText = "The server is now Nitro Boosted to Tier 3."
-	default:
 	}
 
 	if messageText == "" {
 		message.UpdateContent(m)
 	} else {
 		message.updateContent(`<i>` + messageText + `</i>`)
+		message.setAvailable(false)
+	}
+
+	return message, nil
+}
+
+func newMessageCustom(m discord.Message) (*Message, error) {
+	main := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+	mstyle := must(main.GetStyleContext).(*gtk.StyleContext)
+
+	message := &Message{
+		Nonce:     m.Nonce,
+		ID:        m.ID,
+		AuthorID:  m.Author.ID,
+		Timestamp: m.Timestamp.Time().Local(),
+		Edited:    m.EditedTimestamp.Time().Local(),
+
+		ExtendedWidget: main,
+		Condensed:      false,
+
+		main:      main,
+		mainStyle: mstyle,
+		avatar: must(
+			gtk.ImageNewFromPixbuf, App.parser.GetIcon("user-info", AvatarSize)).(*gtk.Image),
+		right: must(
+			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
+		rightTop: must(
+			gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box),
+		author: must(
+			gtk.LabelNew, "").(*gtk.Label),
+		timestamp: must(
+			gtk.LabelNew, "").(*gtk.Label),
+		rightBottom: must(
+			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
+	}
+
+	message.busy.Lock()
+	defer message.busy.Unlock()
+
+	// What the fuck?
+	must(func() {
+		main.SetMarginBottom(2)
+		mstyle.AddClass("message")
+
+		message.rightBottom.SetHExpand(true)
+		message.rightBottom.SetMarginEnd(AvatarPadding)
+
+		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
+		message.avatar.SetProperty("yalign", 0.0)
+		message.avatar.SetMarginStart(AvatarPadding * 2)
+		message.avatar.SetMarginEnd(AvatarPadding)
+
+		message.author.SetMarkup(bold(m.Author.Username))
+		message.author.SetSingleLineMode(true)
+
+		message.rightTop.Add(message.author)
+
+		timestampSize := AvatarSize + AvatarPadding*2 - 1
+		message.timestamp.SetSizeRequest(timestampSize, -1)
+		message.timestamp.SetOpacity(0.5)
+		message.timestamp.SetYAlign(0.0)
+		message.timestamp.SetSingleLineMode(true)
+		message.timestamp.SetMarginTop(2)
+		message.timestamp.SetMarginStart(AvatarPadding)
+
+		message.right.Add(message.rightTop)
+
+		message.avatar.SetMarginTop(10)
+		message.right.SetMarginTop(10)
+
+		message.setCondensed()
+	})
+
+	// Message without a valid ID is probably a sending message. Either way,
+	// it's unavailable.
+	if !m.ID.Valid() {
 		message.setAvailable(false)
 	}
 
@@ -200,6 +203,9 @@ func (m *Message) setOffset(last *Message) {
 }
 
 func (m *Message) SetCondensed(condensed bool) {
+	m.busy.Lock()
+	defer m.busy.Unlock()
+
 	if m.Condensed == condensed {
 		return
 	}
@@ -243,16 +249,17 @@ func (m *Message) setCondensed() {
 }
 
 func (m *Message) UpdateAuthor(user discord.User) {
-	state := App.State
+	m.busy.Lock()
+	defer m.busy.Unlock()
 
 	if guildID := App.Guild.ID; guildID.Valid() {
 		var name = escape(user.Username)
 
-		n, err := state.MemberDisplayName(guildID, user.ID)
+		n, err := App.State.MemberDisplayName(guildID, user.ID)
 		if err == nil {
 			name = bold(escape(n))
 
-			if color := state.MemberColor(guildID, user.ID); color > 0 {
+			if color := App.State.MemberColor(guildID, user.ID); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
 		}
@@ -272,7 +279,8 @@ func (m *Message) UpdateAuthor(user discord.User) {
 	m.pbURL = url
 
 	if !animated {
-		p, err := pbpool.GetScaled(url+"?size=64", AvatarSize, AvatarSize, pbpool.Round)
+		p, err := cache.GetImage(url+"?size=64",
+			cache.Resize(AvatarSize, AvatarSize), cache.Round)
 		if err != nil {
 			// logWrap(err, "Failed to get the pixbuf guild icon")
 			return
@@ -280,7 +288,8 @@ func (m *Message) UpdateAuthor(user discord.User) {
 
 		m.pixbuf = &Pixbuf{p, nil}
 	} else {
-		p, err := pbpool.GetAnimationScaled(url+"?size=64", AvatarSize, AvatarSize, pbpool.Round)
+		p, err := cache.GetAnimation(url+"?size=64",
+			cache.Resize(AvatarSize, AvatarSize), cache.Round)
 		if err != nil {
 			// logWrap(err, "Failed to get the pixbuf guild animation")
 			return
@@ -293,15 +302,39 @@ func (m *Message) UpdateAuthor(user discord.User) {
 }
 
 func (m *Message) updateContent(s string) {
+	m.busy.Lock()
+	defer m.busy.Unlock()
+
+	m.assertContent()
 	must(func(m *Message) {
-		end := m.content.GetEndIter()
-		m.content.Delete(m.content.GetStartIter(), end)
-		m.content.InsertMarkup(end, s)
+		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
+		m.content.InsertMarkup(m.content.GetEndIter(), s)
 	}, m)
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
+	m.busy.Lock()
+	defer m.busy.Unlock()
+
+	m.assertContent()
 	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+}
+
+func (m *Message) assertContent() {
+	if m.content == nil {
+		msgTb := must(App.parser.NewTextBuffer).(*gtk.TextBuffer)
+		m.content = msgTb
+
+		msgTv := must(gtk.TextViewNewWithBuffer, msgTb).(*gtk.TextView)
+		m.textView = msgTv
+
+		must(msgTv.SetWrapMode, gtk.WRAP_WORD_CHAR)
+		must(msgTv.SetCursorVisible, false)
+		must(msgTv.SetEditable, false)
+
+		// Add in what's not covered by SetCondensed.
+		must(m.rightBottom.Add, msgTv)
+	}
 }
 
 func (m *Message) UpdateExtras(update discord.Message) {

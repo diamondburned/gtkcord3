@@ -86,3 +86,7 @@ func randString() string {
 
 	return string(b)
 }
+
+func nilAdjustment() *gtk.Adjustment {
+	return (*gtk.Adjustment)(nil)
+}

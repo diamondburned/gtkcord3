@@ -25,10 +25,10 @@ var (
 	App *application
 )
 
-// func init() {
-// 	runtime.LockOSThread()
-// 	runtime.GOMAXPROCS(1)
-// }
+func init() {
+	runtime.LockOSThread()
+	// runtime.GOMAXPROCS(1)
+}
 
 type ExtendedWidget interface {
 	gtk.IWidget
@@ -162,67 +162,74 @@ func (a *application) ChannelID() discord.Snowflake {
 }
 
 func (a *application) init() error {
-	gtk.Init(nil)
-
-	if err := a.loadCSS(); err != nil {
-		return errors.Wrap(err, "Failed to load CSS")
-	}
-
-	w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create window")
-	}
-	w.Connect("destroy", func() {
-		a.close()
-		gtk.MainQuit()
-		close(a.done)
-	})
-	w.SetDefaultSize(1000, 750)
-	a.Window = w
-
-	h, err := newHeader()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create header")
-	}
-	w.SetTitlebar(h)
-	a.Header = h
-
-	i, err := gtk.IconThemeGetDefault()
-	if err != nil {
-		return errors.Wrap(err, "Can't get Gtk icon theme")
-	}
-	a.iconTheme = i
-
-	g, err := gtk.GridNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create grid")
-	}
-	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
-	g.SetRowHomogeneous(true)
-	a.Grid = g
-
-	// Instead of adding the above grid, we should add the spinning circle.
-	sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create spinner box")
-	}
-	sbox.SetSizeRequest(50, 50)
-	sbox.SetVAlign(gtk.ALIGN_CENTER)
-	w.Add(sbox)
-	a.sbox = sbox
-
-	s, err := gtk.SpinnerNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create spinner")
-	}
-	s.SetSizeRequest(50, 50)
-	s.Start()
-	sbox.Add(s)
-	a.spinner = s
-
-	w.ShowAll()
 	go func() {
 		runtime.LockOSThread()
+		gtk.Init(nil)
+
+		if err := a.loadCSS(); err != nil {
+			log.Panicln("Failed to load CSS:", err)
+		}
+
+		w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+		if err != nil {
+			log.Panicln("Failed to create window:", err)
+		}
+
+		w.Connect("destroy", func() {
+			a.close()
+			gtk.MainQuit()
+			close(a.done)
+		})
+
+		w.SetDefaultSize(1000, 750)
+		a.Window = w
+
+		h, err := newHeader()
+		if err != nil {
+			log.Panicln("Failed to create header:", err)
+		}
+
+		w.SetTitlebar(h)
+		a.Header = h
+
+		i, err := gtk.IconThemeGetDefault()
+		if err != nil {
+			log.Panicln("Can't get Gtk icon theme:", err)
+		}
+
+		a.iconTheme = i
+
+		g, err := gtk.GridNew()
+		if err != nil {
+			log.Panicln("Failed to create grid:", err)
+		}
+
+		g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
+		g.SetRowHomogeneous(true)
+		a.Grid = g
+
+		// Instead of adding the above grid, we should add the spinning circle.
+		sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		if err != nil {
+			log.Panicln("Failed to create spinner box:", err)
+		}
+
+		sbox.SetSizeRequest(50, 50)
+		sbox.SetVAlign(gtk.ALIGN_CENTER)
+		w.Add(sbox)
+		a.sbox = sbox
+
+		s, err := gtk.SpinnerNew()
+		if err != nil {
+			log.Panicln("Failed to create spinner:", err)
+		}
+
+		s.SetSizeRequest(50, 50)
+		s.Start()
+		sbox.Add(s)
+		a.spinner = s
+
+		w.ShowAll()
 		gtk.Main()
 	}()
 
@@ -247,12 +254,18 @@ func (a *application) setChannelCol(w ExtendedWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
-func (a *application) setMessageCol(w ExtendedWidget) {
-	a.Messages = w
-	a.Grid.Attach(w, 4, 0, 1, 1)
-}
 
 func (a *application) loadGuild(g *Guild) {
+	a._loadGuild(g)
+
+	ch := g.Current()
+	if ch == nil {
+		return
+	}
+	a.loadChannel(g, ch)
+}
+
+func (a *application) _loadGuild(g *Guild) {
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
@@ -281,13 +294,6 @@ func (a *application) loadGuild(g *Guild) {
 	}
 
 	a.Header.UpdateGuild(g.Name)
-
-	ch := g.Current()
-	if ch == nil {
-		return
-	}
-
-	go a.loadChannel(g, ch)
 }
 
 func (a *application) _loadGuildDone(g *Guild) {
@@ -308,24 +314,36 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 
 	must(g.Channels.Main.SetSensitive, false)
 	must(a.spinner.Start)
-	must(a.setMessageCol, a.sbox)
+
+	a.Messages = nil
+	must(a.Grid.Attach, a.sbox, 4, 0, 1, 1)
 
 	// Run hook
 	a.Header.UpdateChannel(ch.Name, ch.Topic)
 
-	defer must(a._loadChannelDone, g, ch)
+	old := g.current
 
 	if err := g.GoTo(ch); err != nil {
+		must(a._loadChannelDone, g, ch)
+
 		logWrap(err, "Failed to go to channel")
 		return
+	}
+
+	must(a._loadChannelDone, g, ch)
+
+	a.Messages = ch.Messages
+	must(a.Grid.Attach, ch.Messages, 4, 0, 1, 1)
+	must(ch.Messages.Show)
+
+	if old != nil && old.Messages != nil {
+		old.Messages.Clear()
 	}
 }
 
 func (a *application) _loadChannelDone(g *Guild, ch *Channel) {
 	a.spinner.Stop()
 	a.Grid.Remove(a.sbox)
-	a.setMessageCol(ch.Messages)
-	ch.Messages.ShowAll()
 	g.Channels.Main.SetSensitive(true)
 }
 

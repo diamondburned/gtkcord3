@@ -129,7 +129,6 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 	}
 
 	s.iterMu.Lock()
-	defer s.iterMu.Unlock()
 
 	// Wipe the buffer clean
 	semaphore.IdleMust(func(buf *gtk.TextBuffer) {
@@ -146,9 +145,18 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.insertWithTag(md[s.last:], nil)
 
-	go func() {
-		s.iterWg.Wait()
-		s.buf = nil
-		p.pool.Put(s)
-	}()
+	s.iterMu.Unlock()
+
+	s.iterWg.Wait()
+
+	s.buf = nil
+	s.tag = nil
+	s.last = 0
+	s.prev = s.prev[:0]
+	s.used = s.used[:0]
+	s.hasText = false
+	s.attr = 0
+	s.color = ""
+
+	p.pool.Put(s)
 }

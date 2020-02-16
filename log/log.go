@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 
 	"github.com/logrusorgru/aurora"
 )
@@ -28,6 +29,8 @@ var (
 	logError *log.Logger
 	logInfo  *log.Logger
 	logDebug *log.Logger
+
+	traceCtr uint64
 )
 
 func init() {
@@ -48,6 +51,8 @@ func ResetLoggers() {
 // Trace, n is the argument to skip callers. 0 shows the location of the Trace
 // function.
 func Trace(n int) string {
+	i := atomic.AddUint64(&traceCtr, 1)
+
 	_, file1, line1, _ := runtime.Caller(n + 1)
 	_, file2, line2, _ := runtime.Caller(n + 2)
 	_, file3, line3, _ := runtime.Caller(n + 3)
@@ -57,8 +62,8 @@ func Trace(n int) string {
 	file3 = filepath.Base(file3)
 
 	return fmt.Sprintf(
-		"%s:%d > %s:%d > %s:%d >",
-		file3, line3, file2, line2, file1, line1,
+		"%d ::: %s:%d > %s:%d > %s:%d >",
+		i, file3, line3, file2, line2, file1, line1,
 	)
 }
 

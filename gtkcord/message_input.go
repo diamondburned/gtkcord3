@@ -57,62 +57,41 @@ func (messages *Messages) loadMessageInput() error {
 		return nil
 	}
 
-	main, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create main box")
-	}
-	mainStyle, err := main.GetStyleContext()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get style context for main")
-	}
+	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	i.Main = main
 	i.ExtendedWidget = main
 
-	ibox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create input box")
-	}
+	ibox := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
 	i.InputBox = ibox
 
 	// TODO completer
 	// comp, err := gtk.
 
-	upload, err := gtk.ButtonNewFromIconName(
-		"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create upload button")
-	}
+	upload := must(gtk.ButtonNewFromIconName,
+		"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR).(*gtk.Button)
 	i.Upload = upload
 
-	emoji, err := gtk.ButtonNewFromIconName(
-		"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create emoji button")
-	}
+	emoji := must(gtk.ButtonNewFromIconName,
+		"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR).(*gtk.Button)
 	i.Emoji = emoji
 
-	ttt, err := gtk.TextTagTableNew()
-	if err != nil {
-		return errors.Wrap(err, "Faield to create a text tag table")
-	}
+	input := must(gtk.TextViewNew).(*gtk.TextView)
+	i.Input = input
 
-	ibuf, err := gtk.TextBufferNew(ttt)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create input buffer")
-	}
+	ibuf := must(input.GetBuffer).(*gtk.TextBuffer)
 	i.InputBuf = ibuf
 
 	must(func() {
-		mainStyle.AddClass("message-input")
+		style, _ := main.GetStyleContext()
+		style.AddClass("message-input")
+
 		margin2(&ibox.Widget, 8, AvatarPadding)
 		upload.SetVAlign(gtk.ALIGN_START)
+		upload.Connect("clicked", func() {
+			go SpawnUploader(i.upload)
+		})
 		emoji.SetVAlign(gtk.ALIGN_START)
 
-		input, err := gtk.TextViewNewWithBuffer(ibuf)
-		if err != nil {
-			log.Panicln("Die: " + err.Error())
-		}
-		i.Input = input
 		margin2(&input.Widget, 6, 12)
 
 		input.AddEvents(int(gdk.KEY_PRESS_MASK))
@@ -125,6 +104,7 @@ func (messages *Messages) loadMessageInput() error {
 		ibox.PackEnd(emoji, false, false, 0)
 
 		messages.Main.PackEnd(i.Main, false, false, 0)
+		messages.Main.ShowAll()
 	})
 
 	return nil
@@ -163,6 +143,10 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return true
 	}
 
+	if text == "" {
+		return true
+	}
+
 	i.InputBuf.Delete(iStart, iEnd)
 
 	// Shift is not being held, send the message:
@@ -175,9 +159,8 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	return true
 }
 
-func (i *MessageInput) send(content string) error {
-	// An invalid ID keeps the message invalid until it is sent.
-	m := discord.Message{
+func (i *MessageInput) makeMessage(content string) discord.Message {
+	return discord.Message{
 		Type:      discord.DefaultMessage,
 		ChannelID: i.Messages.Channel.ID,
 		GuildID:   i.Messages.Channel.Guild,
@@ -186,6 +169,11 @@ func (i *MessageInput) send(content string) error {
 		Timestamp: discord.Timestamp(time.Now()),
 		Nonce:     randString(),
 	}
+}
+
+func (i *MessageInput) send(content string) error {
+	// An invalid ID keeps the message invalid until it is sent.
+	m := i.makeMessage(content)
 
 	if err := i.Messages.Insert(m); err != nil {
 		log.Errorln("Failed to add message to be sent:", err)
@@ -202,5 +190,44 @@ func (i *MessageInput) send(content string) error {
 
 	s.Nonce = m.Nonce
 	i.Messages.Update(*s)
+
+	return nil
+}
+
+func (i *MessageInput) upload(paths []string) {
+	if err := i._upload(paths); err != nil {
+		logWrap(err, "Failed to upload")
+	}
+}
+
+func (i *MessageInput) _upload(paths []string) error {
+	u, err := NewMessageUploader(paths)
+	if err != nil {
+		return err
+	}
+
+	m := i.makeMessage("")
+	s := u.MakeSendData(m)
+
+	w, err := newMessageCustom(m)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a message container")
+	}
+	must(w.rightBottom.Add, u)
+
+	if err := i.Messages.Insert(m); err != nil {
+		log.Errorln("Failed to add messages to be uploaded:", err)
+	}
+
+	n, err := App.State.SendMessageComplex(m.ChannelID, s)
+	if err != nil {
+		i.Messages.deleteNonce(m.Nonce)
+		return errors.Wrap(err, "Failed to upload message")
+	}
+	s.Nonce = m.Nonce
+
+	must(w.rightBottom.Remove, u)
+	i.Messages.Update(*n)
+
 	return nil
 }
