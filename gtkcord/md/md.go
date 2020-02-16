@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/alecthomas/chroma"
+	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -17,7 +18,7 @@ import (
 
 var regexes = []string{
 	// codeblock
-	`(?:\n?\x60\x60\x60 *(\w*\n?)([\s\S]*?)\n?\x60\x60\x60\n?)`,
+	`(?:\n?\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60\n?)`,
 	// blockquote
 	`((?:(?:^|\n)^>\s+.*)+)\n`,
 	// Inline markup stuff
@@ -60,6 +61,15 @@ type Parser struct {
 
 func NewParser(s *state.State) *Parser {
 	log.Debugln("REGEX:", strings.Join(regexes, "|"))
+
+	if style == nil {
+		style = styles.Get(HighlightStyle)
+		if style == nil {
+			panic("Unknown highlighting style: " + HighlightStyle)
+		}
+
+		css = styleToCSS(style)
+	}
 
 	i, err := gtk.IconThemeGetDefault()
 	if err != nil {

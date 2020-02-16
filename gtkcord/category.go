@@ -99,8 +99,12 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 		list = append(list, v)
 	}
 
-	sort.Slice(list, func(i, j int) bool {
+	sort.SliceStable(list, func(i, j int) bool {
 		return list[i].parent.Position < list[j].parent.Position
+	})
+
+	sort.SliceStable(list, func(i, j int) bool {
+		return list[i].children == nil
 	})
 
 	widget.Channels = make([]*Channel, 0, len(chs))

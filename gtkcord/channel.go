@@ -68,8 +68,10 @@ func (g *Guild) loadChannels() error {
 	 * === Main box ===
 	 */
 
-	cs := must(gtk.ScrolledWindowNew, (*gtk.Adjustment)(nil), (*gtk.Adjustment)(nil)).(*gtk.ScrolledWindow)
+	cs := must(gtk.ScrolledWindowNew,
+		(*gtk.Adjustment)(nil), (*gtk.Adjustment)(nil)).(*gtk.ScrolledWindow)
 	must(cs.SetPolicy, gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	must(main.SetSizeRequest, ChannelsWidth, -1)
 
@@ -187,7 +189,7 @@ func (chs *Channels) UpdateBanner(url string) {
 	if chs.BannerImage == nil {
 		chs.BannerImage = must(gtk.ImageNew).(*gtk.Image)
 		must(chs.BannerImage.SetSizeRequest, ChannelsWidth, BannerHeight)
-		must(chs.Main.PackStart, chs.BannerImage, false, false, 0)
+		must(chs.Main.PackStart, chs.BannerImage, false, false, uint(0))
 	}
 
 	p, err := pbpool.DownloadScaled(url+"?size=512", ChannelsWidth, BannerHeight)

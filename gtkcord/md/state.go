@@ -6,7 +6,6 @@ import (
 
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/lexers"
-	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
@@ -82,7 +81,7 @@ func (s *mdState) tagAttr(token []byte) []byte {
 
 func (s *mdState) switchTree(i int) {
 	switch {
-	case len(s.matches[i][2].str) > 0:
+	case len(s.matches[i][1].str) > 0, len(s.matches[i][2].str) > 0:
 		code := string(s.renderCodeBlock(
 			s.matches[i][1].str,
 			s.matches[i][2].str,
@@ -258,15 +257,6 @@ func findPairs(found [][]int, start, match int, used []int) ([]int, bool) {
 }
 
 func (s *mdState) renderCodeBlock(lang, content []byte) []byte {
-	if style == nil {
-		style = styles.Get(HighlightStyle)
-		if style == nil {
-			panic("Unknown highlighting style: " + HighlightStyle)
-		}
-
-		css = styleToCSS(style)
-	}
-
 	var lexer chroma.Lexer
 
 	if len(lang) > 0 {

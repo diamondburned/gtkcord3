@@ -120,8 +120,6 @@ func (h *Header) UpdateChannel(name, topic string) {
 		name = ChannelHash + name
 	}
 
-	must(func() {
-		h.ChannelName.SetMarkup(bold(name))
-		h.ChannelTopic.SetText(topic)
-	})
+	must(h.ChannelName.SetMarkup, bold(name))
+	must(h.ChannelTopic.SetText, topic)
 }

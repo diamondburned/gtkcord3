@@ -93,6 +93,9 @@ func getScaled(cache bool, url string, w, h int, pp ...Processor) (*gdk.Pixbuf, 
 
 	var pixbuf *gdk.Pixbuf
 
+	poolMu.Lock()
+	defer poolMu.Unlock()
+
 	semaphore.IdleMust(func(data []byte) {
 		l, err := gdk.PixbufLoaderNew()
 		if err != nil {
@@ -108,9 +111,7 @@ func getScaled(cache bool, url string, w, h int, pp ...Processor) (*gdk.Pixbuf, 
 	}, b)
 
 	if len(b) <= MaxCacheSize && cache {
-		poolMu.Lock()
 		pool[url] = pixbuf
-		poolMu.Unlock()
 	}
 
 	if w > 0 && h > 0 {
@@ -170,19 +171,25 @@ func getAnimationScaled(
 	poolMu.Lock()
 	defer poolMu.Unlock()
 
-	l, err := gdk.PixbufLoaderNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a new pixbuf loader")
-	}
+	var pixbuf *gdk.PixbufAnimation
 
-	p, err := l.WriteAndReturnPixbufAnimation(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to set image to pixbuf")
-	}
+	semaphore.IdleMust(func(data []byte) {
+		l, err := gdk.PixbufLoaderNew()
+		if err != nil {
+			return
+		}
+
+		p, err := l.WriteAndReturnPixbufAnimation(data)
+		if err != nil {
+			return
+		}
+
+		pixbuf = p
+	}, b)
 
 	if len(b) <= MaxCacheSize && cache {
-		pool[key] = p
+		pool[key] = pixbuf
 	}
 
-	return p, nil
+	return pixbuf, nil
 }

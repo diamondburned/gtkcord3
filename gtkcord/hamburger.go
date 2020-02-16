@@ -71,7 +71,7 @@ func newHeaderMenu() (*HeaderMenu, error) {
 		}
 		l.SetXAlign(0.0)
 		l.SetMarginStart(10)
-		b.Add(i)
+		b.Add(l)
 		hm.Name = l
 
 		c, err := gtk.PopoverMenuNew()

@@ -194,14 +194,12 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	}
 
 	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
-	must(func() {
-		// Set paddings:
-		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
-		r.SetHAlign(gtk.ALIGN_CENTER)
-		r.SetVAlign(gtk.ALIGN_CENTER)
-		r.SetTooltipMarkup(bold(g.Name))
-		r.SetActivatable(true)
-	})
+	// Set paddings:
+	must(r.SetSizeRequest, IconSize+IconPadding*2, IconSize+IconPadding*2)
+	must(r.SetHAlign, gtk.ALIGN_CENTER)
+	must(r.SetVAlign, gtk.ALIGN_CENTER)
+	must(r.SetTooltipMarkup, bold(g.Name))
+	must(r.SetActivatable, true)
 
 	i := must(gtk.ImageNewFromIconName, "user-available", gtk.ICON_SIZE_DIALOG).(*gtk.Image)
 	must(r.Add, i)
@@ -234,11 +232,16 @@ func (g *Guild) Current() *Channel {
 	}
 
 	index := -1
-	current := g.Channels.ChList.GetSelectedRow()
+	current := must(g.Channels.ChList.GetSelectedRow).(*gtk.ListBoxRow)
+
 	if current == nil {
 		index = g.Channels.First()
 	} else {
-		index = current.GetIndex()
+		index = must(current.GetIndex).(int)
+	}
+
+	if index < 0 {
+		return nil
 	}
 
 	g.current = g.Channels.Channels[index]

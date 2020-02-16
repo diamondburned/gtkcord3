@@ -109,7 +109,7 @@ func UseState(s *state.State) error {
 		}
 		App.Guilds = gs
 
-		must(gw.Add, gs.ListBox)
+		must(gw.Add, gs)
 		must(App.Grid.Add, gw)
 
 		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
@@ -230,13 +230,11 @@ func (a *application) init() error {
 }
 
 func (a *application) finalize() {
-	must(func() {
-		a.Window.Remove(a.spinner)
-		a.Window.Add(a.Grid)
-		a.Window.ShowAll()
-		a.spinner.Stop()
-		a.sbox.SetSizeRequest(ChannelsWidth, -1)
-	})
+	must(a.Window.Remove, a.spinner)
+	must(a.Window.Add, a.Grid)
+	must(a.Window.ShowAll)
+	must(a.spinner.Stop)
+	must(a.sbox.SetSizeRequest, ChannelsWidth, -1)
 }
 
 func (a *application) close() {
@@ -256,91 +254,79 @@ func (a *application) setMessageCol(w ExtendedWidget) {
 
 func (a *application) loadGuild(g *Guild) {
 	a.busy.Lock()
-
-	must(func() {
-		if a.Sidebar != nil {
-			a.Grid.Remove(a.Sidebar)
-		}
-
-		a.Guilds.SetSensitive(false)
-		a.spinner.Start()
-		a.setChannelCol(a.sbox)
-	})
-
-	go a._loadGuild(g)
-}
-
-func (a *application) _loadGuild(g *Guild) {
 	defer a.busy.Unlock()
-	defer must(func() {
-		a.spinner.Stop()
-		a.Grid.Remove(a.sbox)
-		a.setChannelCol(g.Channels)
-		g.Channels.ShowAll()
-		a.Guilds.SetSensitive(true)
-	})
+
+	if a.Sidebar != nil {
+		must(a.Grid.Remove, a.Sidebar)
+	}
+
+	must(a.Guilds.SetSensitive, false)
+	must(a.spinner.Start)
+	must(a.setChannelCol, a.sbox)
 
 	if err := g.loadChannels(); err != nil {
+		must(a._loadGuildDone, g)
+
 		logWrap(err, "Failed to load channels")
 		return
 	}
 
 	a.Guild = g
+	first := a.Sidebar == nil
+	must(a._loadGuildDone, g)
 
-	if a.Sidebar == nil {
-		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		if err != nil {
-			logWrap(err, "Failed to make a separator")
-		} else {
-			must(a.Grid.Add, s)
-		}
+	if first {
+		s := must(gtk.SeparatorNew, gtk.ORIENTATION_VERTICAL).(*gtk.Separator)
+		must(a.Grid.Add, s)
 	}
 
 	a.Header.UpdateGuild(g.Name)
+
 	ch := g.Current()
+	if ch == nil {
+		return
+	}
+
 	go a.loadChannel(g, ch)
+}
+
+func (a *application) _loadGuildDone(g *Guild) {
+	a.spinner.Stop()
+	a.Grid.Remove(a.sbox)
+	a.setChannelCol(g.Channels)
+	g.Channels.ShowAll()
+	a.Guilds.SetSensitive(true)
 }
 
 func (a *application) loadChannel(g *Guild, ch *Channel) {
 	a.busy.Lock()
-
-	must(func() {
-		if a.Messages != nil {
-			a.Grid.Remove(a.Messages)
-		}
-
-		g.Channels.Main.SetSensitive(false)
-		a.spinner.Start()
-		a.setMessageCol(a.sbox)
-	})
-
-	go a._loadChannel(g, ch)
-}
-
-func (a *application) _loadChannel(g *Guild, ch *Channel) {
 	defer a.busy.Unlock()
-	defer must(func() {
-		a.spinner.Stop()
-		a.Grid.Remove(a.sbox)
-		a.setMessageCol(ch.Messages)
-		ch.Messages.ShowAll()
-		g.Channels.Main.SetSensitive(true)
-	})
+
+	if a.Messages != nil {
+		must(a.Grid.Remove, a.Messages)
+	}
+
+	must(g.Channels.Main.SetSensitive, false)
+	must(a.spinner.Start)
+	must(a.setMessageCol, a.sbox)
 
 	// Run hook
 	a.Header.UpdateChannel(ch.Name, ch.Topic)
 
-	if a.Messages == nil {
-		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		if err == nil {
-			must(a.Grid.Add, s)
-		}
-	}
+	defer must(a._loadChannelDone, g, ch)
 
 	if err := g.GoTo(ch); err != nil {
 		logWrap(err, "Failed to go to channel")
 		return
 	}
+}
+
+func (a *application) _loadChannelDone(g *Guild, ch *Channel) {
+	a.spinner.Stop()
+	a.Grid.Remove(a.sbox)
+	a.setMessageCol(ch.Messages)
+	ch.Messages.ShowAll()
+	g.Channels.Main.SetSensitive(true)
 }
 
 func (a *application) wait() {

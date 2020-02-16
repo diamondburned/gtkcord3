@@ -20,8 +20,8 @@ func (pb *Pixbuf) Set(img *gtk.Image) {
 	switch {
 	case pb.Pixbuf != nil:
 		semaphore.IdleMust(img.SetFromPixbuf, pb.Pixbuf)
-		// case pb.Animation != nil:
-		// semaphore.IdleMust(img.SetFromAnimation, pb.Animation)
+	case pb.Animation != nil:
+		semaphore.IdleMust(img.SetFromAnimation, pb.Animation)
 	}
 }
 

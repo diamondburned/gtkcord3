@@ -62,7 +62,7 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 		// Try and replace the last inserted pixbuf with ours:
 		last := semaphore.IdleMust(s.buf.GetIterAtLineIndex, lastLine, lastIndex).(*gtk.TextIter)
 		fwdi := semaphore.IdleMust(s.buf.GetIterAtLineIndex, lastLine, lastIndex).(*gtk.TextIter)
-		fwdi.ForwardChar()
+		semaphore.IdleMust(fwdi.ForwardChar)
 
 		semaphore.IdleMust(s.buf.Delete, last, fwdi)
 		semaphore.IdleMust(s.buf.InsertPixbuf, last, pixbuf)
