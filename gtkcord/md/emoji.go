@@ -1,10 +1,10 @@
 package md
 
 import (
-	"github.com/diamondburned/gtkcord3/gtkcord/pbpool"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
 )
 
 func EmojiURL(emojiID string, animated bool) string {
@@ -28,49 +28,43 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 		sz = LargeSize
 	}
 
-	iter := s.buf.GetEndIter()
+	iter := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
 
 	i := s.p.GetIcon("image-missing", sz)
 	if i == nil {
-		s.buf.Insert(iter, "[?]")
+		semaphore.IdleMust(s.buf.Insert, iter, "[?]")
 		log.Errorln("Markdown: Failed to get image-missing icon")
 		return
 	}
 
 	// Preserve position:
-	lastIndex := iter.GetLineIndex()
-	lastLine := iter.GetLine()
+	lastIndex := semaphore.IdleMust(iter.GetLineIndex).(int)
+	lastLine := semaphore.IdleMust(iter.GetLine).(int)
 
 	// Insert Pixbuf after s.prev:
-	s.buf.InsertPixbuf(iter, i)
+	semaphore.IdleMust(s.buf.InsertPixbuf, iter, i)
 
 	// Add to the waitgroup, so we know when to put the state back.
-	s.iterWg.Add(2)
+	s.iterWg.Add(1)
 
-	semaphore.Go(func() {
+	go func() {
 		defer s.iterWg.Done()
 
-		pixbuf, err := pbpool.GetScaled(url+"?size=64", sz, sz)
+		pixbuf, err := cache.GetImage(url+"?size=64", cache.Resize(sz, sz))
 		if err != nil {
 			log.Errorln("Markdown: Failed to GET " + url)
 			return
 		}
 
 		s.iterMu.Lock()
+		defer s.iterMu.Unlock()
 
 		// Try and replace the last inserted pixbuf with ours:
-		glib.IdleAdd(func(s *mdState) bool {
-			defer s.iterMu.Unlock()
-			defer s.iterWg.Done()
+		last := semaphore.IdleMust(s.buf.GetIterAtLineIndex, lastLine, lastIndex).(*gtk.TextIter)
+		fwdi := semaphore.IdleMust(s.buf.GetIterAtLineIndex, lastLine, lastIndex).(*gtk.TextIter)
+		semaphore.IdleMust(fwdi.ForwardChar)
 
-			lastIter := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
-			lastIterFwd := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
-			lastIterFwd.ForwardChar()
-
-			s.buf.Delete(lastIter, lastIterFwd)
-			s.buf.InsertPixbuf(lastIter, pixbuf)
-
-			return false
-		}, s)
-	})
+		semaphore.IdleMust(s.buf.Delete, last, fwdi)
+		semaphore.IdleMust(s.buf.InsertPixbuf, last, pixbuf)
+	}()
 }

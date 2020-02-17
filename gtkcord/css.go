@@ -13,10 +13,13 @@ headerbar { padding: 0; }
 headerbar button { box-shadow: none; }
 textview, textview > text { background-color: transparent; }
 
-.message:not(.condensed) {
+.message:not(.condensed), .message-input {
 	border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
+.message-input {
+	background-image: linear-gradient(transparent, rgba(10, 10, 10, 0.3));
+}
 .message-input button {
 	background: none;
 	box-shadow: none;

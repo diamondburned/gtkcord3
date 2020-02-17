@@ -25,8 +25,11 @@ func main() {
 		log.Fatalln("Can't create a Discord state:", err)
 	}
 
-	s.ErrorLog = func(err error) {
-		log.Debugln("Discord error:", err)
+	s.Gateway.ErrorLog = func(err error) {
+		log.Errorln("Discord error:", err)
+	}
+	s.StateLog = func(err error) {
+		log.Debugln("State error:", err)
 	}
 
 	if err := s.Open(); err != nil {

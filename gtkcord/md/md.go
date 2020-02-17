@@ -7,17 +7,18 @@ import (
 	"sync"
 
 	"github.com/alecthomas/chroma"
+	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
 var regexes = []string{
 	// codeblock
-	`(?:\n?\x60\x60\x60 *(\w*\n?)([\s\S]*?)\n?\x60\x60\x60\n?)`,
+	`(?:\n?\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60\n?)`,
 	// blockquote
 	`((?:(?:^|\n)^>\s+.*)+)\n`,
 	// Inline markup stuff
@@ -60,6 +61,15 @@ type Parser struct {
 
 func NewParser(s *state.State) *Parser {
 	log.Debugln("REGEX:", strings.Join(regexes, "|"))
+
+	if style == nil {
+		style = styles.Get(HighlightStyle)
+		if style == nil {
+			panic("Unknown highlighting style: " + HighlightStyle)
+		}
+
+		css = styleToCSS(style)
+	}
 
 	i, err := gtk.IconThemeGetDefault()
 	if err != nil {
@@ -120,29 +130,33 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.iterMu.Lock()
 
-	glib.IdleAdd(func(s *mdState) bool {
-		defer s.iterMu.Unlock()
+	// Wipe the buffer clean
+	semaphore.IdleMust(func(buf *gtk.TextBuffer) {
+		buf.Delete(buf.GetStartIter(), buf.GetEndIter())
+	}, buf)
 
-		for i := 0; i < len(s.matches); i++ {
-			s.prev = md[s.last:s.matches[i][0].from]
-			s.last = s.getLastIndex(i)
+	for i := 0; i < len(s.matches); i++ {
+		s.prev = md[s.last:s.matches[i][0].from]
+		s.last = s.getLastIndex(i)
 
-			s.insertWithTag(s.prev, nil)
-			tree(i)
-		}
+		s.insertWithTag(s.prev, nil)
+		tree(i)
+	}
 
-		s.insertWithTag(md[s.last:], nil)
+	s.insertWithTag(md[s.last:], nil)
 
-		return false
-	}, s)
+	s.iterMu.Unlock()
 
-	go func() {
-		// We lock here to wait for the IdleAdd callback to finish.
-		s.iterMu.Lock()
-		s.iterMu.Unlock()
+	s.iterWg.Wait()
 
-		s.iterWg.Wait()
-		s.buf = nil
-		p.pool.Put(s)
-	}()
+	s.buf = nil
+	s.tag = nil
+	s.last = 0
+	s.prev = s.prev[:0]
+	s.used = s.used[:0]
+	s.hasText = false
+	s.attr = 0
+	s.color = ""
+
+	p.pool.Put(s)
 }

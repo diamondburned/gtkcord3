@@ -95,16 +95,22 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to load guild "+id.String())
 		}
-		r.Row.SetSizeRequest(
-			// We need to mult 4 div 3, since if we do full *2, the child
-			// channels will be too big and expand the left bar.
-			IconSize+IconPadding*4/3,
-			IconSize+IconPadding*2,
-		)
-
 		f.Folder.Guilds = append(f.Folder.Guilds, r)
-		guildList.Add(r)
 	}
+
+	must(func(f *Guild) {
+		for _, r := range f.Folder.Guilds {
+			r := r
+			r.Row.SetSizeRequest(
+				// We need to mult 4 div 3, since if we do full *2, the child
+				// channels will be too big and expand the left bar.
+				IconSize+IconPadding*4/3,
+				IconSize+IconPadding*2,
+			)
+
+			f.Folder.List.Add(r)
+		}
+	}, f)
 
 	return f, nil
 }
