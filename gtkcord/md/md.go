@@ -103,11 +103,9 @@ func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
 		return v.(*gdk.Pixbuf)
 	}
 
-	pb, err := p.theme.LoadIcon(name, size, gtk.ICON_LOOKUP_FORCE_SIZE)
-	if err != nil {
-		log.Errorln("Markdown: Failed to load icon", name+":", err)
-		return nil
-	}
+	pb := semaphore.IdleMust(
+		p.theme.LoadIcon, name, size,
+		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
 
 	p.icons.Store(key, pb)
 	return pb

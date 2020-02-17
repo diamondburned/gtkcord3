@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,18 +34,16 @@ func init() {
 }
 
 func TransformURL(s string) *diskv.PathKey {
-	var short = s[len("https://"):]
-	var parts = strings.SplitN(short, "/", 3)
-
-	if len(parts) < 3 {
+	u, err := url.Parse(s)
+	if err != nil {
 		return &diskv.PathKey{
-			FileName: SanitizeString(short),
+			FileName: SanitizeString(s),
 		}
 	}
 
 	return &diskv.PathKey{
-		FileName: SanitizeString(parts[2]),
-		Path:     parts[:1],
+		FileName: SanitizeString(u.EscapedPath() + "?" + u.RawQuery),
+		Path:     []string{u.Hostname()},
 	}
 }
 

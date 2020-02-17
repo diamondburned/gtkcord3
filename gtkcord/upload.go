@@ -3,11 +3,11 @@ package gtkcord
 import (
 	"io"
 	"os"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -19,20 +19,24 @@ type Uploader struct {
 	defaultDir string
 }
 
+//go:linkname gostring runtime.gostring
+func gostring(p unsafe.Pointer) string
+
 func SpawnUploader(callback func(absolutePath []string)) {
-	dialog, err := gtk.FileChooserNativeDialogNew(
+	dialog := must(gtk.FileChooserDialogNewWith2Buttons,
 		"Upload File", App.Window,
-		gtk.FILE_CHOOSER_ACTION_OPEN, "Upload", "Cancel")
-	if err != nil {
-		log.Panicln("Failed to spawn a native file chooser")
-	}
+		gtk.FILE_CHOOSER_ACTION_OPEN,
+		"Cancel", gtk.RESPONSE_CANCEL,
+		"Upload", gtk.RESPONSE_ACCEPT,
+	).(*gtk.FileChooserDialog)
 
 	defaultDir := glib.GetUserDataDir()
 	must(dialog.SetCurrentFolder, defaultDir)
 	must(dialog.SetSelectMultiple, true)
 
-	resCode := dialog.Run()
-	if gtk.ResponseType(resCode) != gtk.RESPONSE_ACCEPT {
+	defer must(dialog.Close)
+
+	if res := must(dialog.Run).(gtk.ResponseType); res != gtk.RESPONSE_ACCEPT {
 		return
 	}
 
@@ -40,27 +44,11 @@ func SpawnUploader(callback func(absolutePath []string)) {
 	slist := must(dialog.GetFilenames).(*glib.SList)
 	var names = make([]string, 0, int(slist.Length()))
 	slist.Foreach(func(ptr unsafe.Pointer) {
-		names = append(names, *(*string)(ptr))
+		names = append(names, gostring(ptr))
 	})
+	slist.Free()
 
 	go callback(names)
-}
-
-// Spawn should be running in a goroutine.
-func (u *Uploader) Spawn() {
-	resCode := u.Run()
-	if gtk.ResponseType(resCode) != gtk.RESPONSE_ACCEPT {
-		return
-	}
-
-	// Glib's shitty singly linked list:
-	slist := must(u.GetFilenames).(*glib.SList)
-	var names = make([]string, 0, int(slist.Length()))
-	slist.Foreach(func(ptr unsafe.Pointer) {
-		names = append(names, *(*string)(ptr))
-	})
-
-	go u.callback(names)
 }
 
 type MessageUploader struct {
@@ -71,7 +59,7 @@ type MessageUploader struct {
 func NewMessageUploader(paths []string) (*MessageUploader, error) {
 	var m = &MessageUploader{}
 
-	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL).(*gtk.Box)
+	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	m.Box = main
 
 	for _, path := range paths {
@@ -91,9 +79,9 @@ func NewMessageUploader(paths []string) (*MessageUploader, error) {
 
 	must(func(m *MessageUploader) {
 		for _, p := range m.progresses {
-			m.Box.Add(p)
-			p.ShowAll()
+			m.Box.PackEnd(p, false, false, 5)
 		}
+		m.ShowAll()
 	}, m)
 
 	return m, nil
@@ -130,12 +118,17 @@ type ProgressUploader struct {
 
 	r io.ReadCloser
 	s float64 // total
+	n uint64
 }
 
 func NewProgressUploader(Name string, r io.ReadCloser, s int64) *ProgressUploader {
-	box := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL).(*gtk.Box)
+	box := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	bar := must(gtk.ProgressBarNew).(*gtk.ProgressBar)
 	name := must(gtk.LabelNew, Name).(*gtk.Label)
+	must(name.SetXAlign, float64(0))
+
+	must(box.Add, name)
+	must(box.Add, bar)
 
 	return &ProgressUploader{
 		Box:  box,
@@ -150,7 +143,10 @@ func NewProgressUploader(Name string, r io.ReadCloser, s int64) *ProgressUploade
 
 func (p *ProgressUploader) Read(b []byte) (int, error) {
 	n, err := p.r.Read(b)
-	must(p.bar.SetFraction, float64(n)/p.s)
+
+	atomic.AddUint64(&p.n, uint64(n))
+	glib.IdleAdd(p.bar.SetFraction, float64(p.n)/p.s)
+
 	return n, err
 }
 

@@ -29,6 +29,12 @@ textview, textview > text { background-color: transparent; }
 .message-input button:hover {
 	opacity: 1;
 }
+
+.guild image {
+    box-shadow: 0px 0px 4px -1px rgba(0,0,0,0.5);
+    border-radius: 50%;
+	background-color: grey;
+}
 `
 
 var CustomCSS = os.Getenv("GTKCORD_CUSTOM_CSS")
@@ -58,7 +64,20 @@ func (a *application) loadCSS() error {
 	}
 
 	gtk.AddProviderForScreen(s, css,
-		uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
+		uint(gtk.STYLE_PROVIDER_PRIORITY_USER))
 
 	return nil
+}
+
+type StyleContextGetter interface {
+	GetStyleContext() (*gtk.StyleContext, error)
+}
+
+func InjectCSS(g StyleContextGetter, class, CSS string) {
+	css := must(gtk.CssProviderNew).(*gtk.CssProvider)
+	must(css.LoadFromData, CSS)
+
+	style := must(g.GetStyleContext).(*gtk.StyleContext)
+	must(style.AddClass, class)
+	must(style.AddProvider, css, uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
 }

@@ -9,10 +9,10 @@ require (
 	github.com/diamondburned/arikawa v0.1.4-0.20200216052925-4e9bd53b0f38
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
-	github.com/gotk3/gotk3 v0.0.0-20200129211157-69caac910e50
+	github.com/gotk3/gotk3 v0.4.0
+	github.com/ianlancetaylor/cgosymbolizer v0.0.0-20170921033129-f5072df9c550
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
 	github.com/mattn/go-isatty v0.0.12 // indirect
-	github.com/peterbourgon/diskv v2.0.1+incompatible
 	github.com/peterbourgon/diskv/v3 v3.0.0
 	github.com/pkg/errors v0.8.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e

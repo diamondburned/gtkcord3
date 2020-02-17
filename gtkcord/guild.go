@@ -127,9 +127,7 @@ func newGuilds() (*Guilds, error) {
 
 	l := must(gtk.ListBoxNew).(*gtk.ListBox)
 	must(l.SetActivateOnSingleClick, true)
-
-	ctx := must(l.GetStyleContext).(*gtk.StyleContext)
-	must(ctx.AddClass, "guild")
+	InjectCSS(l, "guilds", "")
 
 	g := &Guilds{
 		ListBox: l,
@@ -200,8 +198,11 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	must(r.SetVAlign, gtk.ALIGN_CENTER)
 	must(r.SetTooltipMarkup, bold(g.Name))
 	must(r.SetActivatable, true)
+	InjectCSS(r, "guild", "")
 
 	i := must(gtk.ImageNewFromIconName, "user-available", gtk.ICON_SIZE_DIALOG).(*gtk.Image)
+	must(r.SetHAlign, gtk.ALIGN_CENTER)
+	must(r.SetVAlign, gtk.ALIGN_CENTER)
 	must(r.Add, i)
 
 	guild := &Guild{
@@ -288,6 +289,8 @@ func (g *Guild) UpdateImage() {
 	}
 
 	g.Pixbuf.Set(g.Image)
+	must(g.Image.SetHAlign, gtk.ALIGN_CENTER)
+	must(g.Image.SetVAlign, gtk.ALIGN_CENTER)
 }
 
 func escape(str string) string {
