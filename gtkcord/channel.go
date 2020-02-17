@@ -74,6 +74,7 @@ func (g *Guild) loadChannels() error {
 
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	must(main.SetSizeRequest, ChannelsWidth, -1)
+	InjectCSS(main, "channels", "")
 
 	must(cs.Add, main)
 

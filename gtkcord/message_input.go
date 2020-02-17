@@ -195,18 +195,38 @@ func (i *MessageInput) send(content string) error {
 }
 
 func (i *MessageInput) upload(paths []string) {
-	if err := i._upload(paths); err != nil {
+	var text string
+
+	must(func(i *MessageInput) {
+		var (
+			iStart = i.InputBuf.GetStartIter()
+			iEnd   = i.InputBuf.GetEndIter()
+		)
+
+		t, err := i.InputBuf.GetText(iStart, iEnd, true)
+		if err != nil {
+			log.Errorln("Failed to get chatbox text buffer:", err)
+		}
+
+		if t != "" {
+			i.InputBuf.Delete(iStart, iEnd)
+			text = t
+		}
+	}, i)
+
+	if err := i._upload(text, paths); err != nil {
 		logWrap(err, "Failed to upload")
 	}
 }
 
-func (i *MessageInput) _upload(paths []string) error {
+func (i *MessageInput) _upload(content string, paths []string) error {
 	u, err := NewMessageUploader(paths)
 	if err != nil {
 		return err
 	}
+	defer u.Close()
 
-	m := i.makeMessage("")
+	m := i.makeMessage(content)
 	s := u.MakeSendData(m)
 
 	w, err := newMessageCustom(m)
@@ -215,7 +235,7 @@ func (i *MessageInput) _upload(paths []string) error {
 	}
 	must(w.rightBottom.Add, u)
 
-	if err := i.Messages.Insert(m); err != nil {
+	if err := i.Messages.insert(w, m); err != nil {
 		log.Errorln("Failed to add messages to be uploaded:", err)
 	}
 
@@ -224,7 +244,7 @@ func (i *MessageInput) _upload(paths []string) error {
 		i.Messages.deleteNonce(m.Nonce)
 		return errors.Wrap(err, "Failed to upload message")
 	}
-	s.Nonce = m.Nonce
+	n.Nonce = m.Nonce
 
 	must(w.rightBottom.Remove, u)
 	i.Messages.Update(*n)

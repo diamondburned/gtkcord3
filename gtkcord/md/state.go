@@ -149,8 +149,7 @@ func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
 	}
 
 	semaphore.IdleMust(func() {
-		end := s.buf.GetEndIter()
-		s.buf.InsertWithTag(end, string(content), tag)
+		s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
 	})
 }
 

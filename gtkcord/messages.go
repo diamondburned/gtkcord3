@@ -173,13 +173,11 @@ func (m *Messages) Clear() {
 	defer m.guard.Unlock()
 
 	for _, w := range m.messages {
-		w.busy.Lock()
 		m.Messages.Remove(w)
-		w.busy.Unlock()
 	}
 
 	// Set to nil so we don't keep the capacity.
-	m.messages = nil
+	// m.messages = nil
 }
 
 func (m *Messages) ShouldCondense(msg discord.Message) bool {
@@ -214,18 +212,18 @@ func (m *Messages) onSizeAlloc() {
 	}
 
 	max := adj.GetUpper()
-	cur := adj.GetValue()
+	cur := adj.GetValue() + adj.GetPageSize()
 
 	v, ok := m.Resetting.Load().(bool)
 	var loading = ok && v
 
 	// If the scroll is not close to the bottom and we're not loading messages:
-	if max-cur > 2500 && !loading {
+	if max-cur > 500 && !loading {
 		// Then we don't scroll.
 		return
 	}
 
-	log.Debugln("Scrolling because", max, "-", cur, "> 2500, and loading =", loading)
+	log.Debugln("Scrolling because", max, "-", cur, "< 500, and loading =", loading)
 
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)
@@ -291,8 +289,10 @@ func (m *Messages) Update(update discord.Message) bool {
 	// Clear the nonce, if any:
 	if !target.getAvailable() {
 		target.setAvailable(true)
-		target.Nonce = ""
 	}
+
+	target.ID = update.ID
+	target.Nonce = ""
 
 	if update.Content != "" {
 		target.UpdateContent(update)

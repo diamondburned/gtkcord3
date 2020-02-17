@@ -69,6 +69,7 @@ type application struct {
 
 func Init() error {
 	rand.Seed(time.Now().UnixNano())
+	discord.DefaultEmbedColor = 0x808080
 
 	App = new(application)
 	App.done = make(chan struct{})
@@ -162,48 +163,50 @@ func (a *application) ChannelID() discord.Snowflake {
 }
 
 func (a *application) init() error {
+	var done = make(chan error)
+
 	go func() {
 		runtime.LockOSThread()
 		gtk.Init(nil)
 
 		if err := a.loadCSS(); err != nil {
-			log.Panicln("Failed to load CSS:", err)
+			done <- errors.Wrap(err, "Failed to load CSS")
+			return
 		}
 
 		w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 		if err != nil {
-			log.Panicln("Failed to create window:", err)
+			done <- errors.Wrap(err, "Failed to create window")
+			return
 		}
-
 		w.Connect("destroy", func() {
 			a.close()
 			gtk.MainQuit()
 			close(a.done)
 		})
-
 		w.SetDefaultSize(1000, 750)
 		a.Window = w
 
 		h, err := newHeader()
 		if err != nil {
-			log.Panicln("Failed to create header:", err)
+			done <- errors.Wrap(err, "Failed to create header")
+			return
 		}
-
 		w.SetTitlebar(h)
 		a.Header = h
 
 		i, err := gtk.IconThemeGetDefault()
 		if err != nil {
-			log.Panicln("Can't get Gtk icon theme:", err)
+			done <- errors.Wrap(err, "Can't get Gtk icon theme")
+			return
 		}
-
 		a.iconTheme = i
 
 		g, err := gtk.GridNew()
 		if err != nil {
-			log.Panicln("Failed to create grid:", err)
+			done <- errors.Wrap(err, "Failed to create grid")
+			return
 		}
-
 		g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
 		g.SetRowHomogeneous(true)
 		a.Grid = g
@@ -211,9 +214,9 @@ func (a *application) init() error {
 		// Instead of adding the above grid, we should add the spinning circle.
 		sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		if err != nil {
-			log.Panicln("Failed to create spinner box:", err)
+			done <- errors.Wrap(err, "Failed to create spinner box")
+			return
 		}
-
 		sbox.SetSizeRequest(50, 50)
 		sbox.SetVAlign(gtk.ALIGN_CENTER)
 		w.Add(sbox)
@@ -221,19 +224,21 @@ func (a *application) init() error {
 
 		s, err := gtk.SpinnerNew()
 		if err != nil {
-			log.Panicln("Failed to create spinner:", err)
+			done <- errors.Wrap(err, "Failed to create spinner")
+			return
 		}
-
 		s.SetSizeRequest(50, 50)
 		s.Start()
 		sbox.Add(s)
 		a.spinner = s
-
 		w.ShowAll()
+
+		done <- nil
+
 		gtk.Main()
 	}()
 
-	return nil
+	return <-done
 }
 
 func (a *application) finalize() {
@@ -337,7 +342,7 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	must(ch.Messages.Show)
 
 	if old != nil && old.Messages != nil {
-		old.Messages.Clear()
+		// old.Messages.Clear()
 	}
 }
 

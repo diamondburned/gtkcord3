@@ -2,12 +2,12 @@ package gtkcord
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/humanize"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -50,22 +50,22 @@ type Message struct {
 	rightBottom *gtk.Box
 	textView    gtk.IWidget
 	content     *gtk.TextBuffer  // view declared implicitly
-	extras      []*MessageExtras // embeds, images, etc
-
-	busy sync.Mutex
+	extras      []ExtendedWidget // embeds, images, etc
 
 	Condensed      bool
 	CondenseOffset time.Duration
-}
-
-type MessageExtras struct {
-	ExtendedWidget
 }
 
 func newMessage(m discord.Message) (*Message, error) {
 	message, err := newMessageCustom(m)
 	if err != nil {
 		return nil, err
+	}
+
+	// Message without a valid ID is probably a sending message. Either way,
+	// it's unavailable.
+	if !m.ID.Valid() {
+		message.setAvailable(false)
 	}
 
 	var messageText string
@@ -135,8 +135,7 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
 	}
 
-	message.busy.Lock()
-	defer message.busy.Unlock()
+	InjectCSS(message.avatar, "avatar", "")
 
 	// What the fuck?
 	must(func() {
@@ -144,12 +143,12 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 		mstyle.AddClass("message")
 
 		message.rightBottom.SetHExpand(true)
-		message.rightBottom.SetMarginEnd(AvatarPadding)
+		message.rightBottom.SetMarginEnd(AvatarPadding * 2)
 
 		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
-		message.avatar.SetProperty("yalign", 0.0)
 		message.avatar.SetMarginStart(AvatarPadding * 2)
 		message.avatar.SetMarginEnd(AvatarPadding)
+		message.avatar.SetVAlign(gtk.ALIGN_START)
 
 		message.author.SetMarkup(bold(m.Author.Username))
 		message.author.SetSingleLineMode(true)
@@ -171,12 +170,6 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 
 		message.setCondensed()
 	})
-
-	// Message without a valid ID is probably a sending message. Either way,
-	// it's unavailable.
-	if !m.ID.Valid() {
-		message.setAvailable(false)
-	}
 
 	return message, nil
 }
@@ -203,9 +196,6 @@ func (m *Message) setOffset(last *Message) {
 }
 
 func (m *Message) SetCondensed(condensed bool) {
-	m.busy.Lock()
-	defer m.busy.Unlock()
-
 	if m.Condensed == condensed {
 		return
 	}
@@ -249,9 +239,6 @@ func (m *Message) setCondensed() {
 }
 
 func (m *Message) UpdateAuthor(user discord.User) {
-	m.busy.Lock()
-	defer m.busy.Unlock()
-
 	if guildID := App.Guild.ID; guildID.Valid() {
 		var name = escape(user.Username)
 
@@ -282,7 +269,7 @@ func (m *Message) UpdateAuthor(user discord.User) {
 		p, err := cache.GetImage(url+"?size=64",
 			cache.Resize(AvatarSize, AvatarSize), cache.Round)
 		if err != nil {
-			// logWrap(err, "Failed to get the pixbuf guild icon")
+			log.Errorln("Failed to get the pixbuf guild icon:", err)
 			return
 		}
 
@@ -291,7 +278,7 @@ func (m *Message) UpdateAuthor(user discord.User) {
 		p, err := cache.GetAnimation(url+"?size=64",
 			cache.Resize(AvatarSize, AvatarSize), cache.Round)
 		if err != nil {
-			// logWrap(err, "Failed to get the pixbuf guild animation")
+			log.Errorln("Failed to get the pixbuf guild animation:", err)
 			return
 		}
 
@@ -302,9 +289,6 @@ func (m *Message) UpdateAuthor(user discord.User) {
 }
 
 func (m *Message) updateContent(s string) {
-	m.busy.Lock()
-	defer m.busy.Unlock()
-
 	m.assertContent()
 	must(func(m *Message) {
 		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
@@ -313,15 +297,12 @@ func (m *Message) updateContent(s string) {
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
-	m.busy.Lock()
-	defer m.busy.Unlock()
-
 	m.assertContent()
 	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
 }
 
 func (m *Message) assertContent() {
-	if m.content == nil {
+	if m.textView == nil {
 		msgTb := must(App.parser.NewTextBuffer).(*gtk.TextBuffer)
 		m.content = msgTb
 
@@ -334,12 +315,27 @@ func (m *Message) assertContent() {
 
 		// Add in what's not covered by SetCondensed.
 		must(m.rightBottom.Add, msgTv)
+		must(m.rightBottom.ShowAll)
 	}
 }
 
 func (m *Message) UpdateExtras(update discord.Message) {
-	// TODO
-	// must(m.ShowAll)
+	must(func(m *Message) {
+		for _, extra := range m.extras {
+			m.rightBottom.Remove(extra)
+		}
+	}, m)
+
+	m.extras = m.extras[:0]
+	m.extras = append(m.extras, NewEmbed(update)...)
+
+	must(func(m *Message) {
+		for _, extra := range m.extras {
+			m.rightBottom.Add(extra)
+		}
+
+		m.rightBottom.ShowAll()
+	}, m)
 }
 
 func smaller(text string) string {

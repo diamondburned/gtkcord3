@@ -10,64 +10,13 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
 	"golang.org/x/sync/semaphore"
+
+	_ "github.com/ianlancetaylor/cgosymbolizer"
 )
 
 var MaxWorkers = runtime.GOMAXPROCS(0)
 
 var sema *semaphore.Weighted
-
-/*
-var idleAddReturn = sync.Pool{
-	New: func() interface{} {
-		return make(chan [2]interface{})
-	},
-}
-
-// IdleAddReturns prepares for the apocalypse.
-func IdleAddReturns(fn interface{}, args ...interface{}) (interface{}, error) {
-	// Unsafely use this because why not.
-	var fnV = reflect.ValueOf(fn)
-	var argv = make([]reflect.Value, len(args)+1)
-	for i, arg := range args {
-		argv[i+1] = reflect.ValueOf(arg)
-	}
-	argv[0] = fnV
-
-	trace := log.Trace(1)
-
-	// ch := idleAddReturn.Get().(chan [2]interface{})
-	// defer idleAddReturn.Put(ch)
-	ch := make(chan []reflect.Value, 1)
-
-	_, err := glib.IdleAdd(func(values []reflect.Value) bool {
-		log.Debugln(trace, "Semaphore: IdleAdd() called.")
-
-		ch <- values[0].Call(values[1:])
-		return false
-	}, argv)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to IdleAdd")
-	}
-
-	log.Debugln(trace, "Waiting for ch")
-
-	// v := <-ch
-	// returns := v[0].([]reflect.Value)
-	returns := <-ch
-
-	log.Debugln("Channel received")
-
-	switch len(returns) {
-	case 0:
-		return nil, nil
-	case 1:
-		return returns[0].Interface(), nil
-	default:
-		return returns[0].Interface(), returns[1].Interface().(error)
-	}
-}
-*/
 
 var idleAdds = make(chan *idleCall, 1000)
 var recvPool = sync.Pool{
@@ -97,7 +46,9 @@ func init() {
 				call.done <- call.fn.(reflect.Value).Call(call.args)
 			}
 
-			log.Infoln(call.trace, "took", time.Now().Sub(now))
+			if delta := time.Now().Sub(now); delta > time.Millisecond {
+				log.Infoln(call.trace, "took", time.Now().Sub(now))
+			}
 
 		default:
 		}

@@ -1,9 +1,7 @@
 package gtkcord
 
 import (
-	"io/ioutil"
-
-	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -12,7 +10,7 @@ import (
 const HeaderAvatarSize = 38
 
 type HeaderMenu struct {
-	gtk.IWidget
+	ExtendedWidget
 	Menu   *gtk.MenuButton
 	Avatar *gtk.Image
 	Name   *gtk.Label
@@ -46,8 +44,8 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	m.Add(i)
 
 	hm := &HeaderMenu{
-		IWidget: b,
-		Menu:    m,
+		ExtendedWidget: b,
+		Menu:           m,
 	}
 
 	{ // header box
@@ -83,6 +81,8 @@ func newHeaderMenu() (*HeaderMenu, error) {
 		m.SetPopover(&c.Popover)
 	}
 
+	hm.ShowAll()
+
 	return hm, nil
 }
 
@@ -101,25 +101,8 @@ func (m *HeaderMenu) Refresh() error {
 func (m *HeaderMenu) UpdateAvatar(url string) {
 	var animated = url[:len(url)-4] == ".gif"
 
-	r, err := HTTPClient.Get(url + "?size=64")
-	if err != nil {
-		logWrap(err, "Failed to GET URL "+url)
-		return
-	}
-	defer r.Body.Close()
-
-	if r.StatusCode < 200 || r.StatusCode > 299 {
-		log.Errorf("Bad status code %d for %s\n", r.StatusCode, url)
-	}
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logWrap(err, "Failed to download image")
-		return
-	}
-
 	if !animated {
-		p, err := NewPixbuf(b, PbSize(HeaderAvatarSize, HeaderAvatarSize))
+		p, err := cache.GetImage(url+"?size=64", cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild icon")
 			return
@@ -127,9 +110,10 @@ func (m *HeaderMenu) UpdateAvatar(url string) {
 
 		m.Pixbuf = p
 	} else {
-		p, err := NewAnimator(b, PbSize(HeaderAvatarSize, HeaderAvatarSize))
+		p, err := cache.GetAnimation(url+"?size=64", cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
 		if err != nil {
 			logWrap(err, "Failed to get the pixbuf guild animation")
+			return
 		}
 
 		m.Animation = p
@@ -141,12 +125,8 @@ func (m *HeaderMenu) UpdateAvatar(url string) {
 func (m *HeaderMenu) updateAvatar() {
 	switch {
 	case m.Pixbuf != nil:
-		must(func(m *HeaderMenu) {
-			m.Avatar.SetFromPixbuf(m.Pixbuf)
-		}, m)
+		must(m.Avatar.SetFromPixbuf, m.Pixbuf)
 	case m.Animation != nil:
-		must(func(m *HeaderMenu) {
-			m.Avatar.SetFromAnimation(m.Animation)
-		}, m)
+		must(m.Avatar.SetFromAnimation, m.Animation)
 	}
 }
