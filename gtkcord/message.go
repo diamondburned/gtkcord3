@@ -14,6 +14,8 @@ import (
 const (
 	AvatarSize    = 42 // gtk.ICON_SIZE_DND
 	AvatarPadding = 10
+
+	AvatarFallbackURL = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
 )
 
 type Message struct {
@@ -35,7 +37,6 @@ type Message struct {
 
 	// Left side, nil everything if compact mode
 	avatar *gtk.Image
-	pixbuf *Pixbuf
 	pbURL  string
 
 	// Right container:
@@ -258,6 +259,10 @@ func (m *Message) UpdateAuthor(user discord.User) {
 	}
 
 	var url = user.AvatarURL()
+	if url == "" {
+		url = AvatarFallbackURL
+	}
+
 	var animated = url[:len(url)-4] == ".gif"
 
 	if m.pbURL == url {
@@ -265,27 +270,20 @@ func (m *Message) UpdateAuthor(user discord.User) {
 	}
 	m.pbURL = url
 
+	var err error
+
 	if !animated {
-		p, err := cache.GetImage(url+"?size=64",
+		err = cache.SetImage(url+"?size=64", m.avatar,
 			cache.Resize(AvatarSize, AvatarSize), cache.Round)
-		if err != nil {
-			log.Errorln("Failed to get the pixbuf guild icon:", err)
-			return
-		}
-
-		m.pixbuf = &Pixbuf{p, nil}
 	} else {
-		p, err := cache.GetAnimation(url+"?size=64",
+		err = cache.SetAnimation(url+"?size=64", m.avatar,
 			cache.Resize(AvatarSize, AvatarSize), cache.Round)
-		if err != nil {
-			log.Errorln("Failed to get the pixbuf guild animation:", err)
-			return
-		}
-
-		m.pixbuf = &Pixbuf{nil, p}
 	}
 
-	m.pixbuf.Set(m.avatar)
+	if err != nil {
+		log.Errorln("Failed to get the pixbuf guild icon:", err)
+		return
+	}
 }
 
 func (m *Message) updateContent(s string) {
@@ -297,8 +295,10 @@ func (m *Message) updateContent(s string) {
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
-	m.assertContent()
-	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	if update.Content != "" {
+		m.assertContent()
+		App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	}
 }
 
 func (m *Message) assertContent() {
@@ -328,6 +328,7 @@ func (m *Message) UpdateExtras(update discord.Message) {
 
 	m.extras = m.extras[:0]
 	m.extras = append(m.extras, NewEmbed(update)...)
+	m.extras = append(m.extras, NewAttachment(update)...)
 
 	must(func(m *Message) {
 		for _, extra := range m.extras {

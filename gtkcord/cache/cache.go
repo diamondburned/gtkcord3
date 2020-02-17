@@ -11,8 +11,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gtk"
 	"github.com/peterbourgon/diskv/v3"
 	"github.com/pkg/errors"
 )
@@ -78,10 +80,17 @@ func Get(url string) ([]byte, error) {
 }
 
 func get(url, suffix string) ([]byte, error) {
-	b, err := store.Read(url + "#" + suffix)
+	if suffix != "" {
+		suffix = "#" + suffix
+	}
+
+	b, err := store.Read(url + suffix)
 	if err == nil {
+		log.Infoln("[O] Cache hit:", url)
 		return b, nil
 	}
+
+	log.Infoln("[X] Cache MISS:", url)
 
 	r, err := Client.Get(url)
 	if err != nil {
@@ -105,7 +114,7 @@ func get(url, suffix string) ([]byte, error) {
 	return b, nil
 }
 
-func GetImage(url string, pp ...Processor) (*gdk.Pixbuf, error) {
+func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 	b, err := get(url, "image")
 	if err != nil {
 		return nil, err
@@ -121,16 +130,52 @@ func GetImage(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
+	}
+	defer l.Close()
+
+	pixbuf, err := l.WriteAndReturnPixbuf(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to load pixbuf")
 	}
 
-	return l.WriteAndReturnPixbuf(b)
+	return pixbuf, nil
 }
 
-func GetAnimation(url string, pp ...Processor) (*gdk.PixbufAnimation, error) {
+func SetImage(url string, img *gtk.Image, pp ...Processor) error {
+	b, err := get(url, "image")
+	if err != nil {
+		return err
+	}
+
+	if len(pp) > 0 {
+		b = Process(b, pp...)
+	}
+
+	if err := store.Write(url+"#image", b); err != nil {
+		log.Errorln("Failed to store:", err)
+	}
+
+	l, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a pixbuf_loader")
+	}
+	defer l.Close()
+
+	pixbuf, err := l.WriteAndReturnPixbuf(b)
+	if err != nil {
+		return errors.Wrap(err, "Failed to load pixbux")
+	}
+
+	semaphore.IdleMust(img.SetFromPixbuf, pixbuf)
+
+	return nil
+}
+
+func SetAnimation(url string, img *gtk.Image, pp ...Processor) error {
 	b, err := get(url, "animation")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if len(pp) > 0 {
@@ -143,8 +188,16 @@ func GetAnimation(url string, pp ...Processor) (*gdk.PixbufAnimation, error) {
 
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "Failed to create a pixbuf_load")
+	}
+	defer l.Close()
+
+	pixbuf, err := l.WriteAndReturnPixbufAnimation(b)
+	if err != nil {
+		return errors.Wrap(err, "Failed to load animation")
 	}
 
-	return l.WriteAndReturnPixbufAnimation(b)
+	semaphore.IdleMust(img.SetFromAnimation, pixbuf)
+
+	return nil
 }

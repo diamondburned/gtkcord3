@@ -20,7 +20,7 @@ var regexes = []string{
 	// codeblock
 	`(?:\n?\x60\x60\x60 *(\w*)\n?([\s\S]*?)\n?\x60\x60\x60\n?)`,
 	// blockquote
-	`((?:(?:^|\n)^>\s+.*)+)\n`,
+	`((?:(?:^|\n)^>\s+.*)+)\n?`,
 	// Inline markup stuff
 	`(__|\x60|\*\*\*|\*\*|[_*]|~~|\|\|)`,
 	// Hyperlinks

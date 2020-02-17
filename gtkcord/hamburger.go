@@ -100,33 +100,18 @@ func (m *HeaderMenu) Refresh() error {
 
 func (m *HeaderMenu) UpdateAvatar(url string) {
 	var animated = url[:len(url)-4] == ".gif"
+	var err error
 
 	if !animated {
-		p, err := cache.GetImage(url+"?size=64", cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
-		if err != nil {
-			logWrap(err, "Failed to get the pixbuf guild icon")
-			return
-		}
-
-		m.Pixbuf = p
+		err = cache.SetImage(
+			url+"?size=64", m.Avatar, cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
 	} else {
-		p, err := cache.GetAnimation(url+"?size=64", cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
-		if err != nil {
-			logWrap(err, "Failed to get the pixbuf guild animation")
-			return
-		}
-
-		m.Animation = p
+		err = cache.SetAnimation(
+			url+"?size=64", m.Avatar, cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
 	}
 
-	m.updateAvatar()
-}
-
-func (m *HeaderMenu) updateAvatar() {
-	switch {
-	case m.Pixbuf != nil:
-		must(m.Avatar.SetFromPixbuf, m.Pixbuf)
-	case m.Animation != nil:
-		must(m.Avatar.SetFromAnimation, m.Animation)
+	if err != nil {
+		logWrap(err, "Failed to get the pixbuf guild icon")
+		return
 	}
 }

@@ -95,6 +95,10 @@ func (ch *Channel) loadMessages() error {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
+	for _, w := range m.messages {
+		must(m.Messages.Remove, w)
+	}
+
 	// Allocate a new empty slice. This is a trade-off to re-using the old
 	// slice to re-use messages.
 	var newMessages = make([]*Message, 0, DefaultFetch)
@@ -128,40 +132,41 @@ func (ch *Channel) loadMessages() error {
 
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
+		must(msg.setCondensed)
+		must(m.Messages.Add, msg)
 	}
 
-	must(func() {
-		for _, w := range m.messages {
-			m.Messages.Remove(w)
-		}
-
-		for _, msg := range newMessages {
-			msg.setCondensed()
-			m.Messages.Add(msg)
-		}
-
-		// Set the new slice.
-		m.messages = newMessages
-		m.ShowAll()
-	})
+	// Set the new slice.
+	m.messages = newMessages
+	must(m.ShowAll)
 
 	// Hack around the mutex
 	copiedMsg := append([]*Message{}, newMessages...)
 
-	go func() {
-		// Revert to latest is last, earliest is first.
-		for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
-			messages[L], messages[R] = messages[R], messages[L]
-		}
+	// Revert to latest is last, earliest is first.
+	for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
+		messages[L], messages[R] = messages[R], messages[L]
+	}
 
-		// Iterate in reverse, so latest first.
-		for i := len(copiedMsg) - 1; i >= 0; i-- {
-			message, discordm := copiedMsg[i], messages[i]
+	var wg sync.WaitGroup
+
+	// Iterate in reverse, so latest first.
+	for i := len(copiedMsg) - 1; i >= 0; i-- {
+		message, discordm := copiedMsg[i], messages[i]
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
 			message.UpdateAuthor(discordm.Author)
 			message.UpdateExtras(discordm)
-		}
+		}()
+	}
 
-		// We're done resetting, set this to false.
+	go func() {
+		// When we're done resetting, set this to false.
+		wg.Wait()
+		must(m.onSizeAlloc)
 		m.Resetting.Store(false)
 	}()
 
@@ -207,7 +212,7 @@ func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
 func (m *Messages) onSizeAlloc() {
 	adj, err := m.Viewport.GetVAdjustment()
 	if err != nil {
-		logWrap(err, "Failed to get viewport")
+		log.Errorln("Failed to get viewport:", err)
 		return
 	}
 

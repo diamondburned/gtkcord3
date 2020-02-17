@@ -35,8 +35,6 @@ type Guild struct {
 	Style *gtk.StyleContext
 	Image *gtk.Image
 	IURL  string
-	// nil if not downloaded
-	Pixbuf *Pixbuf
 
 	ID   discord.Snowflake
 	Name string
@@ -267,28 +265,21 @@ func (g *Guild) UpdateImage() {
 	}
 
 	var animated = g.IURL[:len(g.IURL)-4] == ".gif"
+	var err error
 
 	if !animated {
-		p, err := cache.GetImage(g.IURL+"?size=64",
+		err = cache.SetImage(g.IURL+"?size=64", g.Image,
 			cache.Resize(IconSize, IconSize), cache.Round)
-		if err != nil {
-			log.Errorln("Failed to update the pixbuf guild icon:", err)
-			return
-		}
-
-		g.Pixbuf = &Pixbuf{p, nil}
 	} else {
-		p, err := cache.GetAnimation(g.IURL+"?size=64",
+		err = cache.SetAnimation(g.IURL+"?size=64", g.Image,
 			cache.Resize(IconSize, IconSize), cache.Round)
-		if err != nil {
-			log.Errorln("Failed to update the pixbuf guild animation:", err)
-			return
-		}
-
-		g.Pixbuf = &Pixbuf{nil, p}
 	}
 
-	g.Pixbuf.Set(g.Image)
+	if err != nil {
+		log.Errorln("Failed to update the pixbuf guild icon:", err)
+		return
+	}
+
 	must(g.Image.SetHAlign, gtk.ALIGN_CENTER)
 	must(g.Image.SetVAlign, gtk.ALIGN_CENTER)
 }

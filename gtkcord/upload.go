@@ -8,6 +8,7 @@ import (
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -29,6 +30,8 @@ func SpawnUploader(callback func(absolutePath []string)) {
 		"Cancel", gtk.RESPONSE_CANCEL,
 		"Upload", gtk.RESPONSE_ACCEPT,
 	).(*gtk.FileChooserDialog)
+
+	WithPreviewer(dialog)
 
 	defaultDir := glib.GetUserDataDir()
 	must(dialog.SetCurrentFolder, defaultDir)
@@ -152,4 +155,25 @@ func (p *ProgressUploader) Read(b []byte) (int, error) {
 
 func (p *ProgressUploader) Close() error {
 	return p.r.Close()
+}
+
+func WithPreviewer(fc *gtk.FileChooserDialog) {
+	img := must(gtk.ImageNew).(*gtk.Image)
+
+	must(fc.SetPreviewWidget, img)
+	must(fc.Connect, "update-preview",
+		func(fc *gtk.FileChooserDialog, img *gtk.Image) {
+			file := fc.GetPreviewFilename()
+
+			b, err := gdk.PixbufNewFromFileAtScale(file, 256, 256, true)
+			if err != nil {
+				fc.SetPreviewWidgetActive(false)
+				return
+			}
+
+			img.SetFromPixbuf(b)
+			fc.SetPreviewWidgetActive(true)
+		},
+		img,
+	)
 }

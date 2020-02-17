@@ -50,7 +50,7 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 	go func() {
 		defer s.iterWg.Done()
 
-		pixbuf, err := cache.GetImage(url+"?size=64", cache.Resize(sz, sz))
+		pixbuf, err := cache.GetPixbuf(url+"?size=64", cache.Resize(sz, sz))
 		if err != nil {
 			log.Errorln("Markdown: Failed to GET " + url)
 			return

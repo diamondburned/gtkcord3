@@ -2,6 +2,7 @@ package gtkcord
 
 import (
 	"fmt"
+	"path"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
@@ -14,6 +15,7 @@ import (
 const (
 	EmbedAvatarSize = 24
 	EmbedMaxWidth   = 480
+	EmbedImgHeight  = 400 // max
 	EmbedMargin     = 8
 
 	EmbedMainCSS = `
@@ -24,8 +26,45 @@ const (
 	`
 )
 
-type Embed struct {
-	*gtk.Box
+func NewAttachment(msg discord.Message) []ExtendedWidget {
+	// Discord's supported formats
+	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
+	var widgets = make([]ExtendedWidget, 0, len(msg.Attachments))
+
+	for _, att := range msg.Attachments {
+		if att.Width == 0 || att.Height == 0 {
+			continue
+		}
+
+		if !validExt(att.Proxy, formats) {
+			continue
+		}
+
+		w := newExtraImage(
+			att.Proxy,
+			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
+		)
+
+		if w, ok := w.(embedMarginator); ok {
+			must(w.SetMarginStart, 0)
+		}
+
+		widgets = append(widgets, w)
+	}
+
+	return widgets
+}
+
+func validExt(url string, exts []string) bool {
+	var ext = path.Ext(url)
+
+	for _, e := range exts {
+		if e == ext {
+			return true
+		}
+	}
+
+	return false
 }
 
 func NewEmbed(msg discord.Message) []ExtendedWidget {
@@ -34,14 +73,52 @@ func NewEmbed(msg discord.Message) []ExtendedWidget {
 	}
 
 	var embeds = make([]ExtendedWidget, 0, len(msg.Embeds))
+
 	for _, embed := range msg.Embeds {
-		embeds = append(embeds, newEmbed(msg, embed))
+		w := newEmbed(msg, embed)
+		if w == nil {
+			continue
+		}
+
+		embeds = append(embeds, w)
 	}
 
 	return embeds
 }
 
-func newEmbed(msg discord.Message, embed discord.Embed) *Embed {
+func newEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
+	switch embed.Type {
+	case discord.NormalEmbed:
+		return newNormalEmbed(msg, embed)
+	case discord.ImageEmbed:
+		return newImageEmbed(embed)
+	case discord.VideoEmbed:
+		// Unsupported
+		return nil
+	}
+
+	return nil
+}
+
+func newExtraImage(url string, pp ...cache.Processor) ExtendedWidget {
+	img := must(gtk.ImageNew).(*gtk.Image)
+	must(img.SetVAlign, gtk.ALIGN_START)
+	must(img.SetHAlign, gtk.ALIGN_START)
+	must(embedSetMargin, img)
+
+	asyncFetch(url, img, pp...)
+
+	return img
+}
+
+func newImageEmbed(embed discord.Embed) ExtendedWidget {
+	return newExtraImage(
+		embed.Thumbnail.Proxy,
+		cache.Resize(EmbedMaxWidth, EmbedImgHeight),
+	)
+}
+
+func newNormalEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	must(main.SetHAlign, gtk.ALIGN_START)
 
@@ -109,8 +186,8 @@ func newEmbed(msg discord.Message, embed discord.Embed) *Embed {
 	if len(embed.Fields) > 0 {
 		fields := must(gtk.GridNew).(*gtk.Grid)
 		must(embedSetMargin, fields)
-		must(fields.SetRowSpacing, 7)
-		must(fields.SetColumnSpacing, 14)
+		must(fields.SetRowSpacing, uint(7))
+		must(fields.SetColumnSpacing, uint(14))
 		must(main.Add, fields)
 
 		col, row := 0, 0
@@ -125,7 +202,7 @@ func newEmbed(msg discord.Message, embed discord.Embed) *Embed {
 				field.Name, field.Value,
 			))
 
-			// I have no idea what this does. It's just improvised.
+			// I have no idea what this does. It')s just improvised.
 			if field.Inline && col < 3 {
 				fields.Attach(text, col, row, 1, 1)
 				col++
@@ -192,11 +269,10 @@ func newEmbed(msg discord.Message, embed discord.Embed) *Embed {
 		main = wrapper
 		must(main.SetHAlign, gtk.ALIGN_START)
 
-		img := must(gtk.ImageNew).(*gtk.Image)
-		must(img.SetVAlign, gtk.ALIGN_START)
-		must(embedSetMargin, img)
-		asyncFetch(embed.Thumbnail.Proxy, img, cache.Resize(80, 80))
-		must(wrapper.Add, img)
+		must(wrapper.Add, newExtraImage(
+			embed.Thumbnail.Proxy,
+			cache.Resize(80, 80),
+		))
 	}
 
 	if embed.Image != nil {
@@ -207,18 +283,15 @@ func newEmbed(msg discord.Message, embed discord.Embed) *Embed {
 		main = wrapper
 		must(main.SetHAlign, gtk.ALIGN_START)
 
-		img := must(gtk.ImageNew).(*gtk.Image)
-		must(img.SetVAlign, gtk.ALIGN_START)
-		must(embedSetMargin, img)
-		asyncFetch(embed.Image.Proxy, img, cache.Resize(EmbedMaxWidth, 500))
-		must(wrapper.Add, img)
+		must(wrapper.Add, newExtraImage(
+			embed.Image.Proxy,
+			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
+		))
 	}
 
 	InjectCSS(main, "embed", fmt.Sprintf(EmbedMainCSS, embed.Color))
 
-	return &Embed{
-		Box: main,
-	}
+	return main
 }
 
 type embedMarginator interface {
@@ -240,12 +313,9 @@ func asyncFetch(url string, img *gtk.Image, pp ...cache.Processor) {
 	must(img.SetFromPixbuf, icon)
 
 	go func() {
-		p, err := cache.GetImage(url, pp...)
-		if err != nil {
+		if err := cache.SetImage(url, img, pp...); err != nil {
 			log.Errorln("Failed to get image", url+":", err)
 			return
 		}
-
-		must(img.SetFromPixbuf, p)
 	}()
 }
