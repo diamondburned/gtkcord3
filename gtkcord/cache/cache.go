@@ -20,18 +20,19 @@ import (
 )
 
 var Client = http.Client{
-	Timeout: 2 * time.Second,
+	Timeout: 15 * time.Second,
 }
+
+var Path = filepath.Join(os.TempDir(), "gtkcord3")
 
 var store *diskv.Diskv
 
 func init() {
 	store = diskv.New(diskv.Options{
-		BasePath:          filepath.Join(os.TempDir(), "gtkcord3"),
+		BasePath:          Path,
 		AdvancedTransform: TransformURL,
 		InverseTransform:  InverseTransformURL,
 		CacheSizeMax:      5 * 1024 * 1024, // 5MB
-		Compression:       diskv.NewZlibCompressionLevel(7),
 	})
 }
 
@@ -67,16 +68,7 @@ func SanitizeString(str string) string {
 }
 
 func Get(url string) ([]byte, error) {
-	b, err := get(url, "")
-	if err != nil {
-		return nil, err
-	}
-
-	if err := store.Write(url, b); err != nil {
-		log.Errorln("Failed to store:", err)
-	}
-
-	return b, nil
+	return get(url, "")
 }
 
 func get(url, suffix string) ([]byte, error) {
@@ -86,11 +78,8 @@ func get(url, suffix string) ([]byte, error) {
 
 	b, err := store.Read(url + suffix)
 	if err == nil {
-		log.Infoln("[O] Cache hit:", url)
 		return b, nil
 	}
-
-	log.Infoln("[X] Cache MISS:", url)
 
 	r, err := Client.Get(url)
 	if err != nil {
@@ -111,6 +100,10 @@ func get(url, suffix string) ([]byte, error) {
 		return nil, errors.New("nil body")
 	}
 
+	if err := store.Write(url+suffix, b); err != nil {
+		log.Errorln("Failed to store:", err)
+	}
+
 	return b, nil
 }
 
@@ -124,15 +117,10 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 		b = Process(b, pp...)
 	}
 
-	if err := store.Write(url+"#image", b); err != nil {
-		log.Errorln("Failed to store:", err)
-	}
-
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
-	defer l.Close()
 
 	pixbuf, err := l.WriteAndReturnPixbuf(b)
 	if err != nil {
@@ -152,22 +140,28 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 		b = Process(b, pp...)
 	}
 
-	if err := store.Write(url+"#image", b); err != nil {
-		log.Errorln("Failed to store:", err)
-	}
-
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
 		return errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
-	defer l.Close()
 
-	pixbuf, err := l.WriteAndReturnPixbuf(b)
-	if err != nil {
-		return errors.Wrap(err, "Failed to load pixbux")
+	if _, err := l.Write(b); err != nil {
+		l.Unref()
+		return errors.Wrap(err, "Failed to write to pixbuf_loader")
 	}
 
-	semaphore.IdleMust(img.SetFromPixbuf, pixbuf)
+	if err := l.Close(); err != nil {
+		l.Unref()
+		return errors.Wrap(err, "Failed to close pixbuf_loader")
+	}
+
+	p, err := l.GetPixbuf()
+	if err != nil {
+		l.Unref()
+		return errors.Wrap(err, "Failed to get pixbuf from pixbuf_loader")
+	}
+
+	semaphore.IdleMust(img.SetFromPixbuf, p)
 
 	return nil
 }
@@ -182,22 +176,28 @@ func SetAnimation(url string, img *gtk.Image, pp ...Processor) error {
 		b = ProcessAnimation(b, pp...)
 	}
 
-	if err := store.Write(url+"#animation", b); err != nil {
-		log.Errorln("Failed to store:", err)
-	}
-
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
-		return errors.Wrap(err, "Failed to create a pixbuf_load")
+		return errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
-	defer l.Close()
 
-	pixbuf, err := l.WriteAndReturnPixbufAnimation(b)
+	if _, err := l.Write(b); err != nil {
+		l.Unref()
+		return errors.Wrap(err, "Failed to write to pixbuf_loader")
+	}
+
+	if err := l.Close(); err != nil {
+		l.Unref()
+		return errors.Wrap(err, "Failed to close pixbuf_loader")
+	}
+
+	p, err := l.GetAnimation()
 	if err != nil {
-		return errors.Wrap(err, "Failed to load animation")
+		l.Unref()
+		return errors.Wrap(err, "Failed to get pixbuf from pixbuf_loader")
 	}
 
-	semaphore.IdleMust(img.SetFromAnimation, pixbuf)
+	semaphore.IdleMust(img.SetFromAnimation, p)
 
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/disintegration/imaging"
 )
 
@@ -51,6 +52,7 @@ type Processor func(image.Image) image.Image
 func ProcessAnimation(data []byte, processors ...Processor) []byte {
 	GIF, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
+		log.Errorln("Go: Failed to decode GIF:", err)
 		return data
 	}
 
@@ -73,6 +75,7 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 	buf.Reset()
 
 	if err := gif.EncodeAll(buf, GIF); err != nil {
+		log.Errorln("Go: Failed to encode GIF:", err)
 		return data
 	}
 
@@ -86,6 +89,7 @@ var pngEncoder = png.Encoder{
 func Process(data []byte, processors ...Processor) []byte {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
+		log.Errorln("Go: Failed to decode image:", err)
 		return data
 	}
 
@@ -98,6 +102,7 @@ func Process(data []byte, processors ...Processor) []byte {
 	buf.Reset()
 
 	if err := pngEncoder.Encode(buf, img); err != nil {
+		log.Errorln("Go: Failed to encode PNG:", err)
 		return data
 	}
 

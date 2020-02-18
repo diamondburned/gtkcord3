@@ -1,6 +1,8 @@
 package gtkcord
 
 import (
+	"fmt"
+
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -11,7 +13,7 @@ const HeaderAvatarSize = 38
 
 type HeaderMenu struct {
 	ExtendedWidget
-	Menu   *gtk.MenuButton
+	Menu   *gtk.Popover
 	Avatar *gtk.Image
 	Name   *gtk.Label
 
@@ -29,19 +31,25 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	}
 	b.SetSizeRequest(IconSize+IconPadding*2, -1)
 
-	m, err := gtk.MenuButtonNew()
+	mb, err := gtk.MenuButtonNew()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create menu button")
 	}
-	m.SetHAlign(gtk.ALIGN_CENTER)
-	b.Add(m)
+	mb.SetHAlign(gtk.ALIGN_CENTER)
+	b.Add(mb)
 
 	i, err := gtk.ImageNewFromIconName("open-menu", gtk.ICON_SIZE_LARGE_TOOLBAR)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create avatar placeholder")
 	}
+	mb.Add(i)
 
-	m.Add(i)
+	m, err := gtk.PopoverNew(mb)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create menu")
+	}
+	mb.SetPopover(m)
+	mb.SetUsePopover(true)
 
 	hm := &HeaderMenu{
 		ExtendedWidget: b,
@@ -50,10 +58,13 @@ func newHeaderMenu() (*HeaderMenu, error) {
 
 	{ // header box
 
-		b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		b, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to create hamburger header box")
 		}
+		b.SetMarginTop(7)
+		b.SetMarginBottom(7)
+		b.SetSizeRequest(ChannelsWidth, -1)
 
 		i, err := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
 		if err != nil {
@@ -69,16 +80,12 @@ func newHeaderMenu() (*HeaderMenu, error) {
 		}
 		l.SetXAlign(0.0)
 		l.SetMarginStart(10)
+		l.SetMarginEnd(10)
 		b.Add(l)
 		hm.Name = l
 
-		c, err := gtk.PopoverMenuNew()
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to make popover menu")
-		}
-
-		c.Add(b)
-		m.SetPopover(&c.Popover)
+		b.ShowAll()
+		m.Add(b)
 	}
 
 	hm.ShowAll()
@@ -86,16 +93,19 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	return hm, nil
 }
 
-func (m *HeaderMenu) Refresh() error {
+func (m *HeaderMenu) Refresh() {
 	me := App.Me
 
-	m.Name.SetMarkup(escape(me.Username + "#" + me.Discriminator))
+	must(m.Name.SetMarkup, fmt.Sprintf(
+		"<span weight=\"bold\">%s</span>\n<span size=\"smaller\">#%s</span>",
+		escape(me.Username), me.Discriminator,
+	))
 
 	if me.Avatar != "" {
 		go m.UpdateAvatar(me.AvatarURL())
 	}
 
-	return nil
+	return
 }
 
 func (m *HeaderMenu) UpdateAvatar(url string) {
@@ -104,10 +114,12 @@ func (m *HeaderMenu) UpdateAvatar(url string) {
 
 	if !animated {
 		err = cache.SetImage(
-			url+"?size=64", m.Avatar, cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
+			url+"?size=64", m.Avatar,
+			cache.Resize(HeaderAvatarSize, HeaderAvatarSize), cache.Round)
 	} else {
 		err = cache.SetAnimation(
-			url+"?size=64", m.Avatar, cache.Resize(HeaderAvatarSize, HeaderAvatarSize))
+			url+"?size=64", m.Avatar,
+			cache.Resize(HeaderAvatarSize, HeaderAvatarSize), cache.Round)
 	}
 
 	if err != nil {

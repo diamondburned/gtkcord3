@@ -21,6 +21,7 @@ const (
 
 type Channels struct {
 	ExtendedWidget
+	Guild *Guild
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -35,6 +36,7 @@ type Channels struct {
 
 type Channel struct {
 	ExtendedWidget
+	Channels *Channels
 
 	Row   *gtk.ListBoxRow
 	Label *gtk.Label
@@ -79,6 +81,7 @@ func (g *Guild) loadChannels() error {
 	must(cs.Add, main)
 
 	g.Channels = &Channels{
+		Guild:          g,
 		ExtendedWidget: cs,
 		Scroll:         cs,
 		Main:           main,
@@ -111,6 +114,7 @@ func (g *Guild) loadChannels() error {
 	}
 
 	for _, ch := range g.Channels.Channels {
+		ch.Channels = g.Channels
 		must(cl.Add, ch)
 	}
 

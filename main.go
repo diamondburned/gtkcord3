@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord"
@@ -14,6 +15,11 @@ func main() {
 	var token = os.Getenv("TOKEN")
 	if token == "" {
 		log.Fatalln("No tokens given!")
+	}
+
+	api.UserAgent = "linux"
+	gateway.Identity = gateway.IdentifyProperties{
+		OS: "linux",
 	}
 
 	if err := gtkcord.Init(); err != nil {

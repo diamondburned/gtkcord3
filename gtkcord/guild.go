@@ -3,8 +3,10 @@ package gtkcord
 import (
 	"html"
 	"sort"
+	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -42,6 +44,9 @@ type Guild struct {
 	// nil if Folder
 	Channels *Channels
 	current  *Channel
+
+	requestingMembers  map[discord.Snowflake]struct{}
+	requestingMemMutex sync.Mutex
 }
 
 func newGuildsFromFolders() ([]*Guild, error) {
@@ -282,6 +287,43 @@ func (g *Guild) UpdateImage() {
 
 	must(g.Image.SetHAlign, gtk.ALIGN_CENTER)
 	must(g.Image.SetVAlign, gtk.ALIGN_CENTER)
+}
+
+func (g *Guild) requestMember(memID discord.Snowflake) {
+	g.requestingMemMutex.Lock()
+	defer g.requestingMemMutex.Unlock()
+
+	if g.requestingMembers == nil {
+		g.requestingMembers = map[discord.Snowflake]struct{}{}
+	} else {
+		if _, ok := g.requestingMembers[memID]; ok {
+			return
+		}
+	}
+
+	err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+		GuildID:   []discord.Snowflake{g.ID},
+		UserIDs:   []discord.Snowflake{memID},
+		Presences: true,
+	})
+
+	if err != nil {
+		log.Errorln("Failed to request guild members:", err)
+	}
+
+	g.requestingMembers[memID] = struct{}{}
+	return
+}
+
+func (g *Guild) requestedMember(memID discord.Snowflake) {
+	g.requestingMemMutex.Lock()
+	defer g.requestingMemMutex.Unlock()
+
+	if g.requestingMembers == nil {
+		g.requestingMembers = map[discord.Snowflake]struct{}{}
+	} else {
+		delete(g.requestingMembers, memID)
+	}
 }
 
 func escape(str string) string {

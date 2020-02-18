@@ -3,6 +3,7 @@ package gtkcord
 import (
 	"fmt"
 	"path"
+	"strconv"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
@@ -41,7 +42,9 @@ func NewAttachment(msg discord.Message) []ExtendedWidget {
 		}
 
 		w := newExtraImage(
-			att.Proxy,
+			sizeToURL(att.Proxy,
+				int(att.Width), int(att.Height),
+				EmbedMaxWidth, EmbedImgHeight),
 			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
 		)
 
@@ -109,6 +112,29 @@ func newExtraImage(url string, pp ...cache.Processor) ExtendedWidget {
 	asyncFetch(url, img, pp...)
 
 	return img
+}
+
+// https://stackoverflow.com/questions/3008772/how-to-smart-resize-a-displayed-image-to-original-aspect-ratio
+func sizeToURL(url string, w, h, maxW, maxH int) string {
+	if w > maxW && h > maxH {
+		return url
+	}
+
+	W := float64(w)
+	H := float64(h)
+
+	ratio := min(float64(maxW)/W, float64(maxH)/H)
+	w = int(W / ratio)
+	h = int(H / ratio)
+
+	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
+}
+
+func min(i, j float64) float64 {
+	if i < j {
+		return i
+	}
+	return j
 }
 
 func newImageEmbed(embed discord.Embed) ExtendedWidget {

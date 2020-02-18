@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -59,11 +60,12 @@ type application struct {
 	spinner   *gtk.Spinner
 	iconTheme *gtk.IconTheme
 
-	css    *gtk.CssProvider
-	parser *md.Parser
+	css       *gtk.CssProvider
+	parser    *md.Parser
+	clipboard *gtk.Clipboard
 
 	// used for events
-	busy sync.Mutex
+	busy sync.RWMutex
 	done chan struct{}
 }
 
@@ -92,10 +94,7 @@ func UseState(s *state.State) error {
 		return errors.Wrap(err, "Failed to get current user")
 	}
 	App.Me = u
-
-	if err := App.Header.Hamburger.Refresh(); err != nil {
-		return errors.Wrap(err, "Failed to refresh hamburger")
-	}
+	App.Header.Hamburger.Refresh()
 
 	{
 		gw, err := gtk.ScrolledWindowNew(nil, nil)
@@ -142,6 +141,11 @@ func UseState(s *state.State) error {
 	// })
 
 	App.hookEvents()
+
+	// Start the garbage collector:
+	// (Too unstable right now)
+	// go App.cleanUp()
+
 	App.wait()
 
 	return nil
@@ -173,6 +177,12 @@ func (a *application) init() error {
 			done <- errors.Wrap(err, "Failed to load CSS")
 			return
 		}
+
+		c, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
+		if err != nil {
+			log.Errorln("Failed to get clipboard:", err)
+		}
+		a.clipboard = c
 
 		w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 		if err != nil {
@@ -217,8 +227,9 @@ func (a *application) init() error {
 			done <- errors.Wrap(err, "Failed to create spinner box")
 			return
 		}
-		sbox.SetSizeRequest(50, 50)
 		sbox.SetVAlign(gtk.ALIGN_CENTER)
+		sbox.SetHAlign(gtk.ALIGN_CENTER)
+		sbox.SetSizeRequest(50, 50)
 		w.Add(sbox)
 		a.sbox = sbox
 
@@ -227,6 +238,8 @@ func (a *application) init() error {
 			done <- errors.Wrap(err, "Failed to create spinner")
 			return
 		}
+		s.SetVAlign(gtk.ALIGN_CENTER)
+		s.SetHAlign(gtk.ALIGN_CENTER)
 		s.SetSizeRequest(50, 50)
 		s.Start()
 		sbox.Add(s)
@@ -246,7 +259,6 @@ func (a *application) finalize() {
 	must(a.Window.Add, a.Grid)
 	must(a.Window.ShowAll)
 	must(a.spinner.Stop)
-	must(a.sbox.SetSizeRequest, ChannelsWidth, -1)
 }
 
 func (a *application) close() {
@@ -271,6 +283,8 @@ func (a *application) loadGuild(g *Guild) {
 }
 
 func (a *application) _loadGuild(g *Guild) {
+	must(a.Guilds.SetSensitive, false)
+
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
@@ -278,8 +292,8 @@ func (a *application) _loadGuild(g *Guild) {
 		must(a.Grid.Remove, a.Sidebar)
 	}
 
-	must(a.Guilds.SetSensitive, false)
 	must(a.spinner.Start)
+	must(a.sbox.SetSizeRequest, ChannelsWidth, -1)
 	must(a.setChannelCol, a.sbox)
 
 	if err := g.loadChannels(); err != nil {
@@ -310,23 +324,29 @@ func (a *application) _loadGuildDone(g *Guild) {
 }
 
 func (a *application) loadChannel(g *Guild, ch *Channel) {
+	must(g.Channels.Main.SetSensitive, false)
+	defer must(g.Channels.Main.SetSensitive, true)
+
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
-	if a.Messages != nil {
-		must(a.Grid.Remove, a.Messages)
+	old := a.Messages
+	if old != nil {
+		must(a.Grid.Remove, old)
+
+		if old == ch.Messages {
+			return
+		}
 	}
 
-	must(g.Channels.Main.SetSensitive, false)
-	must(a.spinner.Start)
-
 	a.Messages = nil
+
+	must(a.spinner.Start)
+	must(a.sbox.SetSizeRequest, -1, -1)
 	must(a.Grid.Attach, a.sbox, 4, 0, 1, 1)
 
 	// Run hook
 	a.Header.UpdateChannel(ch.Name, ch.Topic)
-
-	old := g.current
 
 	if err := g.GoTo(ch); err != nil {
 		must(a._loadChannelDone, g, ch)
@@ -340,16 +360,65 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	a.Messages = ch.Messages
 	must(a.Grid.Attach, ch.Messages, 4, 0, 1, 1)
 	must(ch.Messages.Show)
-
-	if old != nil && old.Messages != nil {
-		// old.Messages.Clear()
-	}
 }
 
 func (a *application) _loadChannelDone(g *Guild, ch *Channel) {
 	a.spinner.Stop()
 	a.Grid.Remove(a.sbox)
-	g.Channels.Main.SetSensitive(true)
+}
+
+func (a *application) cleanUp() {
+	for range time.Tick(30 * time.Second) {
+		a._cleanUp()
+	}
+}
+
+func (a *application) _cleanUp() {
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
+	if a.Guilds == nil {
+		return
+	}
+
+	for _, guild := range a.Guilds.Guilds {
+		if guild.Channels == nil {
+			continue
+		}
+
+		for _, channel := range guild.Channels.Channels {
+			if channel.Messages == nil {
+				continue
+			}
+			if channel.Messages == a.Messages {
+				continue
+			}
+
+			m := channel.Messages
+			m.guard.Lock()
+
+			var count = 0
+
+			for i, msg := range m.messages {
+				if msg == nil || msg.isBusy() {
+					continue
+				}
+				count++
+
+				m.Main.Remove(msg)
+				m.messages[i].main.Unref()
+				m.messages[i] = nil
+			}
+
+			m.guard.Unlock()
+
+			log.Infoln(
+				"Garbage collected", count,
+				"messages in channel",
+				channel.Name, "of guild", guild.Name,
+			)
+		}
+	}
 }
 
 func (a *application) wait() {

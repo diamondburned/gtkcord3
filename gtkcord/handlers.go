@@ -7,8 +7,8 @@ import (
 
 func (a *application) hookEvents() {
 	a.State.AddHandler(func(v interface{}) {
-		a.busy.Lock()
-		defer a.busy.Unlock()
+		a.busy.RLock()
+		defer a.busy.RUnlock()
 
 		switch v := v.(type) {
 		case *gateway.MessageCreateEvent:
@@ -21,6 +21,8 @@ func (a *application) hookEvents() {
 			onGuildUpdate(v)
 		case *gateway.MessageDeleteBulkEvent:
 			onMessageDeleteBulk(v)
+		case *gateway.GuildMembersChunkEvent:
+			onGuildMembersChunk(v)
 		}
 	})
 }
@@ -78,6 +80,27 @@ func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
 
 	for _, id := range m.IDs {
 		mw.Delete(id)
+	}
+}
+
+func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
+	mw, ok := App.Messages.(*Messages)
+	if !ok {
+		return
+	}
+
+	if c.GuildID != mw.Channel.Guild {
+		return
+	}
+
+	if guild := mw.Channel.Channels.Guild; guild != nil {
+		for _, m := range c.Members {
+			guild.requestedMember(m.User.ID)
+		}
+	}
+
+	for _, m := range c.Members {
+		mw.UpdateMessageAuthor(m)
 	}
 }
 

@@ -25,7 +25,7 @@ type Messages struct {
 	Messages *gtk.Box
 
 	messages []*Message
-	guard    sync.Mutex
+	guard    sync.RWMutex
 
 	Resetting atomic.Value
 
@@ -96,7 +96,9 @@ func (ch *Channel) loadMessages() error {
 	}
 
 	for _, w := range m.messages {
-		must(m.Messages.Remove, w)
+		if w != nil {
+			must(m.Messages.Remove, w)
+		}
 	}
 
 	// Allocate a new empty slice. This is a trade-off to re-using the old
@@ -107,23 +109,11 @@ func (ch *Channel) loadMessages() error {
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
 
-		var msg *Message
-
-		// See if we could find the message in our old list:
-		for _, w := range m.messages {
-			if w.ID == message.ID {
-				msg = w
-				break
-			}
+		msg, err := newMessage(message)
+		if err != nil {
+			return errors.Wrap(err, "Failed to render message")
 		}
-
-		if msg == nil {
-			w, err := newMessage(message)
-			if err != nil {
-				return errors.Wrap(err, "Failed to render message")
-			}
-			msg = w
-		}
+		msg.Messages = m
 
 		if shouldCondense(newMessages, message) {
 			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
@@ -173,18 +163,6 @@ func (ch *Channel) loadMessages() error {
 	return nil
 }
 
-func (m *Messages) Clear() {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	for _, w := range m.messages {
-		m.Messages.Remove(w)
-	}
-
-	// Set to nil so we don't keep the capacity.
-	// m.messages = nil
-}
-
 func (m *Messages) ShouldCondense(msg discord.Message) bool {
 	return shouldCondense(m.messages, msg)
 }
@@ -228,7 +206,7 @@ func (m *Messages) onSizeAlloc() {
 		return
 	}
 
-	log.Debugln("Scrolling because", max, "-", cur, "< 500, and loading =", loading)
+	// log.Debugln("Scrolling because", max, "-", cur, "< 500, and loading =", loading)
 
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)
@@ -249,6 +227,8 @@ func (m *Messages) Insert(message discord.Message) error {
 }
 
 func (m *Messages) insert(w *Message, message discord.Message) error {
+	w.Messages = m
+
 	semaphore.Go(func() {
 		w.UpdateAuthor(message.Author)
 		w.UpdateExtras(message)
@@ -275,7 +255,7 @@ func (m *Messages) insert(w *Message, message discord.Message) error {
 func (m *Messages) Update(update discord.Message) bool {
 	var target *Message
 
-	m.guard.Lock()
+	m.guard.RLock()
 	for _, message := range m.messages {
 		if false ||
 			(message.ID.Valid() && message.ID == update.ID) ||
@@ -285,7 +265,7 @@ func (m *Messages) Update(update discord.Message) bool {
 			break
 		}
 	}
-	m.guard.Unlock()
+	m.guard.RUnlock()
 
 	if target == nil {
 		return false
@@ -307,6 +287,17 @@ func (m *Messages) Update(update discord.Message) bool {
 	})
 
 	return true
+}
+
+func (m *Messages) UpdateMessageAuthor(n discord.Member) {
+	m.guard.RLock()
+	for _, message := range m.messages {
+		if message.AuthorID != n.User.ID {
+			continue
+		}
+		message.updateAuthorName(n)
+	}
+	m.guard.RUnlock()
 }
 
 func (m *Messages) Delete(id discord.Snowflake) bool {

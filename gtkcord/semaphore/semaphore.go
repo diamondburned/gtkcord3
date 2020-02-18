@@ -10,13 +10,11 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
 	"golang.org/x/sync/semaphore"
-
-	_ "github.com/ianlancetaylor/cgosymbolizer"
 )
 
 var MaxWorkers = runtime.GOMAXPROCS(0)
 
-var sema *semaphore.Weighted
+var sema = semaphore.NewWeighted(int64(MaxWorkers))
 
 var idleAdds = make(chan *idleCall, 0)
 var recvPool = sync.Pool{
@@ -33,28 +31,27 @@ type idleCall struct {
 }
 
 func init() {
-	glib.IdleAdd(func(idleAdds chan *idleCall) bool {
-		select {
-		case call := <-idleAdds:
-			log.Debugln(call.trace, "IdleAdd() called.")
-			now := time.Now()
+	go func() {
+		runtime.LockOSThread()
 
-			if fn, ok := call.fn.(func()); ok {
-				fn()
-				call.done <- nil
-			} else {
-				call.done <- call.fn.(reflect.Value).Call(call.args)
-			}
+		for call := range idleAdds {
+			glib.IdleAdd(func(call *idleCall) {
+				// log.Debugln(call.trace, "IdleAdd() called.")
+				now := time.Now()
 
-			if delta := time.Now().Sub(now); delta > time.Millisecond {
-				log.Infoln(call.trace, "took", time.Now().Sub(now))
-			}
+				if fn, ok := call.fn.(func()); ok {
+					fn()
+					call.done <- nil
+				} else {
+					call.done <- call.fn.(reflect.Value).Call(call.args)
+				}
 
-		default:
+				if delta := time.Now().Sub(now); delta > time.Millisecond {
+					log.Infoln(call.trace, "took", time.Now().Sub(now))
+				}
+			}, call)
 		}
-
-		return true
-	}, idleAdds)
+	}()
 }
 
 func idleAdd(trace string, fn interface{}, v ...interface{}) []reflect.Value {
@@ -92,50 +89,50 @@ func IdleNow(fn interface{}, v ...interface{}) []interface{} {
 	return interfaces
 }
 
-func IdleMust(fn interface{}, v ...interface{}) interface{} {
-	var trace = log.Trace(1)
+func Idle(fn interface{}, v ...interface{}) (interface{}, error) {
+	return idle(log.Trace(1), fn, v...)
+}
 
+func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
 	var values = idleAdd(trace, fn, v...)
 	switch len(values) {
 	case 2:
 		if v := values[1].Interface(); v != nil {
 			if err := v.(error); err != nil {
-				log.Panicln(trace, "callback returned err != nil:", err)
+				return nil, err
 			}
-
-			log.Errorln("Unknown second return:", v)
 		}
 
 		fallthrough
 	case 1:
-		return values[0].Interface()
+		return values[0].Interface(), nil
 	case 0:
-		return nil
+		return nil, nil
 	default:
 		log.Panicln(trace, "Unknown returns:", values)
-		return nil
+		return nil, nil
 	}
 }
 
-func Go(fn func()) {
-	if sema == nil {
-		sema = semaphore.NewWeighted(int64(MaxWorkers))
+func IdleMust(fn interface{}, v ...interface{}) interface{} {
+	var trace = log.Trace(1)
+
+	r, err := idle(trace, fn, v...)
+	if err != nil {
+		log.Panicln(trace, "callback returned err != nil:", err)
 	}
 
+	return r
+}
+
+func Go(fn func()) {
 	if err := sema.Acquire(context.TODO(), 1); err != nil {
-		log.Errorln("Semaphore: Failed to acquire shared semaphore:", err)
+		log.Panicln("Semaphore: Failed to acquire shared semaphore:", err)
 		return
 	}
 
 	go func() {
 		defer sema.Release(1)
-
-		fn()
-	}()
-}
-
-func GoNow(fn func()) {
-	go func() {
 		fn()
 	}()
 }

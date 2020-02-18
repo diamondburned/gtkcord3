@@ -2,6 +2,7 @@ package gtkcord
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -25,7 +26,6 @@ type Message struct {
 	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
-	Author   string
 
 	Timestamp time.Time
 	Edited    time.Time
@@ -55,6 +55,8 @@ type Message struct {
 
 	Condensed      bool
 	CondenseOffset time.Duration
+
+	busy atomic.Value
 }
 
 func newMessage(m discord.Message) (*Message, error) {
@@ -62,6 +64,8 @@ func newMessage(m discord.Message) (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	defer message.markBusy()()
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
@@ -136,6 +140,7 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
 	}
 
+	defer message.markBusy()()
 	InjectCSS(message.avatar, "avatar", "")
 
 	// What the fuck?
@@ -175,6 +180,16 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 	return message, nil
 }
 
+func (m *Message) markBusy() func() {
+	m.busy.Store(true)
+	return func() { m.busy.Store(false) }
+}
+
+func (m *Message) isBusy() bool {
+	v, ok := m.busy.Load().(bool)
+	return v && ok
+}
+
 func (m *Message) getAvailable() bool {
 	return must(m.rightBottom.GetOpacity).(float64) > 0.9
 }
@@ -197,6 +212,8 @@ func (m *Message) setOffset(last *Message) {
 }
 
 func (m *Message) SetCondensed(condensed bool) {
+	defer m.markBusy()()
+
 	if m.Condensed == condensed {
 		return
 	}
@@ -239,23 +256,38 @@ func (m *Message) setCondensed() {
 	m.main.Add(m.right)
 }
 
+func (m *Message) updateAuthorName(n discord.Member) {
+	defer m.markBusy()()
+
+	var name = bold(escape(n.User.Username))
+
+	if n.Nick != "" {
+		name = bold(escape(n.Nick))
+	}
+
+	if g, err := App.State.Guild(m.Messages.Channel.Guild); err == nil {
+		if color := discord.MemberColor(*g, n); color > 0 {
+			name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
+		}
+	}
+
+	must(m.author.SetMarkup, name)
+}
+
 func (m *Message) UpdateAuthor(user discord.User) {
-	if guildID := App.Guild.ID; guildID.Valid() {
-		var name = escape(user.Username)
+	defer m.markBusy()()
 
-		n, err := App.State.MemberDisplayName(guildID, user.ID)
-		if err == nil {
-			name = bold(escape(n))
-
-			if color := App.State.MemberColor(guildID, user.ID); color > 0 {
-				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
-			}
+	if guildID := m.Messages.Channel.Guild; guildID.Valid() {
+		n, err := App.State.Store.Member(guildID, user.ID)
+		if err != nil {
+			m.Messages.Channel.Channels.Guild.requestMember(user.ID)
+		} else {
+			// Update the author name:
+			m.updateAuthorName(*n)
+			m.markBusy()
 		}
-
-		if m.Author != name {
-			m.Author = name
-			must(m.author.SetMarkup, name)
-		}
+	} else {
+		must(m.author.SetMarkup, bold(escape(user.Username)))
 	}
 
 	var url = user.AvatarURL()
@@ -287,6 +319,8 @@ func (m *Message) UpdateAuthor(user discord.User) {
 }
 
 func (m *Message) updateContent(s string) {
+	defer m.markBusy()()
+
 	m.assertContent()
 	must(func(m *Message) {
 		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
@@ -295,6 +329,8 @@ func (m *Message) updateContent(s string) {
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
+	defer m.markBusy()()
+
 	if update.Content != "" {
 		m.assertContent()
 		App.parser.ParseMessage(&update, []byte(update.Content), m.content)
@@ -320,6 +356,8 @@ func (m *Message) assertContent() {
 }
 
 func (m *Message) UpdateExtras(update discord.Message) {
+	defer m.markBusy()()
+
 	must(func(m *Message) {
 		for _, extra := range m.extras {
 			m.rightBottom.Remove(extra)
