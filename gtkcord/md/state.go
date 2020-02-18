@@ -220,7 +220,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 		}
 
 		if !s.hasText {
-			if i > 0 {
+			if i := len(matchesList) - 1; i > 0 {
 				last = matchesList[i-1][0].to
 			}
 

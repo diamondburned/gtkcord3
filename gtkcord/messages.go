@@ -156,7 +156,6 @@ func (ch *Channel) loadMessages() error {
 	go func() {
 		// When we're done resetting, set this to false.
 		wg.Wait()
-		must(m.onSizeAlloc)
 		m.Resetting.Store(false)
 	}()
 
@@ -206,10 +205,10 @@ func (m *Messages) onSizeAlloc() {
 		return
 	}
 
-	// log.Debugln("Scrolling because", max, "-", cur, "< 500, and loading =", loading)
-
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)
+
+	m.Resetting.Store(false)
 }
 
 func (m *Messages) Insert(message discord.Message) error {

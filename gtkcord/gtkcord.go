@@ -332,11 +332,11 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 
 	old := a.Messages
 	if old != nil {
-		must(a.Grid.Remove, old)
-
 		if old == ch.Messages {
 			return
 		}
+
+		must(a.Grid.Remove, old)
 	}
 
 	a.Messages = nil
