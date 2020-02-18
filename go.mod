@@ -16,7 +16,12 @@ require (
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/peterbourgon/diskv/v3 v3.0.0
 	github.com/pkg/errors v0.8.1
+	github.com/sergi/go-diff v1.1.0 // indirect
+	golang.org/x/mod v0.2.0 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
+	golang.org/x/tools v0.0.0-20200216192241-b320d3a0f5a2 // indirect
+	golang.org/x/tools/gopls v0.3.2 // indirect
+	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
