@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -82,8 +83,9 @@ func (p *Parser) Tag(attr Attribute) *gtk.TextTag {
 func (p *Parser) ColorTag(attr Attribute, color string) *gtk.TextTag {
 	var key = attr.StringInt() + color
 
-	if t, err := p.table.Lookup(key); err == nil {
-		return t
+	v, err := semaphore.Idle(p.table.Lookup, key)
+	if err == nil {
+		return v.(*gtk.TextTag)
 	}
 
 	t, err := gtk.TextTagNew(key)
@@ -120,7 +122,7 @@ func (p *Parser) ColorTag(attr Attribute, color string) *gtk.TextTag {
 		t.SetProperty("size", "smaller")
 	}
 
-	p.table.Add(t)
+	semaphore.IdleMust(p.table.Add, t)
 	return t
 }
 

@@ -96,6 +96,7 @@ func newHeader() (*Header, error) {
 	chtopic.SetEllipsize(pango.ELLIPSIZE_END)
 	chtopic.SetXAlign(0.0)
 	chtopic.SetMarginStart(20)
+	chtopic.SetSingleLineMode(true)
 
 	g.PackStart(chname, false, false, 0)
 	g.PackStart(chtopic, false, false, 0)

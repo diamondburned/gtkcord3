@@ -1,10 +1,12 @@
 package gtkcord
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -117,8 +119,39 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	}
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
-	shift := evKey.State()&shiftMask == shiftMask
-	enter := evKey.KeyVal() == gdk.KEY_Return
+	const cntrlMask = uint(gdk.GDK_CONTROL_MASK)
+
+	var (
+		shift = evKey.State()&shiftMask == shiftMask
+		cntrl = evKey.State()&cntrlMask == cntrlMask
+		enter = evKey.KeyVal() == gdk.KEY_Return
+		vkey  = evKey.KeyVal() == gdk.KEY_v
+	)
+
+	// If Ctrl-V is pressed:
+	if cntrl && vkey && App.clipboard != nil {
+		// Is there an image in the clipboard?
+		if !App.clipboard.WaitIsImageAvailable() {
+			// No.
+			return false
+		}
+		// Yes.
+
+		p, err := App.clipboard.WaitForImage()
+		if err != nil {
+			log.Errorln("Failed to get image from clipboard:", err)
+			return false
+		}
+		text := i.popContent()
+
+		semaphore.Go(func() {
+			if err := i.paste(text, p); err != nil {
+				log.Errorln("Failed to paste message:", err)
+			}
+		})
+
+		return true
+	}
 
 	// If Enter isn't being pressed:
 	if !enter {
@@ -132,6 +165,19 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return true
 	}
 
+	text := i.popContent()
+
+	// Shift is not being held, send the message:
+	semaphore.Go(func() {
+		if err := i.send(text); err != nil {
+			log.Errorln("Failed to paste message:", err)
+		}
+	})
+
+	return true
+}
+
+func (i *MessageInput) popContent() string {
 	var (
 		iStart = i.InputBuf.GetStartIter()
 		iEnd   = i.InputBuf.GetEndIter()
@@ -140,23 +186,15 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	text, err := i.InputBuf.GetText(iStart, iEnd, true)
 	if err != nil {
 		log.Errorln("Failed to get chatbox text buffer:", err)
-		return true
+		return ""
 	}
 
 	if text == "" {
-		return true
+		return ""
 	}
 
 	i.InputBuf.Delete(iStart, iEnd)
-
-	// Shift is not being held, send the message:
-	semaphore.Go(func() {
-		if err := i.send(text); err != nil {
-			log.Println("Failed to send message:", err)
-		}
-	})
-
-	return true
+	return text
 }
 
 func (i *MessageInput) makeMessage(content string) discord.Message {
@@ -169,6 +207,16 @@ func (i *MessageInput) makeMessage(content string) discord.Message {
 		Timestamp: discord.Timestamp(time.Now()),
 		Nonce:     randString(),
 	}
+}
+
+func (i *MessageInput) paste(content string, pic *gdk.Pixbuf) error {
+	path := filepath.Join(cache.Path, "clipboard.png")
+
+	if err := pic.SavePNG(path, 9); err != nil {
+		return errors.Wrap(err, "Failed to save PNG to "+path+":")
+	}
+
+	return i._upload(content, []string{path})
 }
 
 func (i *MessageInput) send(content string) error {
@@ -195,27 +243,9 @@ func (i *MessageInput) send(content string) error {
 }
 
 func (i *MessageInput) upload(paths []string) {
-	var text string
-
-	must(func(i *MessageInput) {
-		var (
-			iStart = i.InputBuf.GetStartIter()
-			iEnd   = i.InputBuf.GetEndIter()
-		)
-
-		t, err := i.InputBuf.GetText(iStart, iEnd, true)
-		if err != nil {
-			log.Errorln("Failed to get chatbox text buffer:", err)
-		}
-
-		if t != "" {
-			i.InputBuf.Delete(iStart, iEnd)
-			text = t
-		}
-	}, i)
-
+	text := must(i.popContent).(string)
 	if err := i._upload(text, paths); err != nil {
-		logWrap(err, "Failed to upload")
+		log.Fatalln("Failed to upload:", err)
 	}
 }
 

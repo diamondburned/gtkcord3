@@ -25,7 +25,7 @@ type Messages struct {
 	Messages *gtk.Box
 
 	messages []*Message
-	guard    sync.Mutex
+	guard    sync.RWMutex
 
 	Resetting atomic.Value
 
@@ -95,6 +95,12 @@ func (ch *Channel) loadMessages() error {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
+	for _, w := range m.messages {
+		if w != nil {
+			must(m.Messages.Remove, w)
+		}
+	}
+
 	// Allocate a new empty slice. This is a trade-off to re-using the old
 	// slice to re-use messages.
 	var newMessages = make([]*Message, 0, DefaultFetch)
@@ -103,23 +109,11 @@ func (ch *Channel) loadMessages() error {
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
 
-		var msg *Message
-
-		// See if we could find the message in our old list:
-		for _, w := range m.messages {
-			if w.ID == message.ID {
-				msg = w
-				break
-			}
+		msg, err := newMessage(message)
+		if err != nil {
+			return errors.Wrap(err, "Failed to render message")
 		}
-
-		if msg == nil {
-			w, err := newMessage(message)
-			if err != nil {
-				return errors.Wrap(err, "Failed to render message")
-			}
-			msg = w
-		}
+		msg.Messages = m
 
 		if shouldCondense(newMessages, message) {
 			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
@@ -128,56 +122,44 @@ func (ch *Channel) loadMessages() error {
 
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
+		must(msg.setCondensed)
+		must(m.Messages.Add, msg)
 	}
 
-	must(func() {
-		for _, w := range m.messages {
-			m.Messages.Remove(w)
-		}
-
-		for _, msg := range newMessages {
-			msg.setCondensed()
-			m.Messages.Add(msg)
-		}
-
-		// Set the new slice.
-		m.messages = newMessages
-		m.ShowAll()
-	})
+	// Set the new slice.
+	m.messages = newMessages
+	must(m.ShowAll)
 
 	// Hack around the mutex
 	copiedMsg := append([]*Message{}, newMessages...)
 
-	go func() {
-		// Revert to latest is last, earliest is first.
-		for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
-			messages[L], messages[R] = messages[R], messages[L]
-		}
+	// Revert to latest is last, earliest is first.
+	for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
+		messages[L], messages[R] = messages[R], messages[L]
+	}
 
-		// Iterate in reverse, so latest first.
-		for i := len(copiedMsg) - 1; i >= 0; i-- {
-			message, discordm := copiedMsg[i], messages[i]
+	var wg sync.WaitGroup
+
+	// Iterate in reverse, so latest first.
+	for i := len(copiedMsg) - 1; i >= 0; i-- {
+		message, discordm := copiedMsg[i], messages[i]
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
 			message.UpdateAuthor(discordm.Author)
 			message.UpdateExtras(discordm)
-		}
+		}()
+	}
 
-		// We're done resetting, set this to false.
+	go func() {
+		// When we're done resetting, set this to false.
+		wg.Wait()
 		m.Resetting.Store(false)
 	}()
 
 	return nil
-}
-
-func (m *Messages) Clear() {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	for _, w := range m.messages {
-		m.Messages.Remove(w)
-	}
-
-	// Set to nil so we don't keep the capacity.
-	// m.messages = nil
 }
 
 func (m *Messages) ShouldCondense(msg discord.Message) bool {
@@ -207,7 +189,7 @@ func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
 func (m *Messages) onSizeAlloc() {
 	adj, err := m.Viewport.GetVAdjustment()
 	if err != nil {
-		logWrap(err, "Failed to get viewport")
+		log.Errorln("Failed to get viewport:", err)
 		return
 	}
 
@@ -223,10 +205,10 @@ func (m *Messages) onSizeAlloc() {
 		return
 	}
 
-	log.Debugln("Scrolling because", max, "-", cur, "< 500, and loading =", loading)
-
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)
+
+	m.Resetting.Store(false)
 }
 
 func (m *Messages) Insert(message discord.Message) error {
@@ -244,6 +226,8 @@ func (m *Messages) Insert(message discord.Message) error {
 }
 
 func (m *Messages) insert(w *Message, message discord.Message) error {
+	w.Messages = m
+
 	semaphore.Go(func() {
 		w.UpdateAuthor(message.Author)
 		w.UpdateExtras(message)
@@ -270,7 +254,7 @@ func (m *Messages) insert(w *Message, message discord.Message) error {
 func (m *Messages) Update(update discord.Message) bool {
 	var target *Message
 
-	m.guard.Lock()
+	m.guard.RLock()
 	for _, message := range m.messages {
 		if false ||
 			(message.ID.Valid() && message.ID == update.ID) ||
@@ -280,7 +264,7 @@ func (m *Messages) Update(update discord.Message) bool {
 			break
 		}
 	}
-	m.guard.Unlock()
+	m.guard.RUnlock()
 
 	if target == nil {
 		return false
@@ -302,6 +286,17 @@ func (m *Messages) Update(update discord.Message) bool {
 	})
 
 	return true
+}
+
+func (m *Messages) UpdateMessageAuthor(n discord.Member) {
+	m.guard.RLock()
+	for _, message := range m.messages {
+		if message.AuthorID != n.User.ID {
+			continue
+		}
+		message.updateAuthorName(n)
+	}
+	m.guard.RUnlock()
 }
 
 func (m *Messages) Delete(id discord.Snowflake) bool {

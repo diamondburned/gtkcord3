@@ -37,16 +37,12 @@ func Pixbuf(img image.Image) (*gdk.Pixbuf, error) {
 
 	l, err := gdk.PixbufLoaderNewWithType("png")
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create an SVG pixbuf loader")
+		return nil, errors.Wrap(err, "Failed to create an icon pixbuf loader")
 	}
 
-	if _, err := l.Write(buf.Bytes()); err != nil {
-		return nil, errors.Wrap(err, "Failed to set SVG to pixbuf")
-	}
-
-	p, err := l.GetPixbuf()
+	p, err := l.WriteAndReturnPixbuf(buf.Bytes())
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get the pixbuf SVG")
+		return nil, errors.Wrap(err, "Failed to set icon to pixbuf")
 	}
 
 	return p, nil
@@ -61,18 +57,14 @@ func PixbufIcon(img image.Image, size int) (*gdk.Pixbuf, error) {
 
 	l, err := gdk.PixbufLoaderNewWithType("png")
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create an SVG pixbuf loader")
+		return nil, errors.Wrap(err, "Failed to create an icon pixbuf loader")
 	}
 
 	l.SetSize(size, size)
 
-	if _, err := l.Write(buf.Bytes()); err != nil {
-		return nil, errors.Wrap(err, "Failed to set SVG to pixbuf")
-	}
-
-	p, err := l.GetPixbuf()
+	p, err := l.WriteAndReturnPixbuf(buf.Bytes())
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get the pixbuf SVG")
+		return nil, errors.Wrap(err, "Failed to set icon to pixbuf")
 	}
 
 	return p, nil

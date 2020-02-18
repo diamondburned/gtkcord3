@@ -87,9 +87,12 @@ func (s *mdState) switchTree(i int) {
 			s.matches[i][2].str,
 		))
 
+		if i == 0 {
+			code = code[1:] // trim trailing newline
+		}
+
 		semaphore.IdleMust(func() {
-			end := s.buf.GetEndIter()
-			s.buf.InsertMarkup(end, code)
+			s.buf.InsertMarkup(s.buf.GetEndIter(), code)
 		})
 
 	case len(s.matches[i][3].str) > 0:
@@ -217,7 +220,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
 		}
 
 		if !s.hasText {
-			if i > 0 {
+			if i := len(matchesList) - 1; i > 0 {
 				last = matchesList[i-1][0].to
 			}
 

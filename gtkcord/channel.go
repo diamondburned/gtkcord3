@@ -21,6 +21,7 @@ const (
 
 type Channels struct {
 	ExtendedWidget
+	Guild *Guild
 
 	Scroll *gtk.ScrolledWindow
 	Main   *gtk.Box
@@ -35,6 +36,7 @@ type Channels struct {
 
 type Channel struct {
 	ExtendedWidget
+	Channels *Channels
 
 	Row   *gtk.ListBoxRow
 	Label *gtk.Label
@@ -79,6 +81,7 @@ func (g *Guild) loadChannels() error {
 	must(cs.Add, main)
 
 	g.Channels = &Channels{
+		Guild:          g,
 		ExtendedWidget: cs,
 		Scroll:         cs,
 		Main:           main,
@@ -111,6 +114,7 @@ func (g *Guild) loadChannels() error {
 	}
 
 	for _, ch := range g.Channels.Channels {
+		ch.Channels = g.Channels
 		must(cl.Add, ch)
 	}
 
@@ -193,13 +197,14 @@ func (chs *Channels) UpdateBanner(url string) {
 		must(chs.Main.PackStart, chs.BannerImage, false, false, uint(0))
 	}
 
-	p, err := cache.GetImage(url+"?size=512", cache.Resize(ChannelsWidth, BannerHeight))
-	if err != nil {
+	if err := cache.SetImage(
+		url+"?size=512",
+		chs.BannerImage,
+		cache.Resize(ChannelsWidth, BannerHeight)); err != nil {
+
 		logWrap(err, "Failed to get the pixbuf guild icon")
 		return
 	}
-
-	must(chs.BannerImage.SetFromPixbuf, p)
 }
 
 func (chs *Channels) First() int {

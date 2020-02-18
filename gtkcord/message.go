@@ -2,6 +2,7 @@ package gtkcord
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -14,6 +15,8 @@ import (
 const (
 	AvatarSize    = 42 // gtk.ICON_SIZE_DND
 	AvatarPadding = 10
+
+	AvatarFallbackURL = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
 )
 
 type Message struct {
@@ -23,7 +26,6 @@ type Message struct {
 	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
-	Author   string
 
 	Timestamp time.Time
 	Edited    time.Time
@@ -35,7 +37,6 @@ type Message struct {
 
 	// Left side, nil everything if compact mode
 	avatar *gtk.Image
-	pixbuf *Pixbuf
 	pbURL  string
 
 	// Right container:
@@ -54,6 +55,8 @@ type Message struct {
 
 	Condensed      bool
 	CondenseOffset time.Duration
+
+	busy atomic.Value
 }
 
 func newMessage(m discord.Message) (*Message, error) {
@@ -61,6 +64,8 @@ func newMessage(m discord.Message) (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	defer message.markBusy()()
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
@@ -135,6 +140,7 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
 	}
 
+	defer message.markBusy()()
 	InjectCSS(message.avatar, "avatar", "")
 
 	// What the fuck?
@@ -174,6 +180,16 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 	return message, nil
 }
 
+func (m *Message) markBusy() func() {
+	m.busy.Store(true)
+	return func() { m.busy.Store(false) }
+}
+
+func (m *Message) isBusy() bool {
+	v, ok := m.busy.Load().(bool)
+	return v && ok
+}
+
 func (m *Message) getAvailable() bool {
 	return must(m.rightBottom.GetOpacity).(float64) > 0.9
 }
@@ -196,6 +212,8 @@ func (m *Message) setOffset(last *Message) {
 }
 
 func (m *Message) SetCondensed(condensed bool) {
+	defer m.markBusy()()
+
 	if m.Condensed == condensed {
 		return
 	}
@@ -238,26 +256,45 @@ func (m *Message) setCondensed() {
 	m.main.Add(m.right)
 }
 
-func (m *Message) UpdateAuthor(user discord.User) {
-	if guildID := App.Guild.ID; guildID.Valid() {
-		var name = escape(user.Username)
+func (m *Message) updateAuthorName(n discord.Member) {
+	defer m.markBusy()()
 
-		n, err := App.State.MemberDisplayName(guildID, user.ID)
-		if err == nil {
-			name = bold(escape(n))
+	var name = bold(escape(n.User.Username))
 
-			if color := App.State.MemberColor(guildID, user.ID); color > 0 {
-				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
-			}
-		}
+	if n.Nick != "" {
+		name = bold(escape(n.Nick))
+	}
 
-		if m.Author != name {
-			m.Author = name
-			must(m.author.SetMarkup, name)
+	if g, err := App.State.Guild(m.Messages.Channel.Guild); err == nil {
+		if color := discord.MemberColor(*g, n); color > 0 {
+			name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 		}
 	}
 
+	must(m.author.SetMarkup, name)
+}
+
+func (m *Message) UpdateAuthor(user discord.User) {
+	defer m.markBusy()()
+
+	if guildID := m.Messages.Channel.Guild; guildID.Valid() {
+		n, err := App.State.Store.Member(guildID, user.ID)
+		if err != nil {
+			m.Messages.Channel.Channels.Guild.requestMember(user.ID)
+		} else {
+			// Update the author name:
+			m.updateAuthorName(*n)
+			m.markBusy()
+		}
+	} else {
+		must(m.author.SetMarkup, bold(escape(user.Username)))
+	}
+
 	var url = user.AvatarURL()
+	if url == "" {
+		url = AvatarFallbackURL
+	}
+
 	var animated = url[:len(url)-4] == ".gif"
 
 	if m.pbURL == url {
@@ -265,30 +302,25 @@ func (m *Message) UpdateAuthor(user discord.User) {
 	}
 	m.pbURL = url
 
+	var err error
+
 	if !animated {
-		p, err := cache.GetImage(url+"?size=64",
+		err = cache.SetImage(url+"?size=64", m.avatar,
 			cache.Resize(AvatarSize, AvatarSize), cache.Round)
-		if err != nil {
-			log.Errorln("Failed to get the pixbuf guild icon:", err)
-			return
-		}
-
-		m.pixbuf = &Pixbuf{p, nil}
 	} else {
-		p, err := cache.GetAnimation(url+"?size=64",
+		err = cache.SetAnimation(url+"?size=64", m.avatar,
 			cache.Resize(AvatarSize, AvatarSize), cache.Round)
-		if err != nil {
-			log.Errorln("Failed to get the pixbuf guild animation:", err)
-			return
-		}
-
-		m.pixbuf = &Pixbuf{nil, p}
 	}
 
-	m.pixbuf.Set(m.avatar)
+	if err != nil {
+		log.Errorln("Failed to get the pixbuf guild icon:", err)
+		return
+	}
 }
 
 func (m *Message) updateContent(s string) {
+	defer m.markBusy()()
+
 	m.assertContent()
 	must(func(m *Message) {
 		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
@@ -297,8 +329,12 @@ func (m *Message) updateContent(s string) {
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
-	m.assertContent()
-	App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	defer m.markBusy()()
+
+	if update.Content != "" {
+		m.assertContent()
+		App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+	}
 }
 
 func (m *Message) assertContent() {
@@ -320,6 +356,8 @@ func (m *Message) assertContent() {
 }
 
 func (m *Message) UpdateExtras(update discord.Message) {
+	defer m.markBusy()()
+
 	must(func(m *Message) {
 		for _, extra := range m.extras {
 			m.rightBottom.Remove(extra)
@@ -328,6 +366,7 @@ func (m *Message) UpdateExtras(update discord.Message) {
 
 	m.extras = m.extras[:0]
 	m.extras = append(m.extras, NewEmbed(update)...)
+	m.extras = append(m.extras, NewAttachment(update)...)
 
 	must(func(m *Message) {
 		for _, extra := range m.extras {
