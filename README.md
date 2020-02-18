@@ -45,15 +45,18 @@ go run .
 	- [X] Emojis
 	- [X] Async loading
 	- [ ] Message reactions
-	- [ ] Rich content
-		- [ ] Images
+	- [X] Rich content
+		- [X] Images
 		- [ ] Embeds
-- [ ] Send messages
+- [X] Send messages
+  - [X] Text
+  - [X] Images & files
+	- [ ] Emojis
 	- [ ] Message reactions
 - [ ] Graphical login
 	- [ ] Graphical logout
-- [ ] Hamburger menu
-	- [ ] User avatar view
+- [X] Hamburger menu
+	- [X] User avatar view
 	- [ ] Change the visibility of your online state
 		- [ ] Custom Rich Presence
 		- [ ] Rich Presence IPC server
