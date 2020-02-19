@@ -48,7 +48,7 @@ func NewAttachment(msg discord.Message) []ExtendedWidget {
 			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
 		)
 
-		if w, ok := w.(embedMarginator); ok {
+		if w, ok := w.(marginator); ok {
 			must(w.SetMarginStart, 0)
 		}
 
@@ -310,14 +310,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
 	return main
 }
 
-type embedMarginator interface {
-	SetMarginStart(int)
-	SetMarginEnd(int)
-	SetMarginTop(int)
-	SetMarginBottom(int)
-}
-
-func embedSetMargin(w embedMarginator) {
+func embedSetMargin(w marginator) {
 	w.SetMarginStart(EmbedMargin * 2)
 	w.SetMarginEnd(EmbedMargin * 2)
 	w.SetMarginTop(EmbedMargin)

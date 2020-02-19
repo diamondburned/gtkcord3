@@ -59,18 +59,25 @@ func logWrap(err error, str string) {
 	log.Errorln(str+":", err)
 }
 
-func margin4(w *gtk.Widget, top, bottom, left, right int) {
+type marginator interface {
+	SetMarginStart(int)
+	SetMarginEnd(int)
+	SetMarginTop(int)
+	SetMarginBottom(int)
+}
+
+func margin4(w marginator, top, bottom, left, right int) {
 	w.SetMarginTop(top)
 	w.SetMarginBottom(bottom)
 	w.SetMarginStart(left)
 	w.SetMarginEnd(right)
 }
 
-func margin2(w *gtk.Widget, top, left int) {
+func margin2(w marginator, top, left int) {
 	margin4(w, top, top, left, left)
 }
 
-func margin(w *gtk.Widget, sz int) {
+func margin(w marginator, sz int) {
 	margin2(w, sz, sz)
 }
 
