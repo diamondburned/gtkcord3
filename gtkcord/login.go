@@ -10,15 +10,12 @@ import (
 
 type Login struct {
 	*gtk.Box
-	Email    *gtk.Entry
-	Password *gtk.Entry
-	Submit   *gtk.Button
-	Error    *gtk.Label
-}
+	Token  *gtk.Entry
+	Submit *gtk.Button
+	Error  *gtk.Label
 
-type TOTPDialog struct {
-	*gtk.Dialog
-	Input *gtk.Entry
+	// Button that opens discordlogin
+	InfoButton *gtk.Button
 }
 
 func NewLogin() (*Login, error) {
@@ -29,16 +26,11 @@ func NewLogin() (*Login, error) {
 	err.SetSingleLineMode(true)
 	err.SetMarginBottom(10)
 
-	email, _ := gtk.EntryNew()
-	email.SetMarginBottom(15)
-	email.SetInputPurpose(gtk.INPUT_PURPOSE_EMAIL)
-	email.SetPlaceholderText("Email")
-
-	password, _ := gtk.EntryNew()
-	password.SetInputPurpose(gtk.INPUT_PURPOSE_PASSWORD)
-	password.SetPlaceholderText("Password")
-	password.SetVisibility(false)
-	password.SetInvisibleChar('*')
+	token, _ := gtk.EntryNew()
+	token.SetMarginBottom(15)
+	token.SetInputPurpose(gtk.INPUT_PURPOSE_PASSWORD)
+	token.SetPlaceholderText("Token")
+	token.SetInvisibleChar('*')
 
 	submit, _ := gtk.ButtonNewWithLabel("Login")
 
