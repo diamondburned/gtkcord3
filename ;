@@ -79,7 +79,16 @@ func (l *Login) login() error {
 		return errors.Wrap(err, "Failed to get text")
 	}
 
-	return l.tryToken(token)
+	s, err := state.New(token)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a new Discord session")
+	}
+
+	if err := s.Open(); err != nil {
+		return errors.Wrap(err, "Failed to connect to Discord")
+	}
+
+	return nil
 }
 
 func (l *Login) DiscordLogin() {
@@ -93,34 +102,8 @@ func (l *Login) discordLogin() error {
 		return errors.Wrap(err, "DiscordLogin cannot be found")
 	}
 
-	cmd := &exec.Cmd{Path: path}
+	cmd := &exec.Cmd{Path: "discordlogin"}
 	cmd.Stderr = os.Stderr
-
-	// UI will actually block during this time.
-
-	b, err := cmd.Output()
-	if err != nil {
-		return errors.Wrap(err, "DiscordLogin failed")
-	}
-
-	if len(b) == 0 {
-		return errors.New("DiscordLogin returned nothing, check Console.")
-	}
-
-	return l.tryToken(string(b))
-}
-
-func (l *Login) tryToken(token string) error {
-	s, err := state.New(token)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a new Discord session")
-	}
-
-	if err := s.Open(); err != nil {
-		return errors.Wrap(err, "Failed to connect to Discord")
-	}
-
-	return nil
 }
 
 func LookPathExtras(file string) (string, error) {
