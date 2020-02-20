@@ -7,7 +7,7 @@ require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/d2r2/gotk3 v0.0.0-20191124065233-86f7ea85405b
 	github.com/davecgh/go-spew v1.1.1
-	github.com/diamondburned/arikawa v0.1.4-0.20200217211148-7b24f584961b
+	github.com/diamondburned/arikawa v0.1.4-0.20200220033600-587d36fd6ca8
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
 	github.com/gotk3/gotk3 v0.4.0
@@ -17,6 +17,8 @@ require (
 	github.com/peterbourgon/diskv/v3 v3.0.0
 	github.com/pkg/errors v0.8.1
 	github.com/sergi/go-diff v1.1.0 // indirect
+	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
+	github.com/zalando/go-keyring v0.0.0-20200121091418-667557018717
 	golang.org/x/mod v0.2.0 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect

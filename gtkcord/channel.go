@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -20,7 +21,7 @@ const (
 )
 
 type Channels struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
 	Guild *Guild
 
 	Scroll *gtk.ScrolledWindow
@@ -35,7 +36,7 @@ type Channels struct {
 }
 
 type Channel struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
 	Channels *Channels
 
 	Row   *gtk.ListBoxRow
@@ -76,7 +77,7 @@ func (g *Guild) loadChannels() error {
 
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	must(main.SetSizeRequest, ChannelsWidth, -1)
-	InjectCSS(main, "channels", "")
+	gtkutils.InjectCSS(main, "channels", "")
 
 	must(cs.Add, main)
 

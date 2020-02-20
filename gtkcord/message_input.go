@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -15,7 +16,7 @@ import (
 )
 
 type MessageInput struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
 	Messages *Messages
 
 	Main *gtk.Box

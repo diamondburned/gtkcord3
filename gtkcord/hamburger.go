@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -12,7 +13,8 @@ import (
 const HeaderAvatarSize = 38
 
 type HeaderMenu struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
+
 	Menu   *gtk.Popover
 	Avatar *gtk.Image
 	Name   *gtk.Label

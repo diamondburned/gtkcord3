@@ -1,14 +1,14 @@
 package gtkcord
 
 import (
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
 )
 
 type Header struct {
-	gtk.IWidget
-	Bar  *gtk.HeaderBar
+	gtkutils.ExtendedWidget
 	Main *gtk.Box
 
 	// Grid 1, on top of guilds
@@ -25,18 +25,10 @@ type Header struct {
 }
 
 func newHeader() (*Header, error) {
-	h, err := gtk.HeaderBarNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create headerbar")
-	}
-	h.SetShowCloseButton(true)
-
 	g, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create grid")
 	}
-
-	h.PackStart(g)
 
 	/*
 	 * Grid 1
@@ -102,13 +94,12 @@ func newHeader() (*Header, error) {
 	g.PackStart(chtopic, false, false, 0)
 
 	return &Header{
-		IWidget:      h,
-		Bar:          h,
-		Main:         g,
-		Hamburger:    hamburger,
-		GuildName:    label,
-		ChannelName:  chname,
-		ChannelTopic: chtopic,
+		ExtendedWidget: g,
+		Main:           g,
+		Hamburger:      hamburger,
+		GuildName:      label,
+		ChannelName:    chname,
+		ChannelTopic:   chtopic,
 	}, nil
 }
 
