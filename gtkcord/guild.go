@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -27,7 +28,7 @@ type Guilds struct {
 }
 
 type Guild struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
 	Guilds *Guilds
 
 	Row *gtk.ListBoxRow
@@ -130,7 +131,7 @@ func newGuilds() (*Guilds, error) {
 
 	l := must(gtk.ListBoxNew).(*gtk.ListBox)
 	must(l.SetActivateOnSingleClick, true)
-	InjectCSS(l, "guilds", "")
+	gtkutils.InjectCSS(l, "guilds", "")
 
 	g := &Guilds{
 		ListBox: l,
@@ -201,7 +202,7 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	must(r.SetVAlign, gtk.ALIGN_CENTER)
 	must(r.SetTooltipMarkup, bold(g.Name))
 	must(r.SetActivatable, true)
-	InjectCSS(r, "guild", "")
+	gtkutils.InjectCSS(r, "guild", "")
 
 	i := must(gtk.ImageNewFromIconName, "user-available", gtk.ICON_SIZE_DIALOG).(*gtk.Image)
 	must(r.SetHAlign, gtk.ALIGN_CENTER)

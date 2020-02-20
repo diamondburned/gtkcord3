@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -15,7 +16,7 @@ import (
 const DefaultFetch = 25
 
 type Messages struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
 	Channel *Channel
 
 	Main *gtk.Box

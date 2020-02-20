@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -20,7 +21,7 @@ const (
 )
 
 type Message struct {
-	ExtendedWidget
+	gtkutils.ExtendedWidget
 	Messages *Messages
 
 	Nonce    string
@@ -50,8 +51,8 @@ type Message struct {
 	// Right-bottom container, has message contents:
 	rightBottom *gtk.Box
 	textView    gtk.IWidget
-	content     *gtk.TextBuffer  // view declared implicitly
-	extras      []ExtendedWidget // embeds, images, etc
+	content     *gtk.TextBuffer           // view declared implicitly
+	extras      []gtkutils.ExtendedWidget // embeds, images, etc
 
 	Condensed      bool
 	CondenseOffset time.Duration
@@ -141,7 +142,7 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 	}
 
 	defer message.markBusy()()
-	InjectCSS(message.avatar, "avatar", "")
+	gtkutils.InjectCSS(message.avatar, "avatar", "")
 
 	// What the fuck?
 	must(func() {

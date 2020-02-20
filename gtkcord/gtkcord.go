@@ -3,53 +3,55 @@ package gtkcord
 import (
 	"math/rand"
 	"net/http"
-	"os"
-	"os/signal"
-	"runtime"
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
-var (
-	HTTPClient = http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	App *application
-)
-
-func init() {
-	runtime.LockOSThread()
-	// runtime.GOMAXPROCS(1)
+var HTTPClient = http.Client{
+	Timeout: 10 * time.Second,
 }
 
-type ExtendedWidget interface {
-	gtk.IWidget
-	SetSensitive(bool)
-	GetSensitive() bool
-	Show()
-	ShowAll()
+var App *application
+
+func discordSettings() {
+	discord.DefaultEmbedColor = 0x808080
+	api.UserAgent = "linux"
+	gateway.Identity = gateway.IdentifyProperties{
+		OS: "linux",
+	}
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+	discordSettings()
+
+	App = new(application)
 }
 
 type application struct {
+	gtkutils.ExtendedWidget
+
+	Grid *gtk.Grid
+
 	State *state.State
 	Me    *discord.User
 
-	Window *gtk.Window
 	Header *Header
-	Grid   *gtk.Grid
 
 	// Dynamic sidebars and main pages
-	Sidebar  ExtendedWidget
-	Messages ExtendedWidget
+	Sidebar  gtkutils.ExtendedWidget
+	Messages gtkutils.ExtendedWidget
 
 	// Stuff
 	Guilds *Guilds
@@ -70,23 +72,70 @@ type application struct {
 }
 
 func Init() error {
-	rand.Seed(time.Now().UnixNano())
-	discord.DefaultEmbedColor = 0x808080
-
-	App = new(application)
-	App.done = make(chan struct{})
-
-	if err := App.init(); err != nil {
-		return errors.Wrap(err, "Failed to start Gtk")
+	if App.done != nil {
+		return nil
 	}
 
-	// Things beyond this point must use must() or gdk.IdleAdd.
+	App.done = make(chan struct{})
+	a := App
+
+	g, err := gtk.GridNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create grid")
+	}
+	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
+	g.SetRowHomogeneous(true)
+	a.Grid = g
+
+	// Instead of adding the above grid, we should add the spinning circle.
+	sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create spinner box")
+	}
+	sbox.SetVAlign(gtk.ALIGN_CENTER)
+	sbox.SetHAlign(gtk.ALIGN_CENTER)
+	sbox.SetSizeRequest(50, 50)
+
+	// Add the spinner into the window instead of the spinner:
+	window.Display(sbox)
+	a.sbox = sbox
+
+	s, err := gtk.SpinnerNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create spinner")
+	}
+	s.SetVAlign(gtk.ALIGN_CENTER)
+	s.SetHAlign(gtk.ALIGN_CENTER)
+	s.SetSizeRequest(50, 50)
+	s.Start()
+
+	sbox.Add(s)
+	a.spinner = s
+
 	return nil
 }
 
-func UseState(s *state.State) error {
+func Ready(s *state.State) error {
+	// Set gateway error functions to our own:
+	s.Gateway.ErrorLog = func(err error) {
+		log.Errorln("Discord error:", err)
+	}
+	s.StateLog = func(err error) {
+		log.Debugln("State error:", err)
+	}
+
+	must(window.Resize, 1000, 850)
+
+	// Create a new header placeholder:
+	h, err := newHeader()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create header")
+	}
+	App.Header = h
+	must(window.HeaderDisplay, h)
+
+	// Set variables, etc.
 	App.State = s
-	App.Window.Remove(App.sbox)
 	App.parser = md.NewParser(s)
 
 	u, err := s.Me()
@@ -120,7 +169,10 @@ func UseState(s *state.State) error {
 	}
 
 	// Finalize the window:
-	App.finalize()
+	must(window.Display, App.Grid)
+	must(window.ShowAll)
+
+	must(App.spinner.Stop)
 
 	// semaphore.Go(func() {
 	// 	for _, g := range App.Guilds.Guilds {
@@ -146,8 +198,6 @@ func UseState(s *state.State) error {
 	// (Too unstable right now)
 	// go App.cleanUp()
 
-	App.wait()
-
 	return nil
 }
 
@@ -166,108 +216,13 @@ func (a *application) ChannelID() discord.Snowflake {
 	return mw.Channel.ID
 }
 
-func (a *application) init() error {
-	var done = make(chan error)
-
-	go func() {
-		runtime.LockOSThread()
-		gtk.Init(nil)
-
-		if err := a.loadCSS(); err != nil {
-			done <- errors.Wrap(err, "Failed to load CSS")
-			return
-		}
-
-		c, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
-		if err != nil {
-			log.Errorln("Failed to get clipboard:", err)
-		}
-		a.clipboard = c
-
-		w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-		if err != nil {
-			done <- errors.Wrap(err, "Failed to create window")
-			return
-		}
-		w.Connect("destroy", func() {
-			a.close()
-			gtk.MainQuit()
-			close(a.done)
-		})
-		w.SetDefaultSize(1000, 750)
-		a.Window = w
-
-		h, err := newHeader()
-		if err != nil {
-			done <- errors.Wrap(err, "Failed to create header")
-			return
-		}
-		w.SetTitlebar(h)
-		a.Header = h
-
-		i, err := gtk.IconThemeGetDefault()
-		if err != nil {
-			done <- errors.Wrap(err, "Can't get Gtk icon theme")
-			return
-		}
-		a.iconTheme = i
-
-		g, err := gtk.GridNew()
-		if err != nil {
-			done <- errors.Wrap(err, "Failed to create grid")
-			return
-		}
-		g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
-		g.SetRowHomogeneous(true)
-		a.Grid = g
-
-		// Instead of adding the above grid, we should add the spinning circle.
-		sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		if err != nil {
-			done <- errors.Wrap(err, "Failed to create spinner box")
-			return
-		}
-		sbox.SetVAlign(gtk.ALIGN_CENTER)
-		sbox.SetHAlign(gtk.ALIGN_CENTER)
-		sbox.SetSizeRequest(50, 50)
-		w.Add(sbox)
-		a.sbox = sbox
-
-		s, err := gtk.SpinnerNew()
-		if err != nil {
-			done <- errors.Wrap(err, "Failed to create spinner")
-			return
-		}
-		s.SetVAlign(gtk.ALIGN_CENTER)
-		s.SetHAlign(gtk.ALIGN_CENTER)
-		s.SetSizeRequest(50, 50)
-		s.Start()
-		sbox.Add(s)
-		a.spinner = s
-		w.ShowAll()
-
-		done <- nil
-
-		gtk.Main()
-	}()
-
-	return <-done
-}
-
-func (a *application) finalize() {
-	must(a.Window.Remove, a.spinner)
-	must(a.Window.Add, a.Grid)
-	must(a.Window.ShowAll)
-	must(a.spinner.Stop)
-}
-
 func (a *application) close() {
 	if err := a.State.Close(); err != nil {
 		log.Errorln("Failed to close Discord:", err)
 	}
 }
 
-func (a *application) setChannelCol(w ExtendedWidget) {
+func (a *application) setChannelCol(w gtkutils.ExtendedWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
@@ -418,15 +373,5 @@ func (a *application) _cleanUp() {
 				channel.Name, "of guild", guild.Name,
 			)
 		}
-	}
-}
-
-func (a *application) wait() {
-	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt)
-
-	select {
-	case <-sig:
-	case <-a.done:
 	}
 }

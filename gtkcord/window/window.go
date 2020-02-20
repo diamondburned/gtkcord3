@@ -1,0 +1,117 @@
+package window
+
+import (
+	"os"
+	"os/signal"
+	"runtime"
+
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gtk"
+	"github.com/pkg/errors"
+)
+
+var Window struct {
+	*gtk.Window
+	Widget gtkutils.ExtendedWidget
+
+	Header *Header
+
+	CSS       *gtk.CssProvider
+	Clipboard *gtk.Clipboard
+	IconTheme *gtk.IconTheme
+
+	Closer func()
+
+	done chan struct{}
+}
+
+func Init() error {
+	if Window.Window != nil {
+		return nil
+	}
+
+	runtime.LockOSThread()
+	gtk.Init(nil)
+
+	Window.Closer = func() {}
+	Window.done = make(chan struct{})
+
+	if err := loadCSS(); err != nil {
+		return errors.Wrap(err, "Failed to load CSS")
+	}
+
+	w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create window")
+	}
+	Window.Window = w
+
+	w.Connect("destroy", func() {
+		gtk.MainQuit()
+		Window.Closer()
+
+		close(Window.done)
+	})
+
+	// w.SetVAlign(gtk.ALIGN_CENTER)
+	// w.SetHAlign(gtk.ALIGN_CENTER)
+	// w.SetDefaultSize(500, 250)
+
+	c, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get clipboard")
+	}
+	Window.Clipboard = c
+
+	i, err := gtk.IconThemeGetDefault()
+	if err != nil {
+		return errors.Wrap(err, "Can't get Gtk icon theme")
+	}
+	Window.IconTheme = i
+
+	if err := initHeader(); err != nil {
+		return errors.Wrap(err, "Failed to make a headerbar")
+	}
+
+	go func() {
+		runtime.LockOSThread()
+		gtk.Main()
+	}()
+
+	return nil
+}
+
+func Blur() {
+	Window.SetSensitive(false)
+}
+func Unblur() {
+	Window.SetSensitive(true)
+}
+
+func Resize(w, h int) {
+	Window.Window.Resize(w, h)
+}
+
+func Display(w gtkutils.ExtendedWidget) {
+	if Window.Widget != nil {
+		Window.Window.Remove(Window.Widget)
+	}
+
+	Window.Widget = w
+	Window.Window.Add(w)
+}
+
+func ShowAll() {
+	Window.Window.ShowAll()
+}
+
+func Wait() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt)
+
+	select {
+	case <-Window.done:
+	case <-sig:
+	}
+}

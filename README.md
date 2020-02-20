@@ -2,7 +2,7 @@
 
 A lightweight Discord client which uses GTK3 for the user interface.
 
-![Screenshot of gtkcord](https://cdn.discordapp.com/attachments/520263044891279381/677030848830111744/unknown.png)
+![Screenshot of gtkcord](.readme-resources/images/screenshot1.png)
 
 ## It's time to ditch the Discord Electron application (soon).
 
@@ -47,13 +47,13 @@ go run .
 	- [ ] Message reactions
 	- [X] Rich content
 		- [X] Images
-		- [ ] Embeds
+		- [x] Embeds
 - [X] Send messages
   - [X] Text
   - [X] Images & files
 	- [ ] Emojis
 	- [ ] Message reactions
-- [ ] Graphical login
+- [x] Graphical login
 	- [ ] Graphical logout
 - [X] Hamburger menu
 	- [X] User avatar view

@@ -8,6 +8,7 @@ import (
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -25,7 +26,7 @@ func gostring(p unsafe.Pointer) string
 
 func SpawnUploader(callback func(absolutePath []string)) {
 	dialog := must(gtk.FileChooserDialogNewWith2Buttons,
-		"Upload File", App.Window,
+		"Upload File", window.Window,
 		gtk.FILE_CHOOSER_ACTION_OPEN,
 		"Cancel", gtk.RESPONSE_CANCEL,
 		"Upload", gtk.RESPONSE_ACCEPT,

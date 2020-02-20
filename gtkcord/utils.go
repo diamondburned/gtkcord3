@@ -3,49 +3,13 @@ package gtkcord
 import (
 	"math/rand"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
 var must = semaphore.IdleMust
-
-/*
-func must(fn interface{}, args ...interface{}) {
-	var trace = log.Trace(1)
-	// var err error
-
-	switch len(args) {
-	case 0:
-		switch fn := fn.(type) {
-		case func() bool:
-			semaphore.IdleAdd(func() {
-				log.Debugln(trace, "IdleAdd() called.")
-				fn()
-			})
-		case func():
-			semaphore.IdleAdd(func() {
-				log.Debugln(trace, "IdleAdd() called.")
-				fn()
-			})
-		default:
-			log.Panicln("Unknown callback type")
-		}
-
-	case 1:
-		fnV := reflect.ValueOf(fn)
-		argV := reflect.ValueOf(args[0])
-
-		semaphore.IdleAdd(func() {
-			log.Debugln(trace, "IdleAdd() called.")
-			fnV.Call([]reflect.Value{argV})
-		})
-
-	default:
-		log.Panicln("BUG: >1 arguments given to must()")
-	}
-}
-*/
 
 func idleWait(fn func()) {
 	must(fn)
@@ -59,19 +23,16 @@ func logWrap(err error, str string) {
 	log.Errorln(str+":", err)
 }
 
-func margin4(w *gtk.Widget, top, bottom, left, right int) {
-	w.SetMarginTop(top)
-	w.SetMarginBottom(bottom)
-	w.SetMarginStart(left)
-	w.SetMarginEnd(right)
+func margin4(w gtkutils.Marginator, top, bottom, left, right int) {
+	gtkutils.Margin4(w, top, bottom, left, right)
 }
 
-func margin2(w *gtk.Widget, top, left int) {
-	margin4(w, top, top, left, left)
+func margin2(w gtkutils.Marginator, top, left int) {
+	gtkutils.Margin2(w, top, left)
 }
 
-func margin(w *gtk.Widget, sz int) {
-	margin2(w, sz, sz)
+func margin(w gtkutils.Marginator, sz int) {
+	gtkutils.Margin(w, sz)
 }
 
 func randString() string {

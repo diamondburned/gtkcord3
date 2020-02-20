@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -27,10 +28,10 @@ const (
 	`
 )
 
-func NewAttachment(msg discord.Message) []ExtendedWidget {
+func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 	// Discord's supported formats
 	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
-	var widgets = make([]ExtendedWidget, 0, len(msg.Attachments))
+	var widgets = make([]gtkutils.ExtendedWidget, 0, len(msg.Attachments))
 
 	for _, att := range msg.Attachments {
 		if att.Width == 0 || att.Height == 0 {
@@ -48,7 +49,7 @@ func NewAttachment(msg discord.Message) []ExtendedWidget {
 			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
 		)
 
-		if w, ok := w.(embedMarginator); ok {
+		if w, ok := w.(gtkutils.Marginator); ok {
 			must(w.SetMarginStart, 0)
 		}
 
@@ -70,12 +71,12 @@ func validExt(url string, exts []string) bool {
 	return false
 }
 
-func NewEmbed(msg discord.Message) []ExtendedWidget {
+func NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 	if len(msg.Embeds) == 0 {
 		return nil
 	}
 
-	var embeds = make([]ExtendedWidget, 0, len(msg.Embeds))
+	var embeds = make([]gtkutils.ExtendedWidget, 0, len(msg.Embeds))
 
 	for _, embed := range msg.Embeds {
 		w := newEmbed(msg, embed)
@@ -89,7 +90,7 @@ func NewEmbed(msg discord.Message) []ExtendedWidget {
 	return embeds
 }
 
-func newEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
+func newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	switch embed.Type {
 	case discord.NormalEmbed:
 		return newNormalEmbed(msg, embed)
@@ -103,7 +104,7 @@ func newEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
 	return nil
 }
 
-func newExtraImage(url string, pp ...cache.Processor) ExtendedWidget {
+func newExtraImage(url string, pp ...cache.Processor) gtkutils.ExtendedWidget {
 	img := must(gtk.ImageNew).(*gtk.Image)
 	must(img.SetVAlign, gtk.ALIGN_START)
 	must(img.SetHAlign, gtk.ALIGN_START)
@@ -127,14 +128,14 @@ func sizeToURL(url string, w, h, maxW, maxH int) string {
 	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
 }
 
-func newImageEmbed(embed discord.Embed) ExtendedWidget {
+func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
 	return newExtraImage(
 		embed.Thumbnail.Proxy,
 		cache.Resize(EmbedMaxWidth, EmbedImgHeight),
 	)
 }
 
-func newNormalEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
+func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	must(main.SetHAlign, gtk.ALIGN_START)
 
@@ -305,19 +306,12 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) ExtendedWidget {
 		))
 	}
 
-	InjectCSS(main, "embed", fmt.Sprintf(EmbedMainCSS, embed.Color))
+	gtkutils.InjectCSS(main, "embed", fmt.Sprintf(EmbedMainCSS, embed.Color))
 
 	return main
 }
 
-type embedMarginator interface {
-	SetMarginStart(int)
-	SetMarginEnd(int)
-	SetMarginTop(int)
-	SetMarginBottom(int)
-}
-
-func embedSetMargin(w embedMarginator) {
+func embedSetMargin(w gtkutils.Marginator) {
 	w.SetMarginStart(EmbedMargin * 2)
 	w.SetMarginEnd(EmbedMargin * 2)
 	w.SetMarginTop(EmbedMargin)
