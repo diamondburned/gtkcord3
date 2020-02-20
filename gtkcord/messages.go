@@ -116,14 +116,15 @@ func (ch *Channel) loadMessages() error {
 		}
 		msg.Messages = m
 
+		var condensed = false
 		if shouldCondense(newMessages, message) {
 			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
-			msg.Condensed = true
+			condensed = true
 		}
 
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
-		must(msg.setCondensed)
+		must(msg.SetCondensed, condensed)
 		must(m.Messages.Add, msg)
 	}
 
