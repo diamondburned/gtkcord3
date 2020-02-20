@@ -34,14 +34,11 @@ func LoadKeyring() (*state.State, error) {
 
 	// If it is, override it in the keyring and use it:
 	if token != "" {
-		// Override:
-		keyring.Set(token)
-
 		return login.CreateState(token)
 	}
 
 	// Does the keyring have the token?
-	// token = keyring.Get()
+	token = keyring.Get()
 
 	// Yes.
 	if token != "" {
