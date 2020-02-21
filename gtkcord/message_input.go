@@ -270,15 +270,11 @@ func (i *MessageInput) _upload(content string, paths []string) error {
 		log.Errorln("Failed to add messages to be uploaded:", err)
 	}
 
-	n, err := App.State.SendMessageComplex(m.ChannelID, s)
+	_, err = App.State.SendMessageComplex(m.ChannelID, s)
 	if err != nil {
 		i.Messages.deleteNonce(m.Nonce)
 		return errors.Wrap(err, "Failed to upload message")
 	}
-	n.Nonce = m.Nonce
-
 	must(w.rightBottom.Remove, u)
-	i.Messages.Update(*n)
-
 	return nil
 }
