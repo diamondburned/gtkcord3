@@ -49,6 +49,7 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 		"image-x-generic-symbolic",
 		gtk.ICON_SIZE_LARGE_TOOLBAR,
 	)
+	bOriginal.SetTooltipText("Open Original")
 	bOriginal.SetMarginStart(10)
 	bOriginal.SetHAlign(gtk.ALIGN_START)
 
@@ -56,6 +57,7 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 		"window-close-symbolic",
 		gtk.ICON_SIZE_LARGE_TOOLBAR,
 	)
+	bExit.SetTooltipText("Close")
 	bExit.SetMarginEnd(10)
 	bExit.SetHAlign(gtk.ALIGN_END)
 
@@ -104,15 +106,9 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 }
 
 func (od *PreviewDialog) Open() {
-	od.OpenOriginal.SetSensitive(false)
-
-	go func() {
-		if err := open.Run(od.URL); err != nil {
-			log.Errorln("Failed to open image URL:", err)
-		}
-
-		semaphore.IdleMust(od.OpenOriginal.SetSensitive, true)
-	}()
+	if err := open.Run(od.URL); err != nil {
+		log.Errorln("Failed to open image URL:", err)
+	}
 }
 
 func (pd *PreviewDialog) Fetch(w, h int) {
