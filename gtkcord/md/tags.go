@@ -7,8 +7,10 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
+	"github.com/skratchdot/open-golang/open"
 )
 
 type Attribute uint16
@@ -76,16 +78,54 @@ func (a Attribute) String() string {
 	return strings.Join(attrs, ", ")
 }
 
+func (p *Parser) Hyperlink(url string) *gtk.TextTag {
+	return semaphore.IdleMust(p.hyperlink, url).(*gtk.TextTag)
+}
+
+func (p *Parser) hyperlink(url string) *gtk.TextTag {
+	v, err := p.table.Lookup("link_" + url)
+	if err == nil {
+		return v
+	}
+
+	t, err := gtk.TextTagNew("link_" + url)
+	if err != nil {
+		log.Panicln("Failed to create new hyperlink tag:", err)
+	}
+
+	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
+	t.SetProperty("foreground", "#3F7CE0")
+	t.Connect("event", func(_ *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
+		evKey := gdk.EventKeyNewFromEvent(ev)
+		if evKey.Type() != gdk.EVENT_BUTTON_RELEASE {
+			return
+		}
+
+		go func() {
+			if err := open.Run(url); err != nil {
+				log.Errorln("Failed to open image URL:", err)
+			}
+		}()
+	})
+
+	p.table.Add(t)
+	return t
+}
+
 func (p *Parser) Tag(attr Attribute) *gtk.TextTag {
 	return p.ColorTag(attr, "")
 }
 
 func (p *Parser) ColorTag(attr Attribute, color string) *gtk.TextTag {
+	return semaphore.IdleMust(p.colorTag, attr, color).(*gtk.TextTag)
+}
+
+func (p *Parser) colorTag(attr Attribute, color string) *gtk.TextTag {
 	var key = attr.StringInt() + color
 
-	v, err := semaphore.Idle(p.table.Lookup, key)
+	v, err := p.table.Lookup(key)
 	if err == nil {
-		return v.(*gtk.TextTag)
+		return v
 	}
 
 	t, err := gtk.TextTagNew(key)
@@ -106,7 +146,7 @@ func (p *Parser) ColorTag(attr Attribute, color string) *gtk.TextTag {
 		t.SetProperty("style", pango.STYLE_ITALIC)
 	}
 	if attr.Has(AttrUnderline) {
-		t.SetProperty("weight", pango.UNDERLINE_SINGLE)
+		t.SetProperty("underline", pango.UNDERLINE_SINGLE)
 	}
 	if attr.Has(AttrStrikethrough) {
 		t.SetProperty("strikethrough", true)
@@ -122,7 +162,7 @@ func (p *Parser) ColorTag(attr Attribute, color string) *gtk.TextTag {
 		t.SetProperty("size", "smaller")
 	}
 
-	semaphore.IdleMust(p.table.Add, t)
+	p.table.Add(t)
 	return t
 }
 

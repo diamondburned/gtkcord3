@@ -106,8 +106,10 @@ func (s *mdState) switchTree(i int) {
 		}
 
 	case len(s.matches[i][5].str) > 0:
-		// TODO URLs
-		s.insertWithTag(s.matches[i][5].str, s.tagWithColor("cyan"))
+		s.insertWithTag(
+			s.matches[i][5].str,
+			s.p.Hyperlink(string(s.matches[i][5].str)),
+		)
 
 	case len(s.matches[i][9].str) > 0:
 		// Emojis

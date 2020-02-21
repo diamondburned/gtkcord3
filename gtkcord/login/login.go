@@ -125,8 +125,8 @@ func (l *Login) error(err error) {
 }
 
 func (l *Login) Login() {
-	window.Blur()
-	defer window.Unblur()
+	l.Box.SetSensitive(false)
+	defer l.Box.SetSensitive(true)
 
 	if err := l.login(); err != nil {
 		log.Errorln("Failed to login:", err)

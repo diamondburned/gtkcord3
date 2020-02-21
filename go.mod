@@ -23,8 +23,8 @@ require (
 	golang.org/x/mod v0.2.0 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
-	golang.org/x/tools v0.0.0-20200216192241-b320d3a0f5a2 // indirect
-	golang.org/x/tools/gopls v0.3.2 // indirect
+	golang.org/x/tools v0.0.0-20200221191710-57f3fb51f507 // indirect
+	golang.org/x/tools/gopls v0.1.8-0.20200221191710-57f3fb51f507 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
