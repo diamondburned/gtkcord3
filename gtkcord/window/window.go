@@ -13,6 +13,7 @@ import (
 
 var Window struct {
 	*gtk.Window
+	Root   *gdk.Window
 	Widget gtkutils.ExtendedWidget
 
 	Header *Header
@@ -22,6 +23,9 @@ var Window struct {
 	IconTheme *gtk.IconTheme
 
 	Closer func()
+
+	CursorDefault *gdk.Cursor
+	CursorPointer *gdk.Cursor
 
 	done chan struct{}
 }
@@ -37,7 +41,22 @@ func Init() error {
 	Window.Closer = func() {}
 	Window.done = make(chan struct{})
 
-	if err := loadCSS(); err != nil {
+	d, err := gdk.DisplayGetDefault()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get default GDK display")
+	}
+	s, err := d.GetDefaultScreen()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get default screen")
+	}
+
+	root, err := s.GetRootWindow()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get root window")
+	}
+	Window.Root = root
+
+	if err := loadCSS(s); err != nil {
 		return errors.Wrap(err, "Failed to load CSS")
 	}
 
@@ -74,6 +93,15 @@ func Init() error {
 		return errors.Wrap(err, "Failed to make a headerbar")
 	}
 
+	Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a default cursor")
+	}
+	Window.CursorPointer, err = gdk.CursorNewFromName(d, "pointer")
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a pointer cursor")
+	}
+
 	go func() {
 		runtime.LockOSThread()
 		gtk.Main()
@@ -87,6 +115,13 @@ func Blur() {
 }
 func Unblur() {
 	Window.SetSensitive(true)
+}
+
+func SetPointerCursor() {
+	Window.Root.SetCursor(Window.CursorPointer)
+}
+func SetDefaultCursor() {
+	Window.Root.SetCursor(Window.CursorDefault)
 }
 
 func Resize(w, h int) {

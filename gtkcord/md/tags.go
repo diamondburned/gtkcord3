@@ -96,8 +96,8 @@ func (p *Parser) hyperlink(url string) *gtk.TextTag {
 	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
 	t.SetProperty("foreground", "#3F7CE0")
 	t.Connect("event", func(_ *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
-		evKey := gdk.EventKeyNewFromEvent(ev)
-		if evKey.Type() != gdk.EVENT_BUTTON_RELEASE {
+		evKey := gdk.EventButtonNewFromEvent(ev)
+		if evKey.Type() != gdk.EVENT_BUTTON_RELEASE || evKey.Button() != 1 {
 			return
 		}
 
