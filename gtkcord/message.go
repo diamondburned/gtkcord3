@@ -349,6 +349,7 @@ func (m *Message) assertContent() {
 		must(msgTv.SetWrapMode, gtk.WRAP_WORD_CHAR)
 		must(msgTv.SetCursorVisible, false)
 		must(msgTv.SetEditable, false)
+		must(msgTv.SetCanFocus, false)
 
 		// Add in what's not covered by SetCondensed.
 		must(m.rightBottom.Add, msgTv)

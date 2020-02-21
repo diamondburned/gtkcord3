@@ -28,6 +28,41 @@ const (
 	`
 )
 
+func newExtraImage(proxy, direct string, pp ...cache.Processor) gtkutils.ExtendedWidget {
+	img := must(gtk.ImageNew).(*gtk.Image)
+	must(img.SetVAlign, gtk.ALIGN_START)
+	must(img.SetHAlign, gtk.ALIGN_START)
+	must(embedSetMargin, img)
+
+	evb := must(gtk.EventBoxNew).(*gtk.EventBox)
+	must(evb.Add, img)
+	must(evb.Connect, "button-release-event", func() {
+		SpawnPreviewDialog(proxy, direct)
+	})
+
+	asyncFetch(proxy, img, pp...)
+
+	return evb
+}
+
+func maxSize(w, h, maxW, maxH int) (int, int) {
+	if w > h {
+		h = h * maxW / w
+		w = maxW
+	} else {
+		w = w * maxH / h
+		h = maxH
+	}
+
+	return w, h
+}
+
+// https://stackoverflow.com/questions/3008772/how-to-smart-resize-a-displayed-image-to-original-aspect-ratio
+func sizeToURL(url string, w, h, maxW, maxH int) string {
+	w, h = maxSize(w, h, maxW, maxH)
+	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
+}
+
 func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 	// Discord's supported formats
 	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -42,13 +77,13 @@ func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 			continue
 		}
 
-		w := newExtraImage(
-			sizeToURL(att.Proxy,
-				int(att.Width), int(att.Height),
-				EmbedMaxWidth, EmbedImgHeight),
-			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
+		proxyURL := sizeToURL(
+			att.Proxy,
+			int(att.Width), int(att.Height),
+			EmbedMaxWidth, EmbedImgHeight,
 		)
 
+		w := newExtraImage(proxyURL, att.URL, cache.Resize(EmbedMaxWidth, EmbedImgHeight))
 		if w, ok := w.(gtkutils.Marginator); ok {
 			must(w.SetMarginStart, 0)
 		}
@@ -104,33 +139,9 @@ func newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget 
 	return nil
 }
 
-func newExtraImage(url string, pp ...cache.Processor) gtkutils.ExtendedWidget {
-	img := must(gtk.ImageNew).(*gtk.Image)
-	must(img.SetVAlign, gtk.ALIGN_START)
-	must(img.SetHAlign, gtk.ALIGN_START)
-	must(embedSetMargin, img)
-
-	asyncFetch(url, img, pp...)
-
-	return img
-}
-
-// https://stackoverflow.com/questions/3008772/how-to-smart-resize-a-displayed-image-to-original-aspect-ratio
-func sizeToURL(url string, w, h, maxW, maxH int) string {
-	if w > h {
-		h = h * maxW / w
-		w = maxW
-	} else {
-		w = w * maxH / h
-		h = maxH
-	}
-
-	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
-}
-
 func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
 	return newExtraImage(
-		embed.Thumbnail.Proxy,
+		embed.Thumbnail.Proxy, embed.Thumbnail.URL,
 		cache.Resize(EmbedMaxWidth, EmbedImgHeight),
 	)
 }
@@ -287,7 +298,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 		must(main.SetHAlign, gtk.ALIGN_START)
 
 		must(wrapper.Add, newExtraImage(
-			embed.Thumbnail.Proxy,
+			embed.Thumbnail.Proxy, embed.Thumbnail.URL,
 			cache.Resize(80, 80),
 		))
 	}
@@ -301,7 +312,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 		must(main.SetHAlign, gtk.ALIGN_START)
 
 		must(wrapper.Add, newExtraImage(
-			embed.Image.Proxy,
+			embed.Image.Proxy, embed.Image.URL,
 			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
 		))
 	}

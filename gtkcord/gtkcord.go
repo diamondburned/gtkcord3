@@ -120,9 +120,9 @@ func Ready(s *state.State) error {
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln("Discord error:", err)
 	}
-	s.StateLog = func(err error) {
-		log.Debugln("State error:", err)
-	}
+	// s.StateLog = func(err error) {
+	// 	log.Debugln("State error:", err)
+	// }
 
 	must(window.Resize, 1000, 850)
 

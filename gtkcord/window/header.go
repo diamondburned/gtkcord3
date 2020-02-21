@@ -18,6 +18,13 @@ func initHeader() error {
 	}
 	h.SetShowCloseButton(true)
 
+	// empty box
+	b, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create an empty box")
+	}
+	h.SetCustomTitle(b)
+
 	Window.Header = &Header{
 		HeaderBar: h,
 	}

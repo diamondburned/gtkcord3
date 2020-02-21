@@ -103,8 +103,7 @@ func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
 		return v.(*gdk.Pixbuf)
 	}
 
-	pb := semaphore.IdleMust(
-		p.theme.LoadIcon, name, size,
+	pb := semaphore.IdleMust(p.theme.LoadIcon, name, size,
 		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
 
 	p.icons.Store(key, pb)

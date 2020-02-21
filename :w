@@ -3,7 +3,6 @@ package gtkcord
 import (
 	"fmt"
 	"path"
-	"strings"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -26,8 +25,6 @@ type PreviewDialog struct {
 }
 
 func SpawnPreviewDialog(proxy, imageURL string) {
-	// Trim the forms
-	proxy = strings.Split(proxy, "?")[0]
 
 	// Main dialog
 
@@ -38,12 +35,12 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	d, _ := gtk.DialogNew()
 	d.SetModal(true)
-	d.SetTransientFor(window.Window)
 	d.SetDefaultSize(w, h)
 
 	// Header
 
 	header, _ := gtk.HeaderBarNew()
+	header.SetShowCloseButton(true)
 
 	bOriginal, _ := gtk.ButtonNewFromIconName(
 		"image-x-generic-symbolic",
@@ -52,16 +49,8 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	bOriginal.SetMarginStart(10)
 	bOriginal.SetHAlign(gtk.ALIGN_START)
 
-	bExit, _ := gtk.ButtonNewFromIconName(
-		"window-close-symbolic",
-		gtk.ICON_SIZE_LARGE_TOOLBAR,
-	)
-	bExit.SetMarginEnd(10)
-	bExit.SetHAlign(gtk.ALIGN_END)
-
 	header.PackStart(bOriginal)
 	header.SetTitle(path.Base(imageURL))
-	header.PackEnd(bExit)
 
 	d.SetTitlebar(header)
 
@@ -93,9 +82,6 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	bOriginal.Connect("clicked", func() {
 		go pd.Open()
-	})
-	bExit.Connect("clicked", func() {
-		d.Close()
 	})
 
 	go pd.Fetch(w, h)
