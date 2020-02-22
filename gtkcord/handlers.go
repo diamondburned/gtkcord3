@@ -37,9 +37,11 @@ func onMessageCreate(m *gateway.MessageCreateEvent) {
 		return
 	}
 
-	if err := mw.Insert(discord.Message(*m)); err != nil {
-		logWrap(err, "Failed to insert message from "+m.Author.Username)
-	}
+	go func() {
+		if err := mw.Insert(discord.Message(*m)); err != nil {
+			logWrap(err, "Failed to insert message from "+m.Author.Username)
+		}
+	}()
 }
 
 func onMessageUpdate(m *gateway.MessageUpdateEvent) {
@@ -52,7 +54,7 @@ func onMessageUpdate(m *gateway.MessageUpdateEvent) {
 		return
 	}
 
-	mw.Update(discord.Message(*m))
+	go mw.Update(discord.Message(*m))
 }
 
 func onMessageDelete(m *gateway.MessageDeleteEvent) {
@@ -65,7 +67,7 @@ func onMessageDelete(m *gateway.MessageDeleteEvent) {
 		return
 	}
 
-	mw.Delete(m.ID)
+	go mw.Delete(m.ID)
 }
 
 func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
@@ -78,9 +80,7 @@ func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
 		return
 	}
 
-	for _, id := range m.IDs {
-		mw.Delete(id)
-	}
+	go mw.Delete(m.IDs...)
 }
 
 func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
@@ -94,14 +94,18 @@ func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 	}
 
 	if guild := mw.Channel.Channels.Guild; guild != nil {
-		for _, m := range c.Members {
-			guild.requestedMember(m.User.ID)
-		}
+		go func() {
+			for _, m := range c.Members {
+				guild.requestedMember(m.User.ID)
+			}
+		}()
 	}
 
-	for _, m := range c.Members {
-		mw.UpdateMessageAuthor(m)
-	}
+	go func() {
+		for _, m := range c.Members {
+			mw.UpdateMessageAuthor(m)
+		}
+	}()
 }
 
 func onGuildUpdate(g *gateway.GuildUpdateEvent) {

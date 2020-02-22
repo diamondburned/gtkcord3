@@ -97,7 +97,8 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 		go pd.Open()
 	})
 	bExit.Connect("clicked", func() {
-		d.Close()
+		pd.Dialog.Hide()
+		pd.Dialog.Destroy()
 	})
 
 	go pd.Fetch(w, h)

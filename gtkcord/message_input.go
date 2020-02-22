@@ -8,7 +8,6 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -145,11 +144,11 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		}
 		text := i.popContent()
 
-		semaphore.Go(func() {
+		go func() {
 			if err := i.paste(text, p); err != nil {
 				log.Errorln("Failed to paste message:", err)
 			}
-		})
+		}()
 
 		return true
 	}
@@ -169,11 +168,11 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	text := i.popContent()
 
 	// Shift is not being held, send the message:
-	semaphore.Go(func() {
+	go func() {
 		if err := i.send(text); err != nil {
 			log.Errorln("Failed to paste message:", err)
 		}
-	})
+	}()
 
 	return true
 }
@@ -228,7 +227,7 @@ func (i *MessageInput) send(content string) error {
 		log.Errorln("Failed to add message to be sent:", err)
 	}
 
-	s, err := App.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
+	_, err := App.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
 		Content: m.Content,
 		Nonce:   m.Nonce,
 	})
@@ -236,9 +235,6 @@ func (i *MessageInput) send(content string) error {
 		i.Messages.deleteNonce(m.Nonce)
 		return errors.Wrap(err, "Failed to send message")
 	}
-
-	s.Nonce = m.Nonce
-	i.Messages.Update(*s)
 
 	return nil
 }

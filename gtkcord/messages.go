@@ -301,18 +301,23 @@ func (m *Messages) UpdateMessageAuthor(n discord.Member) {
 	m.guard.RUnlock()
 }
 
-func (m *Messages) Delete(id discord.Snowflake) bool {
+func (m *Messages) Delete(ids ...discord.Snowflake) (deleted bool) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	for i, message := range m.messages {
-		if message.ID != id {
-			continue
-		}
+IDLoop:
+	for _, id := range ids {
+		for i, message := range m.messages {
+			if message.ID != id {
+				continue
+			}
 
-		m.messages = append(m.messages[:i], m.messages[i+1:]...)
-		must(m.Messages.Remove, message)
-		return true
+			m.messages = append(m.messages[:i], m.messages[i+1:]...)
+			must(m.Messages.Remove, message)
+
+			deleted = true
+			continue IDLoop
+		}
 	}
 
 	return false
