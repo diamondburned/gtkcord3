@@ -13,11 +13,11 @@ A lightweight Discord client which uses GTK3 for the user interface.
 - Uses your prefered GTK theme
 
 ## Build gtkcord
-**Required:** `go` (1.13+), `gtk`
+**Required:** `go` (1.13+), `gtk`, `pkgconfig` (refer to `shell.nix`)
 
 ```sh
-export TOKEN="<your copied token here>"
-go run .
+go get -u github.com/diamondburned/gtkcord3
+~/go/bin/gtkcord3 # $GOPATH/bin/gtkcord3 or $GOBIN/gtkcord3
 ```
 
 ## Logging in
@@ -33,10 +33,9 @@ go run .
 ### Manually
 
 1. Press F12 in when Discord is open (to open the Inspector).
-2. Press F5 to refresh the page and go to the Network tab.
+2. Go to the Network tab then press F5 to refresh the page.
 3. Search `api library` then look for the "Authorization" header in the right column.
-4. Copy this token.
-5. Paste this token into the Token field, then click Login.
+5. Copy this token into the Token field, then click Login.
 
 ## Current features
 
