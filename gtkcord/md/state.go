@@ -3,11 +3,14 @@ package md
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/humanize"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -146,6 +149,27 @@ func (s *mdState) switchTreeMessage(m *discord.Message) func(i int) {
 			s.switchTree(i)
 		}
 	}
+}
+
+func (s *mdState) addEditedStamp(date time.Time) {
+	semaphore.IdleMust(func() {
+		v, err := s.p.table.Lookup("timestamp")
+		if err != nil {
+			v, err = gtk.TextTagNew("timestamp")
+			if err != nil {
+				log.Panicln("Failed to create a new timestamp tag:", err)
+			}
+
+			v.SetProperty("scale", 0.84)
+			v.SetProperty("scale-set", true)
+			v.SetProperty("foreground", "#808080")
+
+			s.p.table.Add(v)
+		}
+
+		edited := "  (edited " + humanize.TimeAgo(date) + ")"
+		s.buf.InsertWithTag(s.buf.GetEndIter(), edited, v)
+	})
 }
 
 func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {

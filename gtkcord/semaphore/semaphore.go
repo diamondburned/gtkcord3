@@ -1,7 +1,6 @@
 package semaphore
 
 import (
-	"context"
 	"reflect"
 	"runtime"
 	"sync"
@@ -9,12 +8,10 @@ import (
 
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
-	"golang.org/x/sync/semaphore"
 )
 
-var MaxWorkers = runtime.GOMAXPROCS(0)
-
-var sema = semaphore.NewWeighted(int64(MaxWorkers))
+// var MaxWorkers = runtime.GOMAXPROCS(0)
+// var sema = semaphore.NewWeighted(int64(MaxWorkers))
 
 var idleAdds = make(chan *idleCall, 1000)
 var recvPool = sync.Pool{
@@ -126,13 +123,5 @@ func IdleMust(fn interface{}, v ...interface{}) interface{} {
 }
 
 func Go(fn func()) {
-	if err := sema.Acquire(context.TODO(), 1); err != nil {
-		log.Panicln("Semaphore: Failed to acquire shared semaphore:", err)
-		return
-	}
-
-	go func() {
-		defer sema.Release(1)
-		fn()
-	}()
+	go fn()
 }

@@ -142,6 +142,11 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.insertWithTag(md[s.last:], nil)
 
+	// Check if the message is edited:
+	if m != nil && m.EditedTimestamp.Valid() {
+		s.addEditedStamp(m.EditedTimestamp.Time())
+	}
+
 	s.iterMu.Unlock()
 
 	s.iterWg.Wait()

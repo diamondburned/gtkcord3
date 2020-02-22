@@ -127,7 +127,7 @@ func NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 
 func newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	switch embed.Type {
-	case discord.NormalEmbed:
+	case discord.NormalEmbed, discord.LinkEmbed:
 		return newNormalEmbed(msg, embed)
 	case discord.ImageEmbed:
 		return newImageEmbed(embed)
@@ -182,7 +182,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 	}
 
 	if embed.Title != "" {
-		var title = `<span size="larger">` + escape(embed.Title) + `</span>`
+		var title = `<span weight="heavy">` + escape(embed.Title) + `</span>`
 		if embed.URL != "" {
 			title = fmt.Sprintf(`<a href="%s">%s</a>`, embed.URL, title)
 		}
@@ -325,7 +325,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 func embedSetMargin(w gtkutils.Marginator) {
 	w.SetMarginStart(EmbedMargin * 2)
 	w.SetMarginEnd(EmbedMargin * 2)
-	w.SetMarginTop(EmbedMargin)
+	w.SetMarginTop(EmbedMargin / 2)
 	w.SetMarginBottom(EmbedMargin / 2)
 }
 

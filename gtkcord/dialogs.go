@@ -33,8 +33,8 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	w := window.Window.GetAllocatedWidth()
 	h := window.Window.GetAllocatedHeight()
-	w = int(float64(w) / 1.5)
-	h = int(float64(h) / 1.5)
+	w = int(float64(w) / 1.25)
+	h = int(float64(h) / 1.25)
 
 	d, _ := gtk.DialogNew()
 	d.SetModal(true)

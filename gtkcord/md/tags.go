@@ -159,7 +159,8 @@ func (p *Parser) colorTag(attr Attribute, color string) *gtk.TextTag {
 	}
 	if attr.Has(AttrMonospace) {
 		t.SetProperty("family", "monospace")
-		t.SetProperty("size", "smaller")
+		t.SetProperty("scale", 0.84)
+		t.SetProperty("scale-set", true)
 	}
 
 	p.table.Add(t)
