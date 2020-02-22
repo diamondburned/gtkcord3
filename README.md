@@ -15,23 +15,28 @@ A lightweight Discord client which uses GTK3 for the user interface.
 ## Build gtkcord
 **Required:** `go` (1.13+), `gtk`
 
-
-### 1. Set the TOKEN variable to your Discord key
-
-(The developer of gtkcord is currently working on a login, so that you no longer need to set the TOKEN variable.)
-
-You can find this key by:
-- Press F12 in when Discord is open (to open the Inspector).
-- Press F5 to refresh the page and go to the Network tab.
-- Search `api library` and look for the "Authorization" header in the right column.
-- Copy this token.
-
-### 2. Compile and run GtkCord
-
 ```sh
 export TOKEN="<your copied token here>"
 go run .
 ```
+
+## Logging in
+
+![Login screen](.readme-resources/images/login.png)
+
+### Using DiscordLogin (recommended)
+
+1. Click the DiscordLogin button.
+2. Install DiscordLogin if you have to.
+3. Login normally.
+
+### Manually
+
+1. Press F12 in when Discord is open (to open the Inspector).
+2. Press F5 to refresh the page and go to the Network tab.
+3. Search `api library` then look for the "Authorization" header in the right column.
+4. Copy this token.
+5. Paste this token into the Token field, then click Login.
 
 ## Current features
 
@@ -69,8 +74,8 @@ go run .
 
 ## Known Bugs/Limitations
 
-- [ ] Emojis always appear large
+- [x] Emojis always appear large
 - [ ] Random crashes
-- [ ] Thread (un)safety with Xorg/xcb
-- [ ] Rampant concurrency
-- [ ] Semaphore limits
+- [x] Thread (un)safety with Xorg/xcb
+- [x] Rampant concurrency
+- [x] Semaphore limits
