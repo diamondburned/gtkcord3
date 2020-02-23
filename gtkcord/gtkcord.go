@@ -45,7 +45,9 @@ type application struct {
 	Grid *gtk.Grid
 
 	State *state.State
-	Me    *discord.User
+
+	// self stufff
+	Me *discord.User
 
 	Header *Header
 

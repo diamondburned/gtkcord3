@@ -2,9 +2,12 @@ package gtkutils
 
 import (
 	"html"
+	"log"
+	"sync"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -71,4 +74,20 @@ func Bold(str string) string {
 
 func KeyIsASCII(key uint) bool {
 	return key >= gdk.KEY_exclam && key <= gdk.KEY_asciitilde
+}
+
+var connectMutex sync.Mutex
+
+type connector interface {
+	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
+}
+
+func Connect(connector connector, event string, cb interface{}, data ...interface{}) {
+	connectMutex.Lock()
+	defer connectMutex.Unlock()
+
+	_, err := connector.Connect(event, cb, data...)
+	if err != nil {
+		log.Panicln("Failed to connect:", err)
+	}
 }

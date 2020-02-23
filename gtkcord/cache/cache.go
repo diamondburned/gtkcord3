@@ -9,14 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/peterbourgon/diskv/v3"
 	"github.com/pkg/errors"
@@ -150,22 +149,6 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 	return GetPixbufScaled(url, 0, 0, pp...)
 }
 
-var connectMutex sync.Mutex
-
-type connector interface {
-	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
-}
-
-func connect(connector connector, event string, cb interface{}, data ...interface{}) {
-	connectMutex.Lock()
-	defer connectMutex.Unlock()
-
-	_, err := connector.Connect(event, cb, data...)
-	if err != nil {
-		log.Panicln("Failed to connect:", err)
-	}
-}
-
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
 	b, err := get(url, "image")
 	if err != nil {
@@ -213,13 +196,13 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	}
 
 	if w > 0 && h > 0 {
-		connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
+		gtkutils.Connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
 			w, h = maxSize(_w, _h, w, h)
 			l.SetSize(w, h)
 		})
 	}
 
-	connect(l, "closed", func() {
+	gtkutils.Connect(l, "closed", func() {
 		p, err := l.GetPixbuf()
 		if err != nil || p == nil {
 			log.Errorln("Failed to get pixbuf during area-updated:", err)
@@ -261,13 +244,13 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	}
 
 	if w > 0 && h > 0 {
-		connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
+		gtkutils.Connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
 			w, h = maxSize(_w, _h, w, h)
 			l.SetSize(w, h)
 		})
 	}
 
-	connect(l, "area-updated", func() {
+	gtkutils.Connect(l, "area-updated", func() {
 		if gif {
 			p, err := l.GetAnimation()
 			if err != nil || p == nil {

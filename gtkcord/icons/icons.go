@@ -5,8 +5,13 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
+	"io"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
@@ -70,14 +75,34 @@ func PixbufIcon(img image.Image, size int) (*gdk.Pixbuf, error) {
 	return p, nil
 }
 
-func PixbufSolid(w, h int, r, g, b, a uint8) (*gdk.Pixbuf, error) {
-	i := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for j := 0; j < len(i.Pix); j += 4 {
-		i.Pix[j+0] = r
-		i.Pix[j+1] = g
-		i.Pix[j+2] = b
-		i.Pix[j+3] = a
+func SetImage(img image.Image, gtkimg *gtk.Image) error {
+	var buf bytes.Buffer
+
+	if err := pngEncoder.Encode(&buf, img); err != nil {
+		return errors.Wrap(err, "Failed to encode PNG")
 	}
 
-	return Pixbuf(i)
+	l, err := gdk.PixbufLoaderNewWithType("png")
+	if err != nil {
+		return errors.Wrap(err, "Failed to create an icon pixbuf loader")
+	}
+
+	gtkutils.Connect(l, "area-updated", func() {
+		p, err := l.GetPixbuf()
+		if err != nil || p == nil {
+			log.Errorln("Failed to get animation during area-prepared:", err)
+			return
+		}
+		semaphore.IdleMust(gtkimg.SetFromPixbuf, p)
+	})
+
+	if _, err := io.Copy(l, &buf); err != nil {
+		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
+	}
+
+	if err := l.Close(); err != nil {
+		return errors.Wrap(err, "Failed to close pixbuf_loader")
+	}
+
+	return nil
 }

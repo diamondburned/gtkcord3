@@ -3,6 +3,7 @@ package gtkcord
 import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/log"
 )
 
 func (a *application) hookEvents() {
@@ -17,12 +18,16 @@ func (a *application) hookEvents() {
 			onMessageUpdate(v)
 		case *gateway.MessageDeleteEvent:
 			onMessageDelete(v)
+		case *gateway.GuildCreateEvent:
+			onGuildCreate(v)
 		case *gateway.GuildUpdateEvent:
 			onGuildUpdate(v)
 		case *gateway.MessageDeleteBulkEvent:
 			onMessageDeleteBulk(v)
 		case *gateway.GuildMembersChunkEvent:
 			onGuildMembersChunk(v)
+		case *gateway.SessionsReplaceEvent:
+			onSessionsReplace(*v)
 		}
 	})
 }
@@ -108,5 +113,82 @@ func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 	}()
 }
 
+func onSessionsReplace(replaces gateway.SessionsReplaceEvent) {
+	if len(replaces) == 0 {
+		return
+	}
+	replace := replaces[0]
+
+	App.Header.Hamburger.User.UpdateStatus(replace.Status)
+	App.Header.Hamburger.User.UpdateActivity(replace.Game)
+}
+
+func onGuildCreate(g *gateway.GuildCreateEvent) {
+	var target *Guild
+
+Find:
+	for _, guild := range App.Guilds.Guilds {
+		if guild.ID == g.ID {
+			target = guild
+			break Find
+		}
+
+		if guild.Folder != nil {
+			for _, guild := range guild.Folder.Guilds {
+				if guild.ID == g.ID {
+					target = guild
+					break Find
+				}
+			}
+		}
+	}
+
+	if target == nil {
+		log.Errorln("Couldn't find guild with ID", g.ID, "for update.")
+		return
+	}
+
+	must(target.SetUnavailable, g.Unavailable)
+
+	if target.Name != g.Name {
+		must(target.Row.SetTooltipMarkup, bold(g.Name))
+	}
+	if url := g.IconURL(); target.IURL != url {
+		target.IURL = url
+		target.UpdateImage()
+	}
+}
+
 func onGuildUpdate(g *gateway.GuildUpdateEvent) {
+	var target *Guild
+
+Find:
+	for _, guild := range App.Guilds.Guilds {
+		if guild.ID == g.ID {
+			target = guild
+			break Find
+		}
+
+		if guild.Folder != nil {
+			for _, guild := range guild.Folder.Guilds {
+				if guild.ID == g.ID {
+					target = guild
+					break Find
+				}
+			}
+		}
+	}
+
+	if target == nil {
+		log.Errorln("Couldn't find guild with ID", g.ID, "for update.")
+		return
+	}
+
+	if target.Name != g.Name {
+		must(target.Row.SetTooltipMarkup, bold(g.Name))
+	}
+	if url := g.IconURL(); target.IURL != url {
+		target.IURL = url
+		target.UpdateImage()
+	}
 }

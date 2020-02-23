@@ -3,7 +3,6 @@ package cache
 import (
 	"bytes"
 	"image"
-	"image/color"
 	"image/draw"
 	"image/gif"
 	"image/png"
@@ -11,35 +10,10 @@ import (
 
 	_ "image/jpeg"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/disintegration/imaging"
 )
-
-type circle struct {
-	p image.Point
-	r int
-}
-
-func (c *circle) ColorModel() color.Model {
-	return color.AlphaModel
-}
-
-func (c *circle) Bounds() image.Rectangle {
-	return image.Rect(
-		c.p.X-c.r,
-		c.p.Y-c.r,
-		c.p.X+c.r,
-		c.p.Y+c.r,
-	)
-}
-
-func (c *circle) At(x, y int) color.Color {
-	xx, yy, rr := float64(x-c.p.X)+0.5, float64(y-c.p.Y)+0.5, float64(c.r)
-	if xx*xx+yy*yy < rr*rr {
-		return color.Alpha{255}
-	}
-	return color.Alpha{0}
-}
 
 var bufPool = sync.Pool{
 	New: func() interface{} { return new(bytes.Buffer) },
@@ -142,10 +116,7 @@ func roundTo(src image.Image, dst draw.Image, r int) {
 		src.Bounds(),
 		src,
 		image.ZP,
-		&circle{
-			p: image.Point{X: r, Y: r},
-			r: r,
-		},
+		icons.NewCircle(r),
 		image.ZP,
 		draw.Src,
 	)

@@ -228,7 +228,7 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 }
 
 func (g *Guild) SetUnavailable(unavailable bool) {
-	must(g.Row.SetSensitive, !unavailable)
+	g.Row.SetSensitive(!unavailable)
 }
 
 func (g *Guild) Current() *Channel {
