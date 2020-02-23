@@ -33,7 +33,7 @@ func init() {
 
 		for call := range idleAdds {
 			glib.IdleAdd(func(call *idleCall) {
-				// log.Debugln(call.trace, "IdleAdd() called.")
+				log.Debugln(call.trace, "IdleAdd() called.")
 				now := time.Now()
 
 				if fn, ok := call.fn.(func()); ok {

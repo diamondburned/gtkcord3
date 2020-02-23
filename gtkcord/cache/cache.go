@@ -158,21 +158,29 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 		b = Process(b, pp...)
 	}
 
-	l, err := gdk.PixbufLoaderNew()
+	v, err := semaphore.Idle(func() (*gdk.Pixbuf, error) {
+		l, err := gdk.PixbufLoaderNew()
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
+		}
+
+		if w > 0 && h > 0 {
+			l.SetSize(w, h)
+		}
+
+		pixbuf, err := l.WriteAndReturnPixbuf(b)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to load pixbuf")
+		}
+
+		return pixbuf, nil
+	})
+
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
+		return nil, err
 	}
 
-	if w > 0 && h > 0 {
-		l.SetSize(w, h)
-	}
-
-	pixbuf, err := l.WriteAndReturnPixbuf(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to load pixbuf")
-	}
-
-	return pixbuf, nil
+	return v.(*gdk.Pixbuf), nil
 }
 
 func SetImage(url string, img *gtk.Image, pp ...Processor) error {
@@ -189,31 +197,39 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 		b = Process(b, pp...)
 	}
 
-	l, err := gdk.PixbufLoaderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a pixbuf_loader")
-	}
-
-	if w > 0 && h > 0 {
-		l.SetSize(w, h)
-	}
-
-	l.Connect("area-prepared", func() {
-		p, err := l.GetPixbuf()
+	v, _ := semaphore.Idle(func() error {
+		l, err := gdk.PixbufLoaderNew()
 		if err != nil {
-			log.Errorln("Failed to get pixbuf during area-prepared:", err)
-			return
+			return errors.Wrap(err, "Failed to create a pixbuf_loader")
 		}
 
-		semaphore.IdleMust(img.SetFromPixbuf, p)
+		if w > 0 && h > 0 {
+			l.SetSize(w, h)
+		}
+
+		l.Connect("area-updated", func() {
+			p, err := l.GetPixbuf()
+			if err != nil {
+				log.Errorln("Failed to get pixbuf during area-updated:", err)
+				return
+			}
+
+			img.SetFromPixbuf(p)
+		})
+
+		if _, err := l.Write(b); err != nil {
+			return errors.Wrap(err, "Failed to write to pixbuf_loader")
+		}
+
+		if err := l.Close(); err != nil {
+			return errors.Wrap(err, "Failed to close pixbuf_loader")
+		}
+
+		return nil
 	})
 
-	if _, err := l.Write(b); err != nil {
-		return errors.Wrap(err, "Failed to write to pixbuf_loader")
-	}
-
-	if err := l.Close(); err != nil {
-		return errors.Wrap(err, "Failed to close pixbuf_loader")
+	if v != nil {
+		return v.(error)
 	}
 
 	return nil
@@ -232,39 +248,50 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	}
 
 	var gif = strings.Contains(url, ".gif")
+	var l *gdk.PixbufLoader
 
-	l, err := gdk.PixbufLoaderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a pixbuf_loader")
-	}
-
-	if w > 0 && h > 0 {
-		l.SetSize(w, h)
-	}
-
-	var updateErr error
-
-	l.Connect("area-prepared", func() {
-		var p interface{}
-		if gif {
-			p, updateErr = l.GetAnimation()
-			semaphore.IdleMust(img.SetFromAnimation, p)
-		} else {
-			p, updateErr = l.GetPixbuf()
-			semaphore.IdleMust(img.SetFromPixbuf, p)
+	v, _ := semaphore.Idle(func() (err error) {
+		l, err = gdk.PixbufLoaderNew()
+		if err != nil {
+			return errors.Wrap(err, "Failed to create a pixbuf_loader")
 		}
+
+		if w > 0 && h > 0 {
+			l.SetSize(w, h)
+		}
+
+		l.Connect("area-prepared", func() {
+			if gif {
+				p, err := l.GetAnimation()
+				if err != nil {
+					log.Errorln("Failed to get pixbuf during area-prepared:", err)
+					return
+				}
+				img.SetFromAnimation(p)
+
+			} else {
+				p, err := l.GetPixbuf()
+				if err != nil {
+					log.Errorln("Failed to get animation during area-prepared:", err)
+					return
+				}
+				img.SetFromPixbuf(p)
+			}
+		})
+
+		return nil
 	})
+
+	if v != nil {
+		return v.(error)
+	}
 
 	if _, err := io.Copy(l, r.Body); err != nil {
 		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
 	}
 
-	if err := l.Close(); err != nil {
-		return errors.Wrap(err, "Failed to close pixbuf_loader")
-	}
-
-	if updateErr != nil {
-		return errors.Wrap(updateErr, "Failed to get pixbuf/animation")
+	if v, _ := semaphore.Idle(l.Close); v != nil {
+		return errors.Wrap(v.(error), "Failed to close pixbuf_loader")
 	}
 
 	return nil

@@ -175,7 +175,9 @@ func (c *Completer) Run() {
 
 func (c *Completer) run() {
 	word := must(c.getWord).(string)
-	must(c.ClearCompletion)
+	if !c.IsEmpty() {
+		must(c.ClearCompletion)
+	}
 
 	if word == "" {
 		return
@@ -280,7 +282,7 @@ func (c *Completer) completeMentions(word string) {
 			word = strings.ToLower(word)
 		)
 
-		if strings.HasPrefix(name, word) || strings.HasPrefix(nick, word) {
+		if strings.Contains(name, word) || strings.Contains(nick, word) {
 			b := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
 
 			var name = m.Nick
@@ -288,7 +290,12 @@ func (c *Completer) completeMentions(word string) {
 				name = m.User.Username
 			}
 
-			must(b.Add, completerImage(m.User.AvatarURL()))
+			var url = m.User.AvatarURL()
+			if url != "" {
+				url += "?size=64"
+			}
+
+			must(b.Add, completerImage(url))
 			must(b.Add, completerLeftLabel(name))
 			must(b.Add, completerRightLabel(m.User.Username+"#"+m.User.Discriminator))
 
