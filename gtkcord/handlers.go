@@ -187,7 +187,7 @@ Find:
 	if target.Name != g.Name {
 		must(target.Row.SetTooltipMarkup, bold(g.Name))
 	}
-	if url := g.IconURL(); target.IURL != url {
+	if url := discord.Guild(*g).IconURL(); target.IURL != url {
 		target.IURL = url
 		target.UpdateImage()
 	}
