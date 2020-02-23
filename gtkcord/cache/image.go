@@ -121,18 +121,22 @@ func Resize(w, h int) Processor {
 }
 
 func Round(img image.Image) image.Image {
+	r := img.Bounds().Dx() / 2
+
 	dst, ok := img.(draw.Image)
 	if !ok {
-		log.Panicln(log.Trace(0), "Failed to assert img to draw.Image")
+		dst = image.NewRGBA(image.Rect(
+			0, 0,
+			r*2, r*2,
+		))
 	}
 
-	RoundTo(img, dst)
+	roundTo(img, dst, r)
 	return dst
 }
 
 // RoundTo round-crops an image
-func RoundTo(src image.Image, dst draw.Image) {
-	r := src.Bounds().Dx() / 2
+func roundTo(src image.Image, dst draw.Image, r int) {
 	draw.DrawMask(
 		dst,
 		src.Bounds(),

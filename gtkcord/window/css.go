@@ -28,6 +28,11 @@ const CSS = `
 		background-image: linear-gradient(transparent, rgba(114, 137, 218, 0.3));
 	}
 
+	.message-input .completer {
+		background-color: transparent;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+	}
+
 	.message-input button {
 		background: none;
 		box-shadow: none;

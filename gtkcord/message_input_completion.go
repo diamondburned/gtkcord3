@@ -2,7 +2,11 @@ package gtkcord
 
 import (
 	"strings"
+	"time"
 
+	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -18,7 +22,7 @@ type Completer struct {
 	Start *gtk.TextIter
 	End   *gtk.TextIter
 
-	queue chan struct{}
+	lastRequested time.Time
 }
 
 type CompleterEntry struct {
@@ -31,11 +35,7 @@ type CompleterEntry struct {
 func (i *MessageInput) initCompleter() {
 	if i.Completer == nil {
 		l, _ := gtk.ListBoxNew()
-		gtkutils.InjectCSSUnsafe(l, "completer", `
-		.completer {
-			background-color: transparent;
-		}
-	`)
+		gtkutils.InjectCSSUnsafe(l, "completer", "")
 
 		i.Completer = &Completer{
 			ListBox: l,
@@ -44,25 +44,24 @@ func (i *MessageInput) initCompleter() {
 
 		l.Connect("row-activated", i.Completer.ApplyCompletion)
 	}
+}
 
-	if i.Completer.queue != nil {
+func (c *Completer) requestMember(prefix string) {
+	if time.Now().Before(c.lastRequested) {
 		return
 	}
 
-	i.Completer.queue = make(chan struct{})
+	c.lastRequested = time.Now().Add(time.Second)
 
 	go func() {
-		c := i.Completer
+		err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+			GuildID:   []discord.Snowflake{c.Input.Messages.Channel.Guild},
+			Query:     prefix,
+			Presences: true,
+		})
 
-		for range c.queue {
-			word := must(c.getWord).(string)
-			must(c.ClearCompletion)
-
-			if word == "" {
-				continue
-			}
-
-			i.Completer.loadCompletion(word)
+		if err != nil {
+			log.Errorln("Failed to request guild members for completion:", err)
 		}
 	}()
 }
@@ -103,13 +102,6 @@ func (c *Completer) keyDown(state, key uint) bool {
 	}
 
 	return false
-}
-
-func (c *Completer) Close() {
-	close(c.queue)
-	c.queue = nil
-
-	c.ClearCompletion()
 }
 
 func (c *Completer) IsEmpty() bool {
@@ -176,9 +168,21 @@ func (c *Completer) getWord() string {
 
 func (c *Completer) Run() {
 	select {
-	case c.queue <- struct{}{}:
+	case App.completionQueue <- c.run:
 	default:
 	}
+}
+
+func (c *Completer) run() {
+	word := must(c.getWord).(string)
+	must(c.ClearCompletion)
+
+	if word == "" {
+		return
+	}
+
+	c.loadCompletion(word)
+	c.ListBox.Show()
 }
 
 func (c *Completer) ClearCompletion() {
@@ -192,6 +196,8 @@ func (c *Completer) ClearCompletion() {
 		c.Entries[i] = nil
 	}
 	c.Entries = c.Entries[:0]
+
+	c.ListBox.Hide()
 }
 
 // Finalizing function
@@ -227,6 +233,7 @@ func (c *Completer) loadCompletion(word string) {
 
 	switch word[0] {
 	case '@':
+		c.completeMentions(word[1:])
 	case '#':
 		c.completeChannels(word[1:])
 	case ':':
@@ -248,6 +255,65 @@ func (c *Completer) completeChannels(word string) {
 	}
 }
 
+func (c *Completer) completeMentions(word string) {
+	sb, ok := App.Sidebar.(*Channels)
+	if !ok {
+		log.Errorln("App.Sidebar is not of type *Channels")
+		return
+	}
+
+	if !sb.Guild.ID.Valid() {
+		// TODO: DM
+		return
+	}
+
+	members, err := App.State.Store.Members(sb.Guild.ID)
+	if err != nil {
+		log.Errorln("Failed to get members:", err)
+		return
+	}
+
+	for _, m := range members {
+		var (
+			name = strings.ToLower(m.User.Username)
+			nick = strings.ToLower(m.Nick)
+			word = strings.ToLower(word)
+		)
+
+		if strings.HasPrefix(name, word) || strings.HasPrefix(nick, word) {
+			b := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+
+			var name = m.Nick
+			if m.Nick == "" {
+				name = m.User.Username
+			}
+
+			must(b.Add, completerImage(m.User.AvatarURL()))
+			must(b.Add, completerLeftLabel(name))
+			must(b.Add, completerRightLabel(m.User.Username+"#"+m.User.Discriminator))
+
+			c.addCompletionEntry(b, m.User.Mention())
+		}
+	}
+
+	if len(c.Entries) == 0 {
+		// Request the member in a background goroutine
+		c.requestMember(word)
+	}
+}
+
+func completerImage(url string) *gtk.Image {
+	i := must(gtk.ImageNewFromIconName,
+		"dialog-question-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR).(*gtk.Image)
+	if url != "" {
+		asyncFetch(url, i, 24, 24, cache.Round)
+	}
+
+	must(i.SetMarginEnd, AvatarPadding)
+
+	return i
+}
+
 func completerLeftLabel(markup string) *gtk.Label {
 	l, _ := must(gtk.LabelNew, "").(*gtk.Label)
 	must(func() {
@@ -261,6 +327,17 @@ func completerLeftLabel(markup string) *gtk.Label {
 	return l
 }
 
+func completerRightLabel(markup string) *gtk.Label {
+	l := completerLeftLabel(markup)
+	must(func() {
+		l.SetOpacity(0.65)
+		l.SetHExpand(true)
+		l.SetHAlign(gtk.ALIGN_END)
+	})
+
+	return l
+}
+
 func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) {
 	entry := &CompleterEntry{
 		Child: w,
@@ -269,8 +346,8 @@ func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) {
 
 	must(func() {
 		if w, ok := w.(gtkutils.Marginator); ok {
-			w.SetMarginStart(AvatarPadding + 12 + 24) // 24px is LARGE_TOOLBAR
-			w.SetMarginEnd(AvatarPadding + 12 + 24)
+			w.SetMarginStart(AvatarPadding + 5)
+			w.SetMarginEnd(AvatarPadding + 5)
 		}
 
 		entry.ListBoxRow, _ = gtk.ListBoxRowNew()

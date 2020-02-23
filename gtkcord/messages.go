@@ -200,8 +200,6 @@ func (m *Messages) Destroy() {
 		msg.Destroy()
 		m.messages[i] = nil
 	}
-
-	m.Input.Completer.Close()
 }
 
 func (m *Messages) onSizeAlloc() {

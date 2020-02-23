@@ -69,6 +69,8 @@ type application struct {
 	// used for events
 	busy sync.RWMutex
 	done chan struct{}
+
+	completionQueue chan func()
 }
 
 func Init() error {
@@ -195,6 +197,14 @@ func Ready(s *state.State) error {
 	// 	}
 	// })
 
+	// Start the completion queue:
+	App.completionQueue = make(chan func())
+	go func() {
+		for fn := range App.completionQueue {
+			fn()
+		}
+	}()
+
 	App.hookEvents()
 
 	// Start the garbage collector:
@@ -295,6 +305,7 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 		}
 
 		must(a.Grid.Remove, old)
+		defer must(old.Destroy)
 	} else {
 		s := must(gtk.SeparatorNew, gtk.ORIENTATION_VERTICAL).(*gtk.Separator)
 		must(s.Show)
@@ -322,11 +333,6 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	a.Messages = ch.Messages
 	must(a.Grid.Attach, ch.Messages, 4, 0, 1, 1)
 	must(ch.Messages.Show)
-
-	// Cleanup
-	if old != nil {
-		must(old.Destroy)
-	}
 }
 
 func (a *application) _loadChannelDone(g *Guild, ch *Channel) {
