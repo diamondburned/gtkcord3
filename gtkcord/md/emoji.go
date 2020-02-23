@@ -47,12 +47,12 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 	// Add to the waitgroup, so we know when to put the state back.
 	s.iterWg.Add(1)
 
-	emojiTag := s.p.InlineEmojiTag()
+	emojiTag := s.InlineEmojiTag()
 
 	go func() {
 		defer s.iterWg.Done()
 
-		pixbuf, err := cache.GetPixbufScaled(url+"?size=64", 0, 0, cache.Resize(sz, sz))
+		pixbuf, err := cache.GetPixbufScaled(url+"?size=64", sz, sz)
 		if err != nil {
 			log.Errorln("Markdown: Failed to GET " + url)
 			return

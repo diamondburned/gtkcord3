@@ -96,7 +96,7 @@ func (c *Completer) keyDown(state, key uint) bool {
 		return true
 	}
 
-	if key == gdk.KEY_Return {
+	if key == gdk.KEY_Return || key == gdk.KEY_Tab {
 		c.ApplyCompletion()
 		return true
 	}
@@ -185,6 +185,7 @@ func (c *Completer) run() {
 
 	c.loadCompletion(word)
 	c.ListBox.Show()
+
 }
 
 func (c *Completer) ClearCompletion() {
@@ -206,8 +207,8 @@ func (c *Completer) ClearCompletion() {
 func (c *Completer) ApplyCompletion() {
 	r := c.ListBox.GetSelectedRow()
 	if r == nil {
-		c.ClearCompletion()
-		return
+		r = c.Entries[0].ListBoxRow
+		c.ListBox.SelectRow(r)
 	}
 
 	i := r.GetIndex()

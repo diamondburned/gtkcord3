@@ -301,8 +301,7 @@ func (m *Message) UpdateAuthor(user discord.User) {
 	}
 	m.pbURL = url
 
-	err := cache.SetImage(url+"?size=64", m.avatar,
-		cache.Resize(AvatarSize, AvatarSize), cache.Round)
+	err := cache.SetImageScaled(url+"?size=64", m.avatar, AvatarSize, AvatarSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get the pixbuf guild icon:", err)
 		return
@@ -324,26 +323,26 @@ func (m *Message) UpdateContent(update discord.Message) {
 
 	if update.Content != "" {
 		m.assertContent()
-		App.parser.ParseMessage(&update, []byte(update.Content), m.content)
+		App.parser.ParseMessage(App.State.Store, &update, []byte(update.Content), m.content)
 	}
 }
 
 func (m *Message) assertContent() {
 	if m.textView == nil {
-		msgTb := must(App.parser.NewTextBuffer).(*gtk.TextBuffer)
-		m.content = msgTb
+		must(func() {
+			msgTv, _ := gtk.TextViewNew()
+			m.textView = msgTv
+			msgTb, _ := msgTv.GetBuffer()
+			m.content = msgTb
 
-		msgTv := must(gtk.TextViewNewWithBuffer, msgTb).(*gtk.TextView)
-		m.textView = msgTv
+			msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
+			msgTv.SetCursorVisible(false)
+			msgTv.SetEditable(false)
+			msgTv.SetCanFocus(false)
 
-		must(msgTv.SetWrapMode, gtk.WRAP_WORD_CHAR)
-		must(msgTv.SetCursorVisible, false)
-		must(msgTv.SetEditable, false)
-		must(msgTv.SetCanFocus, false)
-
-		// Add in what's not covered by SetCondensed.
-		must(m.rightBottom.Add, msgTv)
-		must(m.rightBottom.ShowAll)
+			m.rightBottom.Add(msgTv)
+			m.rightBottom.ShowAll()
+		})
 	}
 }
 

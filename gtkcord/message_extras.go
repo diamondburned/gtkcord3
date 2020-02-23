@@ -200,11 +200,11 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 	}
 
 	if embed.Description != "" {
-		desc := must(App.parser.NewTextBuffer).(*gtk.TextBuffer)
-		App.parser.ParseMessage(&msg, []byte(embed.Description), desc)
+		txtv := must(gtk.TextViewNew).(*gtk.TextView)
+		txtb := must(txtv.GetBuffer).(*gtk.TextBuffer)
+		App.parser.ParseMessage(App.State.Store, &msg, []byte(embed.Description), txtb)
 
 		must(func() {
-			txtv, _ := gtk.TextViewNewWithBuffer(desc)
 			txtv.SetCursorVisible(false)
 			txtv.SetEditable(false)
 			txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)

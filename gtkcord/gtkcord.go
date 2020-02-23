@@ -142,13 +142,15 @@ func Ready(s *state.State) error {
 	// Set variables, etc.
 	App.State = s
 	App.parser = md.NewParser(s)
+	App.parser.UserPressed = userMentionPressed
+	App.parser.ChannelPressed = channelMentionPressed
 
 	u, err := s.Me()
 	if err != nil {
 		return errors.Wrap(err, "Failed to get current user")
 	}
 	App.Me = u
-	App.Header.Hamburger.Refresh()
+	App.Header.Hamburger.User.Update(*u)
 
 	{
 		gw, err := gtk.ScrolledWindowNew(nil, nil)

@@ -106,6 +106,9 @@ func (ch *Channel) loadMessages() error {
 	// slice to re-use messages.
 	var newMessages = make([]*Message, 0, DefaultFetch)
 
+	// WaitGroup for the background goroutines that were spawned:
+	var wg sync.WaitGroup
+
 	// Iterate from earliest to latest.
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
@@ -127,7 +130,10 @@ func (ch *Channel) loadMessages() error {
 		must(msg.SetCondensed, condensed)
 		must(m.Messages.Add, msg)
 
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			msg.UpdateAuthor(message.Author)
 			msg.UpdateExtras(message)
 		}()
@@ -137,7 +143,10 @@ func (ch *Channel) loadMessages() error {
 	m.messages = newMessages
 	must(m.ShowAll)
 
-	m.Resetting.Store(false)
+	go func() {
+		wg.Wait()
+		m.Resetting.Store(false)
+	}()
 
 	// // Hack around the mutex
 	// copiedMsg := append([]*Message{}, newMessages...)

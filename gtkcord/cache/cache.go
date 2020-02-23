@@ -213,10 +213,13 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	}
 
 	if w > 0 && h > 0 {
-		l.SetSize(w, h)
+		connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
+			w, h = maxSize(_w, _h, w, h)
+			l.SetSize(w, h)
+		})
 	}
 
-	connect(l, "area-prepared", func() {
+	connect(l, "closed", func() {
 		p, err := l.GetPixbuf()
 		if err != nil || p == nil {
 			log.Errorln("Failed to get pixbuf during area-updated:", err)
@@ -258,10 +261,13 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	}
 
 	if w > 0 && h > 0 {
-		l.SetSize(w, h)
+		connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
+			w, h = maxSize(_w, _h, w, h)
+			l.SetSize(w, h)
+		})
 	}
 
-	connect(l, "area-prepared", func() {
+	connect(l, "area-updated", func() {
 		if gif {
 			p, err := l.GetAnimation()
 			if err != nil || p == nil {
@@ -289,4 +295,16 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	}
 
 	return nil
+}
+
+func maxSize(w, h, maxW, maxH int) (int, int) {
+	if w > h {
+		h = h * maxW / w
+		w = maxW
+	} else {
+		w = w * maxH / h
+		h = maxH
+	}
+
+	return w, h
 }

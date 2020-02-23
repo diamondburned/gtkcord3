@@ -49,12 +49,9 @@ type Parser struct {
 	pool  sync.Pool
 	State *state.State
 
-	ChannelPressed func(id discord.Snowflake)
-	UserPressed    func(id discord.Snowflake)
-	RolePressed    func(id discord.Snowflake)
-	URLPressed     func(url string)
+	ChannelPressed func(ev *gdk.EventButton, ch discord.Channel)
+	UserPressed    func(ev *gdk.EventButton, user discord.GuildUser)
 
-	table *gtk.TextTagTable
 	theme *gtk.IconTheme
 	icons sync.Map
 }
@@ -77,23 +74,13 @@ func NewParser(s *state.State) *Parser {
 		log.Panicln("Couldn't get default GTK Icon Theme:", err)
 	}
 
-	t, err := gtk.TextTagTableNew()
-	if err != nil {
-		log.Panicln("Failed to create a new text tag table:", err)
-	}
-
 	p := &Parser{
 		State: s,
 		theme: i,
-		table: t,
 	}
 	p.pool = newPool(p)
 
 	return p
-}
-
-func (p *Parser) NewTextBuffer() (*gtk.TextBuffer, error) {
-	return gtk.TextBufferNew(p.table)
 }
 
 func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
@@ -111,18 +98,23 @@ func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
 }
 
 func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
-	p.ParseMessage(nil, md, buf)
+	p.ParseMessage(nil, nil, md, buf)
 }
 
-func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer) {
+type Discord interface {
+	Channel(discord.Snowflake) (*discord.Channel, error)
+	Member(guild, user discord.Snowflake) (*discord.Member, error)
+}
+
+func (p *Parser) ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
 	s := p.pool.Get().(*mdState)
-	s.use(buf, md)
+	s.use(buf, md, d, m)
 
 	var tree func(i int)
-	if s == nil || m == nil {
+	if d == nil || m == nil {
 		tree = s.switchTree
 	} else {
-		tree = s.switchTreeMessage(m)
+		tree = s.switchTreeMessage
 	}
 
 	s.iterMu.Lock()
@@ -151,7 +143,10 @@ func (p *Parser) ParseMessage(m *discord.Message, md []byte, buf *gtk.TextBuffer
 
 	s.iterWg.Wait()
 
+	s.d = nil
+	s.m = nil
 	s.buf = nil
+	s.ttt = nil
 	s.tag = nil
 	s.last = 0
 	s.prev = s.prev[:0]

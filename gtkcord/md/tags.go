@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -31,7 +32,7 @@ func TagAttribute(tag []byte) Attribute {
 	case bytes.Equal(tag, []byte("**")):
 		return AttrBold
 	case bytes.Equal(tag, []byte("__")):
-		return AttrItalics
+		return AttrUnderline
 	case bytes.Equal(tag, []byte("*")), bytes.Equal(tag, []byte("_")):
 		return AttrItalics
 	case bytes.Equal(tag, []byte("***")):
@@ -78,12 +79,37 @@ func (a Attribute) String() string {
 	return strings.Join(attrs, ", ")
 }
 
-func (p *Parser) Hyperlink(url string) *gtk.TextTag {
-	return semaphore.IdleMust(p.hyperlink, url).(*gtk.TextTag)
+func (s *mdState) tagTable() *gtk.TextTagTable {
+	if s.ttt != nil {
+		return s.ttt
+	}
+
+	ttt, err := s.buf.GetTagTable()
+	if err != nil {
+		log.Panicln("Failed to get tag table:", err)
+	}
+	s.ttt = ttt
+
+	return ttt
 }
 
-func (p *Parser) hyperlink(url string) *gtk.TextTag {
-	v, err := p.table.Lookup("link_" + url)
+func newAsyncHandler(fn func(*gdk.EventButton)) func(*gtk.TextTag, *gtk.TextView, *gdk.Event) {
+	return func(_ *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
+		evButton := gdk.EventButtonNewFromEvent(ev)
+		if evButton.Type() != gdk.EVENT_BUTTON_RELEASE || evButton.Button() != 1 {
+			return
+		}
+
+		go fn(evButton)
+	}
+}
+
+func (s *mdState) Hyperlink(url string) *gtk.TextTag {
+	return semaphore.IdleMust(s.hyperlink, url).(*gtk.TextTag)
+}
+
+func (s *mdState) hyperlink(url string) *gtk.TextTag {
+	v, err := s.ttt.Lookup("link_" + url)
 	if err == nil {
 		return v
 	}
@@ -95,29 +121,106 @@ func (p *Parser) hyperlink(url string) *gtk.TextTag {
 
 	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
 	t.SetProperty("foreground", "#3F7CE0")
-	t.Connect("event", func(_ *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
-		evKey := gdk.EventButtonNewFromEvent(ev)
-		if evKey.Type() != gdk.EVENT_BUTTON_RELEASE || evKey.Button() != 1 {
-			return
+	t.Connect("event", newAsyncHandler(func(*gdk.EventButton) {
+		if err := open.Run(url); err != nil {
+			log.Errorln("Failed to open image URL:", err)
 		}
+	}))
 
-		go func() {
-			if err := open.Run(url); err != nil {
-				log.Errorln("Failed to open image URL:", err)
-			}
-		}()
-	})
-
-	p.table.Add(t)
+	s.ttt.Add(t)
 	return t
 }
 
-func (p *Parser) InlineEmojiTag() *gtk.TextTag {
-	return semaphore.IdleMust(p.inlineEmojiTag).(*gtk.TextTag)
+func (s *mdState) InsertUserMention(id []byte) {
+	d, err := discord.ParseSnowflake(string(id))
+	if err != nil {
+		s.insertWithTag(id, nil)
+		return
+	}
+
+	var target discord.GuildUser
+	for _, user := range s.m.Mentions {
+		if user.ID == d {
+			target = user
+			break
+		}
+	}
+
+	if !target.ID.Valid() {
+		s.insertWithTag(id, nil)
+		return
+	}
+
+	t := s.MentionTag("@"+target.ID.String(), func(ev *gdk.EventButton) {
+		if s.p.UserPressed != nil {
+			s.p.UserPressed(ev, target)
+		}
+	})
+
+	if !s.m.GuildID.Valid() {
+		s.insertWithTag([]byte("@"+target.User.Username), t)
+		return
+	}
+
+	var name = target.User.Username
+	if m, err := s.d.Member(s.m.GuildID, target.ID); err == nil && m.Nick != "" {
+		name = m.Nick
+	}
+
+	s.insertWithTag([]byte("@"+name), t)
 }
 
-func (p *Parser) inlineEmojiTag() *gtk.TextTag {
-	t, err := p.table.Lookup("emoji")
+func (s *mdState) InsertChannelMention(id []byte) {
+	d, err := discord.ParseSnowflake(string(id))
+	if err != nil {
+		s.insertWithTag(id, nil)
+		return
+	}
+
+	c, err := s.d.Channel(d)
+	if err != nil {
+		s.insertWithTag(id, nil)
+		return
+	}
+
+	var channel = *c
+
+	t := s.MentionTag("#"+c.ID.String(), func(ev *gdk.EventButton) {
+		if s.p.ChannelPressed != nil {
+			s.p.ChannelPressed(ev, channel)
+		}
+	})
+
+	s.insertWithTag([]byte("#"+c.Name), t)
+}
+
+func (s *mdState) MentionTag(key string, asyncH func(*gdk.EventButton)) *gtk.TextTag {
+	return semaphore.IdleMust(s.mentionTag, key, asyncH).(*gtk.TextTag)
+}
+
+func (s *mdState) mentionTag(key string, asyncH func(*gdk.EventButton)) *gtk.TextTag {
+	v, err := s.ttt.Lookup(key)
+	if err == nil {
+		return v
+	}
+
+	t, err := gtk.TextTagNew(key)
+	if err != nil {
+		log.Panicln("Failed to create new hyperlink tag:", err)
+	}
+	t.SetProperty("foreground", "#7289DA")
+	t.Connect("event", newAsyncHandler(asyncH))
+
+	s.ttt.Add(t)
+	return t
+}
+
+func (s *mdState) InlineEmojiTag() *gtk.TextTag {
+	return semaphore.IdleMust(s.inlineEmojiTag).(*gtk.TextTag)
+}
+
+func (s *mdState) inlineEmojiTag() *gtk.TextTag {
+	t, err := s.ttt.Lookup("emoji")
 	if err == nil {
 		return t
 	}
@@ -130,22 +233,22 @@ func (p *Parser) inlineEmojiTag() *gtk.TextTag {
 	t.SetProperty("rise", -4096)
 	t.SetProperty("rise-set", true)
 
-	p.table.Add(t)
+	s.ttt.Add(t)
 	return t
 }
 
-func (p *Parser) Tag(attr Attribute) *gtk.TextTag {
-	return p.ColorTag(attr, "")
+func (s *mdState) Tag(attr Attribute) *gtk.TextTag {
+	return s.ColorTag(attr, "")
 }
 
-func (p *Parser) ColorTag(attr Attribute, color string) *gtk.TextTag {
-	return semaphore.IdleMust(p.colorTag, attr, color).(*gtk.TextTag)
+func (s *mdState) ColorTag(attr Attribute, color string) *gtk.TextTag {
+	return semaphore.IdleMust(s.colorTag, attr, color).(*gtk.TextTag)
 }
 
-func (p *Parser) colorTag(attr Attribute, color string) *gtk.TextTag {
+func (s *mdState) colorTag(attr Attribute, color string) *gtk.TextTag {
 	var key = attr.StringInt() + color
 
-	v, err := p.table.Lookup(key)
+	v, err := s.ttt.Lookup(key)
 	if err == nil {
 		return v
 	}
@@ -185,35 +288,35 @@ func (p *Parser) colorTag(attr Attribute, color string) *gtk.TextTag {
 		t.SetProperty("scale-set", true)
 	}
 
-	p.table.Add(t)
+	s.ttt.Add(t)
 	return t
 }
 
 func (s *mdState) tagAdd(attr Attribute) *gtk.TextTag {
 	if s.attr != s.attr|attr {
 		s.attr |= attr
-		s.tag = s.p.ColorTag(s.attr, s.color)
+		s.tag = s.ColorTag(s.attr, s.color)
 	}
 	return s.tag
 }
 
 func (s *mdState) tagRemove(attr Attribute) *gtk.TextTag {
 	s.attr &= ^attr
-	s.tag = s.p.ColorTag(s.attr, s.color)
+	s.tag = s.ColorTag(s.attr, s.color)
 	return s.tag
 }
 
 func (s *mdState) tagReset() *gtk.TextTag {
 	s.attr = 0
 	s.color = ""
-	s.tag = s.p.ColorTag(s.attr, s.color)
+	s.tag = s.ColorTag(s.attr, s.color)
 	return s.tag
 }
 
 func (s *mdState) tagSetColor(color string) *gtk.TextTag {
 	if s.color != color {
 		s.color = color
-		s.tag = s.p.ColorTag(s.attr, s.color)
+		s.tag = s.ColorTag(s.attr, s.color)
 	}
 	return s.tag
 }
@@ -221,14 +324,14 @@ func (s *mdState) tagSetColor(color string) *gtk.TextTag {
 func (s *mdState) tagSetAttrAndColor(attr Attribute, color string) *gtk.TextTag {
 	s.color = color
 	s.attr = attr
-	s.tag = s.p.ColorTag(s.attr, s.color)
+	s.tag = s.ColorTag(s.attr, s.color)
 	return s.tag
 }
 
 func (s *mdState) tagWith(attr Attribute) *gtk.TextTag {
-	return s.p.ColorTag(s.attr|attr, s.color)
+	return s.ColorTag(s.attr|attr, s.color)
 }
 
 func (s *mdState) tagWithColor(color string) *gtk.TextTag {
-	return s.p.ColorTag(s.attr, color)
+	return s.ColorTag(s.attr, color)
 }

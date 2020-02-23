@@ -34,12 +34,16 @@ func newPool(p *Parser) sync.Pool {
 type mdState struct {
 	p *Parser
 
+	m *discord.Message
+	d Discord
+
 	// We need to lock the iterators so they can't be invalidated while we're
 	// using them.
 	iterMu sync.Mutex
 	iterWg sync.WaitGroup
 
 	buf *gtk.TextBuffer
+	ttt *gtk.TextTagTable
 
 	last    int32
 	prev    []byte
@@ -111,7 +115,7 @@ func (s *mdState) switchTree(i int) {
 	case len(s.matches[i][5].str) > 0:
 		s.insertWithTag(
 			s.matches[i][5].str,
-			s.p.Hyperlink(string(s.matches[i][5].str)),
+			s.Hyperlink(string(s.matches[i][5].str)),
 		)
 
 	case len(s.matches[i][9].str) > 0:
@@ -127,33 +131,29 @@ func (s *mdState) switchTree(i int) {
 	}
 }
 
-func (s *mdState) switchTreeMessage(m *discord.Message) func(i int) {
-	return func(i int) {
-		switch {
-		case len(s.matches[i][6].str) > 0:
-			// user mentions
-			s.insertWithTag(s.matches[i][6].str, nil)
-			// s.chunk = UserNicknameHTML(d, m, s.matches[i][7].str)
+func (s *mdState) switchTreeMessage(i int) {
+	switch {
+	case len(s.matches[i][6].str) > 0:
+		// user mentions
+		s.InsertUserMention(s.matches[i][6].str)
 
-		case len(s.matches[i][7].str) > 0:
-			// role mentions
-			s.insertWithTag(s.matches[i][7].str, nil)
-			// s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
+	case len(s.matches[i][7].str) > 0:
+		// role mentions
+		s.insertWithTag(s.matches[i][7].str, nil)
+		// s.chunk = RoleNameHTML(d, m, s.matches[i][8].str)
 
-		case len(s.matches[i][8].str) > 0:
-			// channel mentions
-			s.insertWithTag(s.matches[i][8].str, nil)
-			// s.chunk = ChannelNameHTML(d, m, s.matches[i][9].str)
+	case len(s.matches[i][8].str) > 0:
+		// channel mentions
+		s.InsertChannelMention(s.matches[i][8].str)
 
-		default:
-			s.switchTree(i)
-		}
+	default:
+		s.switchTree(i)
 	}
 }
 
 func (s *mdState) addEditedStamp(date time.Time) {
 	semaphore.IdleMust(func() {
-		v, err := s.p.table.Lookup("timestamp")
+		v, err := s.ttt.Lookup("timestamp")
 		if err != nil {
 			v, err = gtk.TextTagNew("timestamp")
 			if err != nil {
@@ -164,7 +164,7 @@ func (s *mdState) addEditedStamp(date time.Time) {
 			v.SetProperty("scale-set", true)
 			v.SetProperty("foreground", "#808080")
 
-			s.p.table.Add(v)
+			s.ttt.Add(v)
 		}
 
 		edited := "  (edited " + humanize.TimeAgo(date) + ")"
@@ -190,11 +190,16 @@ func (s *mdState) getLastIndex(currentIndex int) int32 {
 	return s.matches[currentIndex][0].to
 }
 
-func (s *mdState) use(buf *gtk.TextBuffer, input []byte) {
+func (s *mdState) use(buf *gtk.TextBuffer, input []byte, d Discord, msg *discord.Message) {
 	found := regex.FindAllSubmatchIndex(input, -1)
 
 	s.buf = buf
-	s.tag = s.p.ColorTag(s.attr, s.color)
+	s.tagTable()
+
+	s.d = d
+	s.m = msg
+
+	s.tag = s.ColorTag(s.attr, s.color)
 	s.fmtter.Reset()
 
 	// We're not clearing s.matches
