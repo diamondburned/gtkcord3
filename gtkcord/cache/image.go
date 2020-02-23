@@ -9,9 +9,7 @@ import (
 	"image/png"
 	"sync"
 
-	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
 
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/disintegration/imaging"
@@ -63,11 +61,14 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 			img = proc(img)
 		}
 
-		for x := 0; x < img.Bounds().Dx(); x++ {
-			for y := 0; y < img.Bounds().Dy(); y++ {
+		frame.Rect = img.Bounds()
+
+		for x := 0; x < frame.Rect.Dx(); x++ {
+			for y := 0; y < frame.Rect.Dy(); y++ {
 				frame.Set(x, y, img.At(x, y))
 			}
 		}
+
 	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -115,19 +116,23 @@ func Prepend(p1 Processor, pN ...Processor) []Processor {
 
 func Resize(w, h int) Processor {
 	return func(img image.Image) image.Image {
-		return imaging.Fit(img, w, h, imaging.CatmullRom)
+		return imaging.Fit(img, w, h, imaging.Linear)
 	}
 }
 
-// Round round-crops an image
-func Round(src image.Image) image.Image {
+func Round(img image.Image) image.Image {
+	dst, ok := img.(draw.Image)
+	if !ok {
+		log.Panicln(log.Trace(0), "Failed to assert img to draw.Image")
+	}
+
+	RoundTo(img, dst)
+	return dst
+}
+
+// RoundTo round-crops an image
+func RoundTo(src image.Image, dst draw.Image) {
 	r := src.Bounds().Dx() / 2
-
-	var dst = image.NewRGBA(image.Rect(
-		0, 0,
-		r*2, r*2,
-	))
-
 	draw.DrawMask(
 		dst,
 		src.Bounds(),
@@ -140,6 +145,4 @@ func Round(src image.Image) image.Image {
 		image.ZP,
 		draw.Src,
 	)
-
-	return image.Image(dst)
 }

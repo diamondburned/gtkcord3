@@ -296,23 +296,13 @@ func (m *Message) UpdateAuthor(user discord.User) {
 		url = AvatarFallbackURL
 	}
 
-	var animated = url[:len(url)-4] == ".gif"
-
 	if m.pbURL == url {
 		return
 	}
 	m.pbURL = url
 
-	var err error
-
-	if !animated {
-		err = cache.SetImage(url+"?size=64", m.avatar,
-			cache.Resize(AvatarSize, AvatarSize), cache.Round)
-	} else {
-		err = cache.SetAnimation(url+"?size=64", m.avatar,
-			cache.Resize(AvatarSize, AvatarSize), cache.Round)
-	}
-
+	err := cache.SetImage(url+"?size=64", m.avatar,
+		cache.Resize(AvatarSize, AvatarSize), cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get the pixbuf guild icon:", err)
 		return

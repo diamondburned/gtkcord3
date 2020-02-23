@@ -112,6 +112,9 @@ func Init() error {
 	sbox.Add(s)
 	a.spinner = s
 
+	window.Resize(1200, 850)
+	window.ShowAll()
+
 	return nil
 }
 
@@ -124,7 +127,7 @@ func Ready(s *state.State) error {
 	// 	log.Debugln("State error:", err)
 	// }
 
-	must(window.Resize, 1000, 850)
+	must(window.Resize, 1200, 850)
 
 	// Create a new header placeholder:
 	h, err := newHeader()
@@ -292,6 +295,10 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 		}
 
 		must(a.Grid.Remove, old)
+	} else {
+		s := must(gtk.SeparatorNew, gtk.ORIENTATION_VERTICAL).(*gtk.Separator)
+		must(s.Show)
+		must(App.Grid.Add, s)
 	}
 
 	a.Messages = nil
@@ -315,6 +322,11 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	a.Messages = ch.Messages
 	must(a.Grid.Attach, ch.Messages, 4, 0, 1, 1)
 	must(ch.Messages.Show)
+
+	// Cleanup
+	if old != nil {
+		must(old.Destroy)
+	}
 }
 
 func (a *application) _loadChannelDone(g *Guild, ch *Channel) {

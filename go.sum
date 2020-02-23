@@ -22,6 +22,8 @@ github.com/diamondburned/arikawa v0.1.5-0.20200222060442-40948b944512 h1:8TS7JKL
 github.com/diamondburned/arikawa v0.1.5-0.20200222060442-40948b944512/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/diamondburned/arikawa v0.1.5-0.20200222070535-a44cdcc34a85 h1:rl8NaFl5OSkcERiFswyRTXOokNWDfmfyMMu7nrUBF3A=
 github.com/diamondburned/arikawa v0.1.5-0.20200222070535-a44cdcc34a85/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
+github.com/diamondburned/arikawa v0.1.5-0.20200223003819-e0589785c5f7 h1:hjQaxBCNzcRKY6j+xYuE72wZpaMbxF1xdPVkh9QX9gA=
+github.com/diamondburned/arikawa v0.1.5-0.20200223003819-e0589785c5f7/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
 github.com/dlclark/regexp2 v1.1.6 h1:CqB4MjHw0MFCDj+PHHjiESmHX+N7t0tJzKvC6M97BRg=

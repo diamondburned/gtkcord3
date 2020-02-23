@@ -4,6 +4,7 @@ import (
 	"html"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -13,6 +14,7 @@ type ExtendedWidget interface {
 	GetSensitive() bool
 	Show()
 	ShowAll()
+	Destroy()
 }
 
 type Marginator interface {
@@ -42,12 +44,17 @@ type StyleContextGetter interface {
 }
 
 func InjectCSSUnsafe(g StyleContextGetter, class, CSS string) {
-	css, _ := gtk.CssProviderNew()
-	css.LoadFromData(CSS)
-
 	style, _ := g.GetStyleContext()
-	style.AddClass(class)
-	style.AddProvider(css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+	if class != "" {
+		style.AddClass(class)
+	}
+
+	if CSS != "" {
+		css, _ := gtk.CssProviderNew()
+		css.LoadFromData(CSS)
+		style.AddProvider(css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	}
 }
 
 func InjectCSS(g StyleContextGetter, class, CSS string) {
@@ -60,4 +67,8 @@ func Escape(str string) string {
 
 func Bold(str string) string {
 	return "<b>" + Escape(str) + "</b>"
+}
+
+func KeyIsASCII(key uint) bool {
+	return key >= gdk.KEY_exclam && key <= gdk.KEY_asciitilde
 }

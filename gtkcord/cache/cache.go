@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -23,17 +24,48 @@ var Client = http.Client{
 	Timeout: 15 * time.Second,
 }
 
-var Path = filepath.Join(os.TempDir(), "gtkcord3")
+// DO NOT TOUCH.
+const (
+	CacheHash   = "Aethel1s"
+	CachePrefix = "gtkcord3"
+)
+
+var (
+	DirName = CachePrefix + "-" + CacheHash
+	Temp    = os.TempDir()
+	Path    = filepath.Join(Temp, DirName)
+)
 
 var store *diskv.Diskv
 
 func init() {
+	cleanUpCache()
+
 	store = diskv.New(diskv.Options{
 		BasePath:          Path,
 		AdvancedTransform: TransformURL,
 		InverseTransform:  InverseTransformURL,
-		CacheSizeMax:      5 * 1024 * 1024, // 5MB
 	})
+}
+
+func cleanUpCache() {
+	tmp, err := os.Open(Temp)
+	if err != nil {
+		return
+	}
+
+	dirs, err := tmp.Readdirnames(-1)
+	if err != nil {
+		return
+	}
+
+	for _, d := range dirs {
+		if strings.HasPrefix(d, CachePrefix) && d != DirName {
+			path := filepath.Join(Temp, d)
+			log.Infoln("Deleting", path)
+			os.RemoveAll(path)
+		}
+	}
 }
 
 func TransformURL(s string) *diskv.PathKey {
@@ -68,7 +100,12 @@ func SanitizeString(str string) string {
 }
 
 func Get(url string) ([]byte, error) {
-	return get(url, "")
+	b, err := get(url, "")
+	if err != nil {
+		return b, err
+	}
+
+	return b, nil
 }
 
 func get(url, suffix string) ([]byte, error) {
@@ -108,6 +145,10 @@ func get(url, suffix string) ([]byte, error) {
 }
 
 func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
+	return GetPixbufScaled(url, 0, 0, pp...)
+}
+
+func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
 	b, err := get(url, "image")
 	if err != nil {
 		return nil, err
@@ -122,6 +163,10 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
 
+	if w > 0 && h > 0 {
+		l.SetSize(w, h)
+	}
+
 	pixbuf, err := l.WriteAndReturnPixbuf(b)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to load pixbuf")
@@ -131,6 +176,10 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 }
 
 func SetImage(url string, img *gtk.Image, pp ...Processor) error {
+	return SetImageScaled(url, img, 0, 0, pp...)
+}
+
+func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
 	b, err := get(url, "image")
 	if err != nil {
 		return err
@@ -145,59 +194,78 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 		return errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
 
+	if w > 0 && h > 0 {
+		l.SetSize(w, h)
+	}
+
+	l.Connect("area-prepared", func() {
+		p, err := l.GetPixbuf()
+		if err != nil {
+			log.Errorln("Failed to get pixbuf during area-prepared:", err)
+			return
+		}
+
+		semaphore.IdleMust(img.SetFromPixbuf, p)
+	})
+
 	if _, err := l.Write(b); err != nil {
-		l.Unref()
 		return errors.Wrap(err, "Failed to write to pixbuf_loader")
 	}
 
 	if err := l.Close(); err != nil {
-		l.Unref()
 		return errors.Wrap(err, "Failed to close pixbuf_loader")
 	}
-
-	p, err := l.GetPixbuf()
-	if err != nil {
-		l.Unref()
-		return errors.Wrap(err, "Failed to get pixbuf from pixbuf_loader")
-	}
-
-	semaphore.IdleMust(img.SetFromPixbuf, p)
 
 	return nil
 }
 
-func SetAnimation(url string, img *gtk.Image, pp ...Processor) error {
-	b, err := get(url, "animation")
+// SetImageAsync is not cached.
+func SetImageAsync(url string, img *gtk.Image, w, h int) error {
+	r, err := Client.Get(url)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to GET "+url)
+	}
+	defer r.Body.Close()
+
+	if r.StatusCode < 200 || r.StatusCode > 299 {
+		return fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
 	}
 
-	if len(pp) > 0 {
-		b = ProcessAnimation(b, pp...)
-	}
+	var gif = strings.Contains(url, ".gif")
 
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
 		return errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
 
-	if _, err := l.Write(b); err != nil {
-		l.Unref()
-		return errors.Wrap(err, "Failed to write to pixbuf_loader")
+	if w > 0 && h > 0 {
+		l.SetSize(w, h)
+	}
+
+	var updateErr error
+
+	l.Connect("area-prepared", func() {
+		var p interface{}
+		if gif {
+			p, updateErr = l.GetAnimation()
+			semaphore.IdleMust(img.SetFromAnimation, p)
+		} else {
+			p, updateErr = l.GetPixbuf()
+			semaphore.IdleMust(img.SetFromPixbuf, p)
+		}
+	})
+
+	if _, err := io.Copy(l, r.Body); err != nil {
+		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
 	}
 
 	if err := l.Close(); err != nil {
-		l.Unref()
 		return errors.Wrap(err, "Failed to close pixbuf_loader")
 	}
 
-	p, err := l.GetAnimation()
-	if err != nil {
-		l.Unref()
-		return errors.Wrap(err, "Failed to get pixbuf from pixbuf_loader")
+	if updateErr != nil {
+		return errors.Wrap(updateErr, "Failed to get pixbuf/animation")
 	}
-
-	semaphore.IdleMust(img.SetFromAnimation, p)
 
 	return nil
 }

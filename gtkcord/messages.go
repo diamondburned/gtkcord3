@@ -188,6 +188,22 @@ func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
 	return nil
 }
 
+func (m *Messages) Destroy() {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	for i, msg := range m.messages {
+		if msg.isBusy() {
+			continue
+		}
+
+		msg.Destroy()
+		m.messages[i] = nil
+	}
+
+	m.Input.Completer.Close()
+}
+
 func (m *Messages) onSizeAlloc() {
 	adj, err := m.Viewport.GetVAdjustment()
 	if err != nil {

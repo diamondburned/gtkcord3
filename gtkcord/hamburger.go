@@ -111,19 +111,9 @@ func (m *HeaderMenu) Refresh() {
 }
 
 func (m *HeaderMenu) UpdateAvatar(url string) {
-	var animated = url[:len(url)-4] == ".gif"
-	var err error
-
-	if !animated {
-		err = cache.SetImage(
-			url+"?size=64", m.Avatar,
-			cache.Resize(HeaderAvatarSize, HeaderAvatarSize), cache.Round)
-	} else {
-		err = cache.SetAnimation(
-			url+"?size=64", m.Avatar,
-			cache.Resize(HeaderAvatarSize, HeaderAvatarSize), cache.Round)
-	}
-
+	err := cache.SetImage(
+		url+"?size=64", m.Avatar,
+		cache.Resize(HeaderAvatarSize, HeaderAvatarSize), cache.Round)
 	if err != nil {
 		logWrap(err, "Failed to get the pixbuf guild icon")
 		return

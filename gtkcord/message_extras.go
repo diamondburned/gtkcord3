@@ -28,19 +28,19 @@ const (
 	`
 )
 
-func newExtraImage(proxy, direct string, pp ...cache.Processor) gtkutils.ExtendedWidget {
+func newExtraImage(proxy, direct string, w, h int, pp ...cache.Processor) gtkutils.ExtendedWidget {
 	img := must(gtk.ImageNew).(*gtk.Image)
 	must(img.SetVAlign, gtk.ALIGN_START)
 	must(img.SetHAlign, gtk.ALIGN_START)
-	must(embedSetMargin, img)
 
 	evb := must(gtk.EventBoxNew).(*gtk.EventBox)
 	must(evb.Add, img)
 	must(evb.Connect, "button-release-event", func() {
 		SpawnPreviewDialog(proxy, direct)
 	})
+	must(embedSetMargin, evb)
 
-	asyncFetch(proxy, img, pp...)
+	asyncFetch(proxy, img, w, h, pp...)
 
 	return evb
 }
@@ -58,8 +58,7 @@ func maxSize(w, h, maxW, maxH int) (int, int) {
 }
 
 // https://stackoverflow.com/questions/3008772/how-to-smart-resize-a-displayed-image-to-original-aspect-ratio
-func sizeToURL(url string, w, h, maxW, maxH int) string {
-	w, h = maxSize(w, h, maxW, maxH)
+func sizeToURL(url string, w, h int) string {
 	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
 }
 
@@ -77,18 +76,15 @@ func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 			continue
 		}
 
-		proxyURL := sizeToURL(
-			att.Proxy,
-			int(att.Width), int(att.Height),
-			EmbedMaxWidth, EmbedImgHeight,
-		)
+		w, h := maxSize(int(att.Width), int(att.Height), EmbedMaxWidth, EmbedImgHeight)
+		proxyURL := sizeToURL(att.Proxy, w, h)
 
-		w := newExtraImage(proxyURL, att.URL, cache.Resize(EmbedMaxWidth, EmbedImgHeight))
-		if w, ok := w.(gtkutils.Marginator); ok {
-			must(w.SetMarginStart, 0)
+		img := newExtraImage(proxyURL, att.URL, 0, 0)
+		if img, ok := img.(gtkutils.Marginator); ok {
+			must(img.SetMarginStart, 0)
 		}
 
-		widgets = append(widgets, w)
+		widgets = append(widgets, img)
 	}
 
 	return widgets
@@ -140,10 +136,14 @@ func newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget 
 }
 
 func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
-	return newExtraImage(
-		embed.Thumbnail.Proxy, embed.Thumbnail.URL,
-		cache.Resize(EmbedMaxWidth, EmbedImgHeight),
-	)
+	w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
+	w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
+
+	img := newExtraImage(embed.Thumbnail.Proxy, embed.Thumbnail.URL, w, h)
+	if img, ok := img.(gtkutils.Marginator); ok {
+		must(img.SetMarginStart, 0)
+	}
+	return img
 }
 
 func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
@@ -157,7 +157,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 		if embed.Author.ProxyIcon != "" {
 			img := must(gtk.ImageNew).(*gtk.Image)
 			must(img.SetMarginEnd, EmbedMargin)
-			asyncFetch(embed.Author.ProxyIcon, img, cache.Resize(24, 24), cache.Round)
+			asyncFetch(embed.Author.ProxyIcon, img, 24, 24, cache.Round)
 
 			must(box.Add, img)
 		}
@@ -260,7 +260,7 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 			if embed.Footer.ProxyIcon != "" {
 				img := must(gtk.ImageNew).(*gtk.Image)
 				must(img.SetMarginEnd, EmbedMargin)
-				asyncFetch(embed.Footer.ProxyIcon, img, cache.Resize(24, 24), cache.Round)
+				asyncFetch(embed.Footer.ProxyIcon, img, 24, 24, cache.Round)
 
 				must(footer.Add, img)
 			}
@@ -297,9 +297,12 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 		main = wrapper
 		must(main.SetHAlign, gtk.ALIGN_START)
 
+		w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
+		w, h = maxSize(w, h, 80, 80)
+
 		must(wrapper.Add, newExtraImage(
-			embed.Thumbnail.Proxy, embed.Thumbnail.URL,
-			cache.Resize(80, 80),
+			sizeToURL(embed.Thumbnail.Proxy, w, h),
+			embed.Thumbnail.URL, 0, 0,
 		))
 	}
 
@@ -311,9 +314,12 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 		main = wrapper
 		must(main.SetHAlign, gtk.ALIGN_START)
 
+		w, h := int(embed.Image.Width), int(embed.Image.Height)
+		w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
+
 		must(wrapper.Add, newExtraImage(
-			embed.Image.Proxy, embed.Image.URL,
-			cache.Resize(EmbedMaxWidth, EmbedImgHeight),
+			sizeToURL(embed.Image.Proxy, w, h),
+			embed.Image.URL, 0, 0,
 		))
 	}
 
@@ -329,14 +335,24 @@ func embedSetMargin(w gtkutils.Marginator) {
 	w.SetMarginBottom(EmbedMargin / 2)
 }
 
-func asyncFetch(url string, img *gtk.Image, pp ...cache.Processor) {
+func asyncFetch(url string, img *gtk.Image, w, h int, pp ...cache.Processor) {
 	icon := App.parser.GetIcon("image-missing", EmbedAvatarSize)
 	must(img.SetFromPixbuf, icon)
 
-	go func() {
-		if err := cache.SetImage(url, img, pp...); err != nil {
-			log.Errorln("Failed to get image", url+":", err)
-			return
-		}
-	}()
+	if len(pp) == 0 && w != 0 && h != 0 {
+		go func() {
+			if err := cache.SetImageAsync(url, img, w, h); err != nil {
+				log.Errorln("Failed to get image", url+":", err)
+				return
+			}
+		}()
+
+	} else {
+		go func() {
+			if err := cache.SetImageScaled(url, img, w, h, pp...); err != nil {
+				log.Errorln("Failed to get image", url+":", err)
+				return
+			}
+		}()
+	}
 }

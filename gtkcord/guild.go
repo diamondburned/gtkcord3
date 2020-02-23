@@ -270,17 +270,7 @@ func (g *Guild) UpdateImage() {
 		return
 	}
 
-	var animated = g.IURL[:len(g.IURL)-4] == ".gif"
-	var err error
-
-	if !animated {
-		err = cache.SetImage(g.IURL+"?size=64", g.Image,
-			cache.Resize(IconSize, IconSize), cache.Round)
-	} else {
-		err = cache.SetAnimation(g.IURL+"?size=64", g.Image,
-			cache.Resize(IconSize, IconSize), cache.Round)
-	}
-
+	err := cache.SetImageScaled(g.IURL+"?size=64", g.Image, IconSize, IconSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to update the pixbuf guild icon:", err)
 		return

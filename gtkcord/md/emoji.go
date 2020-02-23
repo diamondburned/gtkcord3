@@ -47,10 +47,12 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 	// Add to the waitgroup, so we know when to put the state back.
 	s.iterWg.Add(1)
 
+	emojiTag := s.p.InlineEmojiTag()
+
 	go func() {
 		defer s.iterWg.Done()
 
-		pixbuf, err := cache.GetPixbuf(url+"?size=64", cache.Resize(sz, sz))
+		pixbuf, err := cache.GetPixbufScaled(url+"?size=64", 0, 0, cache.Resize(sz, sz))
 		if err != nil {
 			log.Errorln("Markdown: Failed to GET " + url)
 			return
@@ -60,11 +62,16 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 		defer s.iterMu.Unlock()
 
 		// Try and replace the last inserted pixbuf with ours:
-		last := semaphore.IdleMust(s.buf.GetIterAtLineIndex, lastLine, lastIndex).(*gtk.TextIter)
-		fwdi := semaphore.IdleMust(s.buf.GetIterAtLineIndex, lastLine, lastIndex).(*gtk.TextIter)
-		semaphore.IdleMust(fwdi.ForwardChar)
+		semaphore.IdleMust(func() {
+			last := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
+			fwdi := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
+			fwdi.ForwardChar()
 
-		semaphore.IdleMust(s.buf.Delete, last, fwdi)
-		semaphore.IdleMust(s.buf.InsertPixbuf, last, pixbuf)
+			s.buf.Delete(last, fwdi)
+			s.buf.InsertPixbuf(last, pixbuf)
+
+			first := s.buf.GetIterAtLineIndex(lastLine, lastIndex)
+			s.buf.ApplyTag(emojiTag, first, last)
+		})
 	}()
 }

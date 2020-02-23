@@ -19,10 +19,11 @@ type MessageInput struct {
 	gtkutils.ExtendedWidget
 	Messages *Messages
 
-	Main *gtk.Box
+	Main  *gtk.Box
+	Style *gtk.StyleContext
 
-	InputBox   *gtk.Box
-	Completion *Completer
+	InputBox  *gtk.Box
+	Completer *Completer
 
 	Input    *gtk.TextView
 	InputBuf *gtk.TextBuffer
@@ -33,20 +34,6 @@ type MessageInput struct {
 
 	// uploadButton
 	// emojiButton
-}
-
-type Completer struct {
-	*gtk.ListBox
-	Entries []*CompleterEntry
-}
-
-type CompleterEntry struct {
-	*gtk.ListBoxRow
-	Icon   *gtk.Image
-	Pixbuf *Pixbuf
-
-	Left  *gtk.Label
-	Right *gtk.Label
 }
 
 func (messages *Messages) loadMessageInput() error {
@@ -66,10 +53,14 @@ func (messages *Messages) loadMessageInput() error {
 	i.Main = main
 	i.ExtendedWidget = main
 
+	style, _ := must(main.GetStyleContext).(*gtk.StyleContext)
+	i.Style = style
+
 	ibox := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
 	i.InputBox = ibox
 
 	// TODO completer
+
 	// comp, err := gtk.
 
 	upload := must(gtk.ButtonNewFromIconName,
@@ -87,22 +78,28 @@ func (messages *Messages) loadMessageInput() error {
 	i.InputBuf = ibuf
 
 	must(func() {
-		style, _ := main.GetStyleContext()
 		style.AddClass("message-input")
 
-		margin2(&ibox.Widget, 8, AvatarPadding)
+		// Initialize the completer:
+		i.initCompleter()
+		// Prepend the completer box:
+		main.Add(i.Completer)
+
+		// Prepare the message input box:
+		margin2(ibox, 8, AvatarPadding)
 		upload.SetVAlign(gtk.ALIGN_START)
 		upload.Connect("clicked", func() {
 			go SpawnUploader(i.upload)
 		})
 		emoji.SetVAlign(gtk.ALIGN_START)
 
-		margin2(&input.Widget, 6, 12)
+		margin2(input, 6, 12)
 
 		input.AddEvents(int(gdk.KEY_PRESS_MASK))
 		input.Connect("key-press-event", i.keyDown)
 		input.SetWrapMode(gtk.WRAP_WORD_CHAR)
 
+		// Add the message input box:
 		main.Add(ibox)
 
 		ibox.PackEnd(upload, false, false, 0)
@@ -118,8 +115,9 @@ func (messages *Messages) loadMessageInput() error {
 
 func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	evKey := gdk.EventKeyNewFromEvent(ev)
+
 	if evKey.Type() != gdk.EVENT_KEY_PRESS {
-		return false // propagate
+		return false
 	}
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
@@ -128,13 +126,15 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	var (
 		state = evKey.State()
 		key   = evKey.KeyVal()
+	)
 
-		shift = state&shiftMask == shiftMask
+	if i.Completer.keyDown(state, key) {
+		return true
+	}
+
+	var (
 		cntrl = state&cntrlMask == cntrlMask
-		enter = key == gdk.KEY_Return
 		vkey  = key == gdk.KEY_v
-		upArr = key == gdk.KEY_Up
-		esc   = key == gdk.KEY_Escape
 	)
 
 	// If Ctrl-V is pressed:
@@ -164,6 +164,8 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return true
 	}
 
+	var esc = key == gdk.KEY_Escape
+
 	// If escape key is pressed and we're editing something:
 	if esc && i.Editing != nil {
 		// Clear the text box:
@@ -171,9 +173,12 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 
 		// Reset state:
 		i.Editing = nil
+		i.Style.RemoveClass("editing")
 
-		return false
+		return true
 	}
+
+	var upArr = key == gdk.KEY_Up
 
 	// If arrow up is pressed and the input box is empty:
 	if upArr && i.getContent() == "" {
@@ -197,8 +202,13 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 			}()
 		}
 
-		return false
+		return true
 	}
+
+	var (
+		shift = state&shiftMask == shiftMask
+		enter = key == gdk.KEY_Return
+	)
 
 	// If Enter isn't being pressed:
 	if !enter {
@@ -229,17 +239,16 @@ func (i *MessageInput) editMessage(id discord.Snowflake) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get message")
 	}
+
 	i.Editing = m
+	must(i.Style.AddClass, "editing")
 
 	must(i.InputBuf.SetText, i.Editing.Content)
 	return nil
 }
 
 func (i *MessageInput) getContent() string {
-	var (
-		iStart = i.InputBuf.GetStartIter()
-		iEnd   = i.InputBuf.GetEndIter()
-	)
+	var iStart, iEnd = i.InputBuf.GetBounds()
 
 	text, err := i.InputBuf.GetText(iStart, iEnd, true)
 	if err != nil {
@@ -252,10 +261,7 @@ func (i *MessageInput) getContent() string {
 
 // popContent gets the current messages and deletes the buffer.
 func (i *MessageInput) popContent() string {
-	var (
-		iStart = i.InputBuf.GetStartIter()
-		iEnd   = i.InputBuf.GetEndIter()
-	)
+	var iStart, iEnd = i.InputBuf.GetBounds()
 
 	text, err := i.InputBuf.GetText(iStart, iEnd, true)
 	if err != nil {
@@ -297,6 +303,7 @@ func (i *MessageInput) send(content string) error {
 	if i.Editing != nil {
 		edit := i.Editing
 		i.Editing = nil
+		must(i.Style.RemoveClass, "editing")
 
 		if edit.Content == content {
 			return nil

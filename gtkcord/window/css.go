@@ -20,10 +20,14 @@ const CSS = `
 	.message:not(.condensed), .message-input {
 		border-top: 1px solid rgba(0, 0, 0, 0.12);
 	}
-	
+
 	.message-input {
 		background-image: linear-gradient(transparent, rgba(10, 10, 10, 0.3));
 	}
+	.message-input.editing {
+		background-image: linear-gradient(transparent, rgba(114, 137, 218, 0.3));
+	}
+
 	.message-input button {
 		background: none;
 		box-shadow: none;
@@ -38,6 +42,10 @@ const CSS = `
 	    box-shadow: 0px 0px 4px -1px rgba(0,0,0,0.5);
 	    border-radius: 50%;
 		background-color: grey;
+	}
+
+	.message image:not(.avatar) {
+		border: 1px solid rgba(0, 0, 0, 0.25);
 	}
 `
 

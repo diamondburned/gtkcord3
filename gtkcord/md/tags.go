@@ -112,6 +112,28 @@ func (p *Parser) hyperlink(url string) *gtk.TextTag {
 	return t
 }
 
+func (p *Parser) InlineEmojiTag() *gtk.TextTag {
+	return semaphore.IdleMust(p.inlineEmojiTag).(*gtk.TextTag)
+}
+
+func (p *Parser) inlineEmojiTag() *gtk.TextTag {
+	t, err := p.table.Lookup("emoji")
+	if err == nil {
+		return t
+	}
+
+	t, err = gtk.TextTagNew("emoji")
+	if err != nil {
+		log.Panicln("Failed to create new emoji tag:", err)
+	}
+
+	t.SetProperty("rise", -4096)
+	t.SetProperty("rise-set", true)
+
+	p.table.Add(t)
+	return t
+}
+
 func (p *Parser) Tag(attr Attribute) *gtk.TextTag {
 	return p.ColorTag(attr, "")
 }
