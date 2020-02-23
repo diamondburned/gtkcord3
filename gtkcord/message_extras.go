@@ -187,28 +187,32 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 			title = fmt.Sprintf(`<a href="%s">%s</a>`, embed.URL, title)
 		}
 
-		label := must(gtk.LabelNew, "").(*gtk.Label)
-		must(label.SetMarkup, title)
-		must(label.SetLineWrap, true)
-		must(label.SetLineWrapMode, pango.WRAP_WORD_CHAR)
-		must(label.SetXAlign, float64(0.0))
-		must(embedSetMargin, label)
+		must(func() {
+			label, _ := gtk.LabelNew("")
+			label.SetMarkup(title)
+			label.SetLineWrap(true)
+			label.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+			label.SetXAlign(0.0)
+			embedSetMargin(label)
 
-		must(main.Add, label)
+			main.Add(label)
+		})
 	}
 
 	if embed.Description != "" {
 		desc := must(App.parser.NewTextBuffer).(*gtk.TextBuffer)
 		App.parser.ParseMessage(&msg, []byte(embed.Description), desc)
 
-		txtv := must(gtk.TextViewNewWithBuffer, desc).(*gtk.TextView)
-		must(txtv.SetCursorVisible, false)
-		must(txtv.SetEditable, false)
-		must(txtv.SetWrapMode, gtk.WRAP_WORD_CHAR)
-		must(txtv.SetSizeRequest, EmbedMaxWidth, -1)
-		must(embedSetMargin, txtv)
+		must(func() {
+			txtv, _ := gtk.TextViewNewWithBuffer(desc)
+			txtv.SetCursorVisible(false)
+			txtv.SetEditable(false)
+			txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
+			txtv.SetSizeRequest(EmbedMaxWidth, -1)
+			embedSetMargin(txtv)
 
-		must(main.Add, txtv)
+			main.Add(txtv)
+		})
 	}
 
 	if len(embed.Fields) > 0 {

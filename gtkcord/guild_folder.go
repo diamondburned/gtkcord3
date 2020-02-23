@@ -5,6 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -22,19 +23,12 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 		folder.Color = 0x7289DA
 	}
 
-	mainEv, err := gtk.EventBoxNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create main event box")
-	}
-
 	mainBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create main box")
 	}
+	gtkutils.InjectCSS(mainBox, "guild-folder", "")
 	mainBox.SetTooltipMarkup("<b>" + html.EscapeString(folder.Name) + "</b>")
-
-	// Add the main box into main event box
-	mainEv.Add(mainBox)
 
 	// Folder icon
 	p, err := icons.PixbufIcon(icons.Folder(folder.Color.Uint32()), FolderSize)
@@ -80,7 +74,7 @@ func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) 
 	f := &Guild{
 		// Iter:  store.Append(nil),
 		// Store: store,
-		ExtendedWidget: mainEv,
+		ExtendedWidget: mainBox,
 		Folder: &GuildFolder{
 			Revealer: folderRev,
 			List:     guildList,

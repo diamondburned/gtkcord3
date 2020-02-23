@@ -126,40 +126,47 @@ func (ch *Channel) loadMessages() error {
 		newMessages = append(newMessages, msg)
 		must(msg.SetCondensed, condensed)
 		must(m.Messages.Add, msg)
+
+		go func() {
+			msg.UpdateAuthor(message.Author)
+			msg.UpdateExtras(message)
+		}()
 	}
 
 	// Set the new slice.
 	m.messages = newMessages
 	must(m.ShowAll)
 
-	// Hack around the mutex
-	copiedMsg := append([]*Message{}, newMessages...)
+	m.Resetting.Store(false)
 
-	// Revert to latest is last, earliest is first.
-	for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
-		messages[L], messages[R] = messages[R], messages[L]
-	}
+	// // Hack around the mutex
+	// copiedMsg := append([]*Message{}, newMessages...)
 
-	var wg sync.WaitGroup
+	// // Revert to latest is last, earliest is first.
+	// for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
+	// 	messages[L], messages[R] = messages[R], messages[L]
+	// }
 
-	// Iterate in reverse, so latest first.
-	for i := len(copiedMsg) - 1; i >= 0; i-- {
-		message, discordm := copiedMsg[i], messages[i]
-		wg.Add(1)
+	// var wg sync.WaitGroup
 
-		go func() {
-			defer wg.Done()
+	// // Iterate in reverse, so latest first.
+	// for i := len(copiedMsg) - 1; i >= 0; i-- {
+	// 	message, discordm := copiedMsg[i], messages[i]
+	// 	wg.Add(1)
 
-			message.UpdateAuthor(discordm.Author)
-			message.UpdateExtras(discordm)
-		}()
-	}
+	// 	go func() {
+	// 		defer wg.Done()
 
-	go func() {
-		// When we're done resetting, set this to false.
-		wg.Wait()
-		m.Resetting.Store(false)
-	}()
+	// 		message.UpdateAuthor(discordm.Author)
+	// 		message.UpdateExtras(discordm)
+	// 	}()
+	// }
+
+	// go func() {
+	// 	// When we're done resetting, set this to false.
+	// 	wg.Wait()
+	// 	m.Resetting.Store(false)
+	// }()
 
 	return nil
 }

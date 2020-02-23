@@ -148,7 +148,7 @@ func (c *Completer) getWord() string {
 	iter := c.Input.InputBuf.GetIterAtMark(mark)
 
 	// Seek backwards for space or start-of-line:
-	start, _, ok := iter.BackwardSearch(" ", gtk.TEXT_SEARCH_TEXT_ONLY, nil)
+	_, start, ok := iter.BackwardSearch(" ", gtk.TEXT_SEARCH_TEXT_ONLY, nil)
 	if !ok {
 		start = c.Input.InputBuf.GetStartIter()
 	}

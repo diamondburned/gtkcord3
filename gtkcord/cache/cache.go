@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/peterbourgon/diskv/v3"
 	"github.com/pkg/errors"
@@ -148,6 +150,22 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 	return GetPixbufScaled(url, 0, 0, pp...)
 }
 
+var connectMutex sync.Mutex
+
+type connector interface {
+	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
+}
+
+func connect(connector connector, event string, cb interface{}, data ...interface{}) {
+	connectMutex.Lock()
+	defer connectMutex.Unlock()
+
+	_, err := connector.Connect(event, cb, data...)
+	if err != nil {
+		log.Panicln("Failed to connect:", err)
+	}
+}
+
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
 	b, err := get(url, "image")
 	if err != nil {
@@ -158,29 +176,21 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 		b = Process(b, pp...)
 	}
 
-	v, err := semaphore.Idle(func() (*gdk.Pixbuf, error) {
-		l, err := gdk.PixbufLoaderNew()
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
-		}
-
-		if w > 0 && h > 0 {
-			l.SetSize(w, h)
-		}
-
-		pixbuf, err := l.WriteAndReturnPixbuf(b)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to load pixbuf")
-		}
-
-		return pixbuf, nil
-	})
-
+	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
 
-	return v.(*gdk.Pixbuf), nil
+	if w > 0 && h > 0 {
+		l.SetSize(w, h)
+	}
+
+	pixbuf, err := l.WriteAndReturnPixbuf(b)
+	if err != nil || pixbuf == nil {
+		return nil, errors.Wrap(err, "Failed to load pixbuf")
+	}
+
+	return pixbuf, nil
 }
 
 func SetImage(url string, img *gtk.Image, pp ...Processor) error {
@@ -197,39 +207,31 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 		b = Process(b, pp...)
 	}
 
-	v, _ := semaphore.Idle(func() error {
-		l, err := gdk.PixbufLoaderNew()
-		if err != nil {
-			return errors.Wrap(err, "Failed to create a pixbuf_loader")
+	l, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a pixbuf_loader")
+	}
+
+	if w > 0 && h > 0 {
+		l.SetSize(w, h)
+	}
+
+	connect(l, "area-prepared", func() {
+		p, err := l.GetPixbuf()
+		if err != nil || p == nil {
+			log.Errorln("Failed to get pixbuf during area-updated:", err)
+			return
 		}
 
-		if w > 0 && h > 0 {
-			l.SetSize(w, h)
-		}
-
-		l.Connect("area-updated", func() {
-			p, err := l.GetPixbuf()
-			if err != nil {
-				log.Errorln("Failed to get pixbuf during area-updated:", err)
-				return
-			}
-
-			img.SetFromPixbuf(p)
-		})
-
-		if _, err := l.Write(b); err != nil {
-			return errors.Wrap(err, "Failed to write to pixbuf_loader")
-		}
-
-		if err := l.Close(); err != nil {
-			return errors.Wrap(err, "Failed to close pixbuf_loader")
-		}
-
-		return nil
+		semaphore.IdleMust(img.SetFromPixbuf, p)
 	})
 
-	if v != nil {
-		return v.(error)
+	if _, err := l.Write(b); err != nil {
+		return errors.Wrap(err, "Failed to write to pixbuf_loader")
+	}
+
+	if err := l.Close(); err != nil {
+		return errors.Wrap(err, "Failed to close pixbuf_loader")
 	}
 
 	return nil
@@ -250,48 +252,40 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	var gif = strings.Contains(url, ".gif")
 	var l *gdk.PixbufLoader
 
-	v, _ := semaphore.Idle(func() (err error) {
-		l, err = gdk.PixbufLoaderNew()
-		if err != nil {
-			return errors.Wrap(err, "Failed to create a pixbuf_loader")
-		}
-
-		if w > 0 && h > 0 {
-			l.SetSize(w, h)
-		}
-
-		l.Connect("area-prepared", func() {
-			if gif {
-				p, err := l.GetAnimation()
-				if err != nil {
-					log.Errorln("Failed to get pixbuf during area-prepared:", err)
-					return
-				}
-				img.SetFromAnimation(p)
-
-			} else {
-				p, err := l.GetPixbuf()
-				if err != nil {
-					log.Errorln("Failed to get animation during area-prepared:", err)
-					return
-				}
-				img.SetFromPixbuf(p)
-			}
-		})
-
-		return nil
-	})
-
-	if v != nil {
-		return v.(error)
+	l, err = gdk.PixbufLoaderNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
+
+	if w > 0 && h > 0 {
+		l.SetSize(w, h)
+	}
+
+	connect(l, "area-prepared", func() {
+		if gif {
+			p, err := l.GetAnimation()
+			if err != nil || p == nil {
+				log.Errorln("Failed to get pixbuf during area-prepared:", err)
+				return
+			}
+			semaphore.IdleMust(img.SetFromAnimation, p)
+
+		} else {
+			p, err := l.GetPixbuf()
+			if err != nil || p == nil {
+				log.Errorln("Failed to get animation during area-prepared:", err)
+				return
+			}
+			semaphore.IdleMust(img.SetFromPixbuf, p)
+		}
+	})
 
 	if _, err := io.Copy(l, r.Body); err != nil {
 		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
 	}
 
-	if v, _ := semaphore.Idle(l.Close); v != nil {
-		return errors.Wrap(v.(error), "Failed to close pixbuf_loader")
+	if err := l.Close(); err != nil {
+		return errors.Wrap(err, "Failed to close pixbuf_loader")
 	}
 
 	return nil
