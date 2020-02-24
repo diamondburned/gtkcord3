@@ -8,7 +8,6 @@ import (
 	"io"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -93,7 +92,7 @@ func SetImage(img image.Image, gtkimg *gtk.Image) error {
 			log.Errorln("Failed to get animation during area-prepared:", err)
 			return
 		}
-		semaphore.IdleMust(gtkimg.SetFromPixbuf, p)
+		gtkimg.SetFromPixbuf(p)
 	})
 
 	if _, err := io.Copy(l, &buf); err != nil {

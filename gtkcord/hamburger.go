@@ -8,9 +8,7 @@ import (
 
 type HeaderMenu struct {
 	gtkutils.ExtendedWidget
-	Menu *gtk.Popover
-
-	User *UserPopupBody
+	User *UserPopup
 
 	// About
 }
@@ -35,27 +33,17 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	}
 	mb.Add(i)
 
-	m, err := gtk.PopoverNew(mb)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create menu")
-	}
-	mb.SetPopover(m)
+	// Header box
+	u := NewUserPopup(mb)
+	u.Main.ShowAll()
+
+	mb.SetPopover(u.Popover)
 	mb.SetUsePopover(true)
 
 	hm := &HeaderMenu{
 		ExtendedWidget: b,
-		Menu:           m,
+		User:           u,
 	}
-
-	// Header box
-	u, err := NewUserPopupBody()
-	if err != nil {
-		return nil, errors.Wrap(err, "Faield to create a UserPopupBody")
-	}
-	hm.User = u
-	u.ShowAll()
-	m.Add(u)
-
 	hm.ShowAll()
 
 	return hm, nil

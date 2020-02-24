@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -37,8 +38,9 @@ type Message struct {
 	mainStyle *gtk.StyleContext
 
 	// Left side, nil everything if compact mode
-	avatar *gtk.Image
-	pbURL  string
+	avatarEv *gtk.EventBox
+	avatar   *gtk.Image
+	pbURL    string
 
 	// Right container:
 	right *gtk.Box
@@ -115,6 +117,16 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 	main := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
 	mstyle := must(main.GetStyleContext).(*gtk.StyleContext)
 
+	gtkutils.InjectCSS(main, "message", `
+		.message {
+			border-left: 2px solid transparent;
+		}
+		.message.mentioned {
+			border-left: 2px solid rgb(250, 166, 26);
+			background-color: rgba(250, 166, 26, 0.05);
+		}
+	`)
+
 	message := &Message{
 		Nonce:     m.Nonce,
 		ID:        m.ID,
@@ -127,6 +139,7 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 
 		main:      main,
 		mainStyle: mstyle,
+		avatarEv:  must(gtk.EventBoxNew).(*gtk.EventBox),
 		avatar: must(
 			gtk.ImageNewFromPixbuf, App.parser.GetIcon("user-info", AvatarSize)).(*gtk.Image),
 		right: must(
@@ -146,15 +159,21 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 
 	// What the fuck?
 	must(func() {
-		main.SetMarginBottom(2)
-		mstyle.AddClass("message")
-
 		message.rightBottom.SetHExpand(true)
+		message.rightBottom.SetMarginBottom(5)
 		message.rightBottom.SetMarginEnd(AvatarPadding * 2)
 
+		message.avatarEv.SetMarginStart(AvatarPadding * 2)
+		message.avatarEv.SetMarginEnd(AvatarPadding)
+		message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
+		message.avatarEv.Add(message.avatar)
+		message.avatarEv.Connect("button_press_event", func() {
+			p := NewGuildMemberPopup(message.Messages.Channel.Guild, message.AuthorID)
+			p.SetRelativeTo(message.avatar)
+			p.Show()
+		})
+
 		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
-		message.avatar.SetMarginStart(AvatarPadding * 2)
-		message.avatar.SetMarginEnd(AvatarPadding)
 		message.avatar.SetVAlign(gtk.ALIGN_START)
 
 		message.author.SetMarkup(bold(m.Author.Username))
@@ -172,8 +191,8 @@ func newMessageCustom(m discord.Message) (*Message, error) {
 
 		message.right.Add(message.rightTop)
 
-		message.avatar.SetMarginTop(10)
-		message.right.SetMarginTop(10)
+		message.avatarEv.SetMarginTop(6)
+		message.right.SetMarginTop(6)
 
 		message.setCondensed()
 	})
@@ -224,12 +243,12 @@ func (m *Message) SetCondensed(condensed bool) {
 
 func (m *Message) setCondensed() {
 	if m.Condensed {
-		m.main.SetMarginTop(5)
+		m.main.SetMarginTop(2)
 		m.mainStyle.AddClass("condensed")
 		m.timestamp.SetXAlign(0.5)
 		m.timestamp.SetMarkup(smaller("+" + m.CondenseOffset.String()))
 
-		m.main.Remove(m.avatar)
+		m.main.Remove(m.avatarEv)
 		m.main.Remove(m.right)
 
 		// We need to move Timestamp and RightBottom:
@@ -242,7 +261,7 @@ func (m *Message) setCondensed() {
 		return
 	}
 
-	m.main.SetMarginTop(7)
+	m.main.SetMarginTop(5)
 	m.mainStyle.RemoveClass("condensed")
 	m.timestamp.SetXAlign(0.0) // left align
 	m.timestamp.SetMarkup(smaller(humanize.TimeAgo(m.Timestamp)))
@@ -253,7 +272,7 @@ func (m *Message) setCondensed() {
 	m.rightTop.Add(m.timestamp)
 	m.right.Add(m.rightBottom)
 
-	m.main.Add(m.avatar)
+	m.main.Add(m.avatarEv)
 	m.main.Add(m.right)
 }
 
@@ -325,6 +344,15 @@ func (m *Message) UpdateContent(update discord.Message) {
 		m.assertContent()
 		App.parser.ParseMessage(App.State.Store, &update, []byte(update.Content), m.content)
 	}
+
+	for _, mention := range update.Mentions {
+		if mention.ID == App.Me.ID {
+			must(m.mainStyle.AddClass, "mentioned")
+			return
+		}
+	}
+
+	must(m.mainStyle.RemoveClass, "mentioned")
 }
 
 func (m *Message) assertContent() {

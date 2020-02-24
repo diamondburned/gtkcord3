@@ -9,10 +9,6 @@ import (
 )
 
 const CSS = `
-	window:disabled > *:not(header) {
-		opacity: 0.5;
-	}
-
 	headerbar { padding: 0; }
 	headerbar button { box-shadow: none; }
 	textview, textview > text { background-color: transparent; }
@@ -21,8 +17,17 @@ const CSS = `
 		border-top: 1px solid rgba(0, 0, 0, 0.12);
 	}
 
+	.user-info, .user-info > box > *:nth-child(n+3) {
+		background-color: @theme_base_color;
+	}
+	.user-info.spotify {
+		background-color: #1db954;
+	}
+
 	.message-input {
 		background-image: linear-gradient(transparent, rgba(10, 10, 10, 0.3));
+		transition-property: background-image;
+		transition: 75ms background-image linear;
 	}
 	.message-input.editing {
 		background-image: linear-gradient(transparent, rgba(114, 137, 218, 0.3));
