@@ -46,6 +46,11 @@ func newExtraImage(proxy, direct string, w, h int, pp ...cache.Processor) gtkuti
 }
 
 func maxSize(w, h, maxW, maxH int) (int, int) {
+	if w == 0 || h == 0 {
+		// shit
+		return maxW, maxH
+	}
+
 	if w > h {
 		h = h * maxW / w
 		w = maxW
