@@ -178,6 +178,8 @@ func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 	} else {
 		b.setClass("")
 	}
+
+	must(b.Main.ShowAll)
 }
 
 func (b *UserPopup) UpdateStatus(status discord.Status) {
