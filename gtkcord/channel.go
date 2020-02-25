@@ -65,7 +65,7 @@ func (g *Guild) loadChannels() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get channels")
 	}
-	chs = filterChannels(App.State, chs)
+	chs = filterChannels(chs)
 
 	/*
 	 * === Main box ===

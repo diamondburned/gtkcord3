@@ -66,7 +66,7 @@ func newGuildsFromFolders() ([]*Guild, error) {
 			rows = append(rows, r)
 
 		} else {
-			e, err := newGuildFolder(App.State, f)
+			e, err := newGuildFolder(f)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
 			}

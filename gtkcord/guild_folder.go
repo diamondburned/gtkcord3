@@ -4,7 +4,6 @@ import (
 	"html"
 
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/gotk3/gotk3/gdk"
@@ -18,7 +17,7 @@ type GuildFolder struct {
 	Guilds   []*Guild
 }
 
-func newGuildFolder(s *state.State, folder gateway.GuildFolder) (*Guild, error) {
+func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 	if folder.Color == 0 {
 		folder.Color = 0x7289DA
 	}

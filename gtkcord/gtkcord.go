@@ -9,11 +9,11 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -44,7 +44,7 @@ type application struct {
 
 	Grid *gtk.Grid
 
-	State *state.State
+	State *ningen.State
 
 	// self stufff
 	Me *discord.User
@@ -122,7 +122,7 @@ func Init() error {
 	return nil
 }
 
-func Ready(s *state.State) error {
+func Ready(s *ningen.State) error {
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln("Discord error:", err)
@@ -143,7 +143,7 @@ func Ready(s *state.State) error {
 
 	// Set variables, etc.
 	App.State = s
-	App.parser = md.NewParser(s)
+	App.parser = md.NewParser(s.State)
 	App.parser.UserPressed = userMentionPressed
 	App.parser.ChannelPressed = channelMentionPressed
 
@@ -153,6 +153,7 @@ func Ready(s *state.State) error {
 	}
 	App.Me = u
 	App.Header.Hamburger.User.Update(*u)
+	App.Header.Hamburger.User.UpdateStatus(s.Ready.Settings.Status)
 
 	{
 		gw, err := gtk.ScrolledWindowNew(nil, nil)

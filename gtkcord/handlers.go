@@ -28,6 +28,8 @@ func (a *application) hookEvents() {
 			onGuildMembersChunk(v)
 		case *gateway.SessionsReplaceEvent:
 			onSessionsReplace(*v)
+		case *gateway.UserSettingsUpdateEvent:
+			onUserSettingsUpdate(v)
 		}
 	})
 }
@@ -121,6 +123,10 @@ func onSessionsReplace(replaces gateway.SessionsReplaceEvent) {
 
 	App.Header.Hamburger.User.UpdateStatus(replace.Status)
 	App.Header.Hamburger.User.UpdateActivity(replace.Game)
+}
+
+func onUserSettingsUpdate(r *gateway.UserSettingsUpdateEvent) {
+	App.Header.Hamburger.User.UpdateStatus(r.Status)
 }
 
 func onGuildCreate(g *gateway.GuildCreateEvent) {

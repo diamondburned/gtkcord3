@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
 )
 
 type _sortStructure struct {
@@ -13,8 +12,9 @@ type _sortStructure struct {
 	children  []discord.Channel
 }
 
-func filterChannels(s *state.State, chs []discord.Channel) []discord.Channel {
+func filterChannels(chs []discord.Channel) []discord.Channel {
 	filtered := chs[:0]
+	s := App.State
 
 	u, err := s.Me()
 	if err != nil {

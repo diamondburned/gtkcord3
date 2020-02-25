@@ -144,6 +144,9 @@ func (ch *Channel) loadMessages() error {
 	must(m.ShowAll)
 
 	go func() {
+		// Mark the latest message as read:
+		App.State.MarkRead(ch.ID, newMessages[len(newMessages)-1].ID)
+
 		wg.Wait()
 		m.Resetting.Store(false)
 	}()

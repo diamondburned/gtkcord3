@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/keyring"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/pkg/errors"
 )
 
@@ -71,7 +72,12 @@ func Finish(s *state.State) {
 	// Store the token:
 	keyring.Set(s.Token)
 
-	if err := gtkcord.Ready(s); err != nil {
+	n, err := ningen.Ningen(s)
+	if err != nil {
+		log.Fatalln("Failed to start the Discord wrapper:", err)
+	}
+
+	if err := gtkcord.Ready(n); err != nil {
 		log.Fatalln("Failed to get gtkcord ready:", err)
 	}
 }
