@@ -2,6 +2,7 @@ package ningen
 
 import (
 	"sync"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/diamondburned/arikawa/api"
@@ -18,13 +19,13 @@ type State struct {
 	MutedGuilds   map[discord.Snowflake]*Mute
 	MutedChannels map[discord.Snowflake]*Mute
 
-	readMutex sync.Mutex
-	LastRead  map[discord.Snowflake]*gateway.ReadState
+	readMutex    sync.Mutex
+	lastAck      api.Ack
+	lastAckTimes map[discord.Snowflake]time.Time // channelID
+	LastRead     map[discord.Snowflake]*gateway.ReadState
 
 	OnReadUpdate     func(*gateway.ReadState)
 	OnGuildPosChange func(*gateway.UserSettings)
-
-	lastAck api.Ack
 }
 
 type Mute struct {
@@ -42,6 +43,7 @@ func Ningen(s *state.State) (*State, error) {
 		MutedGuilds:   map[discord.Snowflake]*Mute{},
 		MutedChannels: map[discord.Snowflake]*Mute{},
 		LastRead:      map[discord.Snowflake]*gateway.ReadState{},
+		lastAckTimes:  map[discord.Snowflake]time.Time{},
 		OnReadUpdate: func(r *gateway.ReadState) {
 			log.Println("Read state update in channel", r.ChannelID, "message ID", r.LastMessageID)
 		},
@@ -194,6 +196,24 @@ func (s *State) MarkRead(channelID, messageID discord.Snowflake) {
 	if !s.hookIncomingMessage(channelID, messageID) {
 		return
 	}
+
+	// TODO: make this a select default loop, since this just cancels the latest
+	// message ID, but does not mark them afterwards.
+
+	s.readMutex.Lock()
+	now := time.Now()
+
+	t, ok := s.lastAckTimes[channelID]
+	if ok {
+		// If we've ack'd in the past 10 seconds:
+		if t.Add(10 * time.Second).After(now) {
+			s.readMutex.Unlock()
+			return
+		}
+	}
+	s.lastAckTimes[channelID] = now
+
+	s.readMutex.Unlock()
 
 	// Send over Ack.
 	if err := s.Ack(channelID, messageID, &s.lastAck); err != nil {

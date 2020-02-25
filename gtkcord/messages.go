@@ -144,8 +144,7 @@ func (ch *Channel) loadMessages() error {
 	must(m.ShowAll)
 
 	go func() {
-		// Mark the latest message as read:
-		App.State.MarkRead(ch.ID, newMessages[len(newMessages)-1].ID)
+		m.ackLatest()
 
 		wg.Wait()
 		m.Resetting.Store(false)
@@ -246,6 +245,18 @@ func (m *Messages) onSizeAlloc() {
 	m.Resetting.Store(false)
 }
 
+func (m *Messages) ackLatest() {
+	if len(m.messages) == 0 {
+		return
+	}
+
+	m.guard.Lock()
+	id := m.messages[len(m.messages)-1].ID
+	m.guard.Unlock()
+
+	App.State.MarkRead(m.Channel.ID, id)
+}
+
 func (m *Messages) Insert(message discord.Message) error {
 	// Are we sure this is not our message?
 	if m.Update(message) {
@@ -257,6 +268,7 @@ func (m *Messages) Insert(message discord.Message) error {
 		return errors.Wrap(err, "Failed to render message")
 	}
 
+	defer m.ackLatest()
 	return m.insert(w, message)
 }
 
