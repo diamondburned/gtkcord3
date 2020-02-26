@@ -51,7 +51,7 @@ func Ningen(s *state.State) (*State, error) {
 	}
 
 	s.AddHandler(func(a *gateway.MessageAckEvent) {
-		// TODO
+		state.hookIncomingMessage(a.ChannelID, a.MessageID)
 	})
 
 	s.AddHandler(func(c *gateway.MessageCreateEvent) {
@@ -136,54 +136,35 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 	}
 }
 
-// returns bool updated
+// returns *ReadState if updated, marks the message as unread.
 func (s *State) hookIncomingMessage(channel, message discord.Snowflake) bool {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
 
 	st, ok := s.LastRead[channel]
 	if !ok {
-		s.LastRead[channel] = &gateway.ReadState{
-			ChannelID:     channel,
-			LastMessageID: message,
+		st = &gateway.ReadState{
+			ChannelID: channel,
 		}
-		return true
-	}
+		s.LastRead[channel] = st
 
-	if st.LastMessageID == message {
+	} else if st.LastMessageID == message {
 		return false
 	}
 
 	st.LastMessageID = message
+
+	// Only call the Read update handler when the channel or guild is not muted.
+	if !s.ChannelMuted(channel) {
+		s.OnReadUpdate(st)
+	}
 	return true
 }
 
 func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
-	s.mutedMutex.Lock()
-
-	if _, ok := s.MutedChannels[channelID]; ok {
-		s.mutedMutex.Unlock()
+	if s.ChannelMuted(channelID) {
 		return nil
 	}
-
-	s.mutedMutex.Unlock()
-
-	ch, err := s.Store.Channel(channelID)
-	if err != nil {
-		log.Errorln("Failed to get channel in FindLastRead:", err)
-		return nil
-	}
-
-	s.mutedMutex.Lock()
-
-	if ch.GuildID.Valid() {
-		if _, ok := s.MutedGuilds[ch.GuildID]; ok {
-			s.mutedMutex.Unlock()
-			return nil
-		}
-	}
-
-	s.mutedMutex.Unlock()
 
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
@@ -223,4 +204,31 @@ func (s *State) MarkRead(channelID, messageID discord.Snowflake) {
 	if err := s.Ack(channelID, messageID, &s.lastAck); err != nil {
 		log.Errorln("Failed to ack message:", err)
 	}
+}
+
+func (s *State) ChannelMuted(channelID discord.Snowflake) bool {
+	s.mutedMutex.Lock()
+	if _, ok := s.MutedChannels[channelID]; ok {
+		s.mutedMutex.Unlock()
+		return true
+	}
+	s.mutedMutex.Unlock()
+
+	ch, err := s.Store.Channel(channelID)
+	if err != nil {
+		log.Errorln("Failed to get channel in FindLastRead:", err)
+	}
+
+	if ch.GuildID.Valid() {
+		return s.GuildMuted(ch.GuildID)
+	}
+	return false
+}
+
+func (s *State) GuildMuted(guildID discord.Snowflake) bool {
+	s.mutedMutex.Lock()
+	defer s.mutedMutex.Unlock()
+
+	_, ok := s.MutedGuilds[guildID]
+	return ok
 }
