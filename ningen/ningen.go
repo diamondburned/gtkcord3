@@ -50,6 +50,10 @@ func Ningen(s *state.State) (*State, error) {
 		OnGuildPosChange: func(*gateway.UserSettings) {},
 	}
 
+	s.AddHandler(func(a *gateway.MessageAckEvent) {
+		// TODO
+	})
+
 	s.AddHandler(func(c *gateway.MessageCreateEvent) {
 		state.hookIncomingMessage(c.ChannelID, c.ID)
 	})
