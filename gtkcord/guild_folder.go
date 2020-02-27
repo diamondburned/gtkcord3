@@ -26,8 +26,14 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create main box")
 	}
-	gtkutils.InjectCSS(mainBox, "guild-folder", "")
 	mainBox.SetTooltipMarkup("<b>" + html.EscapeString(folder.Name) + "</b>")
+
+	r, _ := gtk.ListBoxRowNew()
+	r.Add(mainBox)
+	r.SetHAlign(gtk.ALIGN_CENTER)
+	r.SetVAlign(gtk.ALIGN_CENTER)
+	r.SetSizeRequest(IconSize+IconPadding*2, -1)
+	gtkutils.InjectCSSUnsafe(r, "guild-folder", "")
 
 	// Folder icon
 	p, err := icons.PixbufIcon(icons.Folder(folder.Color.Uint32()), FolderSize)
@@ -73,7 +79,7 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 	f := &Guild{
 		// Iter:  store.Append(nil),
 		// Store: store,
-		ExtendedWidget: mainBox,
+		ExtendedWidget: r,
 		Folder: &GuildFolder{
 			Revealer: folderRev,
 			List:     guildList,

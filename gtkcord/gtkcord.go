@@ -211,6 +211,7 @@ func Ready(s *ningen.State) error {
 	}()
 
 	App.hookEvents()
+	App.hookReads()
 
 	// Start the garbage collector:
 	// (Too unstable right now)

@@ -143,6 +143,9 @@ func (ch *Channel) loadMessages() error {
 	m.messages = newMessages
 	must(m.ShowAll)
 
+	// Set the latest message ID.
+	m.Channel.LastMsg = messages[len(messages)-1].ID
+
 	go func() {
 		m.ackLatest()
 
@@ -252,6 +255,7 @@ func (m *Messages) ackLatest() {
 
 	m.guard.Lock()
 	id := m.messages[len(m.messages)-1].ID
+	m.Channel.LastMsg = id
 	m.guard.Unlock()
 
 	App.State.MarkRead(m.Channel.ID, id)

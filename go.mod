@@ -22,5 +22,6 @@ require (
 	github.com/zalando/go-keyring v0.0.0-20200121091418-667557018717
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
+	golang.org/x/tools/gopls v0.3.2 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

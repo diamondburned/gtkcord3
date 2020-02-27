@@ -12,6 +12,32 @@ const CSS = `
 	headerbar { padding: 0; }
 	headerbar button { box-shadow: none; }
 	textview, textview > text { background-color: transparent; }
+
+	.guild-folder, .guild {
+		padding-left: 0;
+		padding-right: 0;
+	}
+	.guild-folder:selected, .guild-folder:selected * {
+		background-color: alpha(@theme_bg_color, 0.5);
+	}
+	.guild-folder:selected {
+		background-color: @theme_bg_color;
+		border-top: 2px solid;
+		border-bottom: 2px solid;
+	}
+	.guild:selected {
+		background-color: alpha(@theme_selected_bg_color, 0.35);
+	}
+	.guild {
+		border-left: 2px solid transparent;
+		border-right: 2px solid transparent;
+	}
+	.guild:selected, .guild:hover:not(.unread) {
+		border-width: 0;
+	}
+	.guild.unread {
+		border-left: 2px solid white;
+	}
 	
 	.message:not(.condensed), .message-input {
 		border-top: 1px solid rgba(0, 0, 0, 0.12);

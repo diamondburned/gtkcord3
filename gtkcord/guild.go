@@ -198,15 +198,13 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
 	// Set paddings:
 	must(r.SetSizeRequest, IconSize+IconPadding*2, IconSize+IconPadding*2)
-	must(r.SetHAlign, gtk.ALIGN_CENTER)
+	must(r.SetHAlign, gtk.ALIGN_FILL)
 	must(r.SetVAlign, gtk.ALIGN_CENTER)
 	must(r.SetTooltipMarkup, bold(g.Name))
 	must(r.SetActivatable, true)
 	gtkutils.InjectCSS(r, "guild", "")
 
 	i := must(gtk.ImageNewFromIconName, "user-available", gtk.ICON_SIZE_DIALOG).(*gtk.Image)
-	must(r.SetHAlign, gtk.ALIGN_CENTER)
-	must(r.SetVAlign, gtk.ALIGN_CENTER)
 	must(r.Add, i)
 
 	guild := &Guild{

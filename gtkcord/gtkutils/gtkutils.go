@@ -15,10 +15,14 @@ type ExtendedWidget interface {
 	gtk.IWidget
 	SetSensitive(bool)
 	GetSensitive() bool
+	SetOpacity(float64)
 	Show()
 	ShowAll()
 	Destroy()
 }
+
+// Safe-guard
+var _ ExtendedWidget = (*gtk.Box)(nil)
 
 type Marginator interface {
 	SetMarginStart(int)
