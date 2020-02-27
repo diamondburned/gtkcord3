@@ -47,6 +47,7 @@ type Channel struct {
 	Name     string
 	Topic    string
 	Category bool
+	LastMsg  discord.Snowflake
 
 	Messages *Messages
 }
@@ -105,6 +106,7 @@ func (g *Guild) loadChannels() error {
 	must(cl.SetActivateOnSingleClick, true)
 	must(cl.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := g.Channels.Channels[r.GetIndex()]
+		row.setUnread(false)
 		go App.loadChannel(g, row)
 	})
 
@@ -171,11 +173,10 @@ func newChannelRow(ch discord.Channel) *Channel {
 	must(l.SetUseMarkup, true)
 	must(l.SetXAlign, 0.0)
 	must(l.SetMarginStart, 8)
-	must(l.SetOpacity, 0.75) // TODO: read state
 
 	must(r.Add, l)
 
-	return &Channel{
+	chw := &Channel{
 		ExtendedWidget: r,
 
 		Row:      r,
@@ -185,7 +186,13 @@ func newChannelRow(ch discord.Channel) *Channel {
 		Name:     ch.Name,
 		Topic:    ch.Topic,
 		Category: false,
+		LastMsg:  ch.LastMessageID,
 	}
+
+	rs := App.State.FindLastRead(ch.ID)
+	chw.updateReadState(rs)
+
+	return chw
 }
 func newDMChannel(ch discord.Channel) *Channel {
 	panic("Implement me")
