@@ -22,9 +22,7 @@ func (f *Formatter) Format(w io.Writer, iterator chroma.Iterator) error {
 	lines := chroma.SplitTokensIntoLines(tokens)
 	highlightIndex := 0
 
-	w.Write([]byte(
-		`<span font_family="monospace" font_size="smaller" ` +
-			f.styleAttr(chroma.Background) + ">"))
+	w.Write([]byte(`<span font_family="monospace" font_size="smaller">`))
 
 	highlightIndex = 0
 	for index, tokens := range lines {
@@ -73,6 +71,14 @@ func (f *Formatter) shouldHighlight(highlightIndex, line int) (bool, bool) {
 }
 
 func (f *Formatter) styleAttr(tt chroma.TokenType, extraCSS ...string) string {
+	// Ignore foreground tokens.
+	switch tt {
+	case chroma.Punctuation,
+		chroma.Text, chroma.TextPunctuation, chroma.TextSymbol:
+
+		return ""
+	}
+
 	if _, ok := css[tt]; !ok {
 		tt = tt.SubCategory()
 	}

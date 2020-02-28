@@ -21,7 +21,7 @@ type State struct {
 	lastAck   api.Ack
 	LastRead  map[discord.Snowflake]*gateway.ReadState
 
-	OnReadUpdate     func(*gateway.ReadState)
+	OnReadChange     func(rs *gateway.ReadState, ack bool)
 	OnGuildPosChange func(*gateway.UserSettings)
 }
 
@@ -36,22 +36,20 @@ type Mute struct {
 
 func Ningen(s *state.State) (*State, error) {
 	state := &State{
-		State:         s,
-		MutedGuilds:   map[discord.Snowflake]*Mute{},
-		MutedChannels: map[discord.Snowflake]*Mute{},
-		LastRead:      map[discord.Snowflake]*gateway.ReadState{},
-		OnReadUpdate: func(r *gateway.ReadState) {
-			log.Println("Read state update in channel", r.ChannelID, "message ID", r.LastMessageID)
-		},
+		State:            s,
+		MutedGuilds:      map[discord.Snowflake]*Mute{},
+		MutedChannels:    map[discord.Snowflake]*Mute{},
+		LastRead:         map[discord.Snowflake]*gateway.ReadState{},
+		OnReadChange:     func(*gateway.ReadState, bool) {},
 		OnGuildPosChange: func(*gateway.UserSettings) {},
 	}
 
 	s.AddHandler(func(a *gateway.MessageAckEvent) {
-		state.hookIncomingMessage(a.ChannelID, a.MessageID, true)
+		state.hookIncomingMessage(a.ChannelID, a.MessageID, true, true)
 	})
 
 	s.AddHandler(func(c *gateway.MessageCreateEvent) {
-		state.hookIncomingMessage(c.ChannelID, c.ID, true)
+		state.hookIncomingMessage(c.ChannelID, c.ID, true, false)
 	})
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
@@ -123,7 +121,7 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 }
 
 // returns *ReadState if updated, marks the message as unread.
-func (s *State) hookIncomingMessage(channel, message discord.Snowflake, call bool) bool {
+func (s *State) hookIncomingMessage(channel, message discord.Snowflake, call, ack bool) bool {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
 
@@ -137,9 +135,8 @@ func (s *State) hookIncomingMessage(channel, message discord.Snowflake, call boo
 
 	st.LastMessageID = message
 
-	// Only call the Read update handler when the channel or guild is not muted.
-	if call && !s.ChannelMuted(channel) {
-		s.OnReadUpdate(st)
+	if call {
+		s.OnReadChange(st, ack)
 	}
 	return true
 }
@@ -161,7 +158,7 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 
 func (s *State) MarkRead(channelID, messageID discord.Snowflake) {
 	// Update ReadState as well as the callback.
-	if !s.hookIncomingMessage(channelID, messageID, false) {
+	if !s.hookIncomingMessage(channelID, messageID, false, false) {
 		return
 	}
 
@@ -171,25 +168,30 @@ func (s *State) MarkRead(channelID, messageID discord.Snowflake) {
 	}
 }
 
+func (s *State) CategoryMuted(channelID discord.Snowflake) bool {
+	ch, err := s.Store.Channel(channelID)
+	if err != nil {
+		return false
+	}
+
+	if !ch.CategoryID.Valid() {
+		return false
+	}
+
+	return s.ChannelMuted(ch.CategoryID)
+}
+
 func (s *State) ChannelMuted(channelID discord.Snowflake) bool {
 	s.mutedMutex.Lock()
+	defer s.mutedMutex.Unlock()
+
 	if m, ok := s.MutedChannels[channelID]; ok {
 		// Channels don't have an @everyone mute.
 		if m.All {
-			s.mutedMutex.Unlock()
 			return true
 		}
 	}
-	s.mutedMutex.Unlock()
 
-	// ch, err := s.Store.Channel(channelID)
-	// if err != nil {
-	// 	return false
-	// }
-
-	// if ch.GuildID.Valid() {
-	// 	return s.GuildMuted(ch.GuildID, false)
-	// }
 	return false
 }
 

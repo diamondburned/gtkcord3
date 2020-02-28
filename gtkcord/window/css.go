@@ -13,32 +13,30 @@ const CSS = `
 	headerbar button { box-shadow: none; }
 	textview, textview > text { background-color: transparent; }
 
+	.guilds, .channels {
+		background-color: @theme_bg_color;
+	}
+	.messages {
+		background-color: @theme_base_color;
+	}
+
 	.guild-folder, .guild {
 		padding-left: 0;
 		padding-right: 0;
 	}
-	.guild-folder:selected, .guild-folder:selected * {
-		background-color: alpha(@theme_bg_color, 0.5);
+	.guild-folder.unread {
+		background-color: alpha(@theme_selected_bg_color, 0.15);
 	}
 	.guild-folder:selected {
-		background-color: @theme_bg_color;
-		border-top: 2px solid;
-		border-bottom: 2px solid;
+		border-top: 5px solid alpha(@theme_selected_bg_color, 0.5);
+	}
+	.guild-folder:selected list {
+		border-bottom: 5px solid alpha(@theme_selected_bg_color, 0.5);
 	}
 	.guild:selected {
-		background-color: alpha(@theme_selected_bg_color, 0.35);
+		background-color: alpha(@theme_selected_bg_color, 0.5);
 	}
-	.guild {
-		border-left: 2px solid transparent;
-		border-right: 2px solid transparent;
-	}
-	.guild:selected, .guild:hover:not(.unread) {
-		border-width: 0;
-	}
-	.guild.unread {
-		border-left: 2px solid white;
-	}
-	
+
 	.message:not(.condensed), .message-input {
 		border-top: 1px solid rgba(0, 0, 0, 0.12);
 	}
@@ -74,14 +72,13 @@ const CSS = `
 		opacity: 1;
 	}
 	
-	.guild image {
+	.guild > image {
 	    box-shadow: 0px 0px 4px -1px rgba(0,0,0,0.5);
 	    border-radius: 50%;
-		background-color: grey;
 	}
-
-	.message image:not(.avatar) {
-		border: 1px solid rgba(0, 0, 0, 0.25);
+	.guild.unread > image {
+		border: 2px solid @theme_fg_color;
+		padding: 2px;
 	}
 `
 

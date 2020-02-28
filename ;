@@ -51,9 +51,7 @@ func (guild *Guild) setUnread(unread bool) {
 
 	if guild.Channels != nil {
 		for _, ch := range guild.Channels.Channels {
-			// Category mute is very special. It doesn't count towards guild
-			// unread, but it should still be highlighted.
-			if ch.unread && !App.State.CategoryMuted(ch.ID) {
+			if ch.unread {
 				unread = true
 				break
 			}
@@ -117,6 +115,15 @@ func (channel *Channel) updateReadState(rs *gateway.ReadState) {
 }
 
 func (channel *Channel) setUnread(unread bool) {
+	if channel.muted {
+		return
+	}
+
+	// Category mute is very special.
+	if App.State.CategoryMuted(channel.ID) {
+		return
+	}
+
 	if App.State.ChannelMuted(channel.ID) {
 		if !channel.muted {
 			channel.muted = true
@@ -127,11 +134,11 @@ func (channel *Channel) setUnread(unread bool) {
 		return
 	}
 
+
 	if channel.unread == unread {
 		return
 	}
 	channel.unread = unread
-	channel.muted = false
 
 	if unread {
 		must(channel.SetOpacity, float64(1.0))

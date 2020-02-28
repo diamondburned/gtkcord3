@@ -4,7 +4,6 @@ import (
 	"html"
 
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -33,7 +32,9 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 	r.SetHAlign(gtk.ALIGN_CENTER)
 	r.SetVAlign(gtk.ALIGN_CENTER)
 	r.SetSizeRequest(IconSize+IconPadding*2, -1)
-	gtkutils.InjectCSSUnsafe(r, "guild-folder", "")
+
+	style, _ := r.GetStyleContext()
+	style.AddClass("guild-folder")
 
 	// Folder icon
 	p, err := icons.PixbufIcon(icons.Folder(folder.Color.Uint32()), FolderSize)
@@ -80,13 +81,16 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 		// Iter:  store.Append(nil),
 		// Store: store,
 		ExtendedWidget: r,
+		Row:            r,
+		Style:          style,
 		Folder: &GuildFolder{
 			Revealer: folderRev,
 			List:     guildList,
 			Guilds:   make([]*Guild, 0, len(folder.GuildIDs)),
 		},
 
-		ID: folder.ID,
+		ID:   folder.ID,
+		Name: folder.Name,
 	}
 
 	for _, id := range folder.GuildIDs {
@@ -94,6 +98,7 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to load guild "+id.String())
 		}
+		r.Parent = f
 		f.Folder.Guilds = append(f.Folder.Guilds, r)
 	}
 

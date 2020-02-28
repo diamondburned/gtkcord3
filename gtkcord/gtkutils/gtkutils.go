@@ -13,6 +13,8 @@ import (
 
 type ExtendedWidget interface {
 	gtk.IWidget
+	StyleContextGetter
+
 	SetSensitive(bool)
 	GetSensitive() bool
 	SetOpacity(float64)

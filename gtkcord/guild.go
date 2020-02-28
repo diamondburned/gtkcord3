@@ -17,7 +17,7 @@ import (
 const (
 	FolderSize  = 42
 	IconSize    = 52
-	IconPadding = 6
+	IconPadding = 8
 )
 
 type Guilds struct {
@@ -28,16 +28,19 @@ type Guilds struct {
 }
 
 type Guild struct {
-	gtkutils.ExtendedWidget
 	Guilds *Guilds
+	Parent *Guild
 
-	Row *gtk.ListBoxRow
+	gtkutils.ExtendedWidget
+	Row   *gtk.ListBoxRow
+	Style *gtk.StyleContext
 
 	Folder *GuildFolder
 
-	Style *gtk.StyleContext
 	Image *gtk.Image
 	IURL  string
+
+	BannerURL string
 
 	ID   discord.Snowflake
 	Name string
@@ -48,6 +51,8 @@ type Guild struct {
 
 	requestingMembers  map[discord.Snowflake]struct{}
 	requestingMemMutex sync.Mutex
+
+	unread bool
 }
 
 func newGuildsFromFolders() ([]*Guild, error) {
@@ -167,22 +172,43 @@ func newGuilds() (*Guilds, error) {
 			row = row.Folder.Guilds[index]
 		}
 
-		go App.loadGuild(row)
+		go func() {
+			App.loadGuild(row)
+		}()
 	})
 
-	go func() {
-		for _, r := range rows {
-			r.UpdateImage()
+	g.find(func(g *Guild) bool {
+		g.UpdateImage()
+		return false
+	})
 
-			if r.Folder != nil {
-				for _, r := range r.Folder.Guilds {
-					r.UpdateImage()
+	return g, nil
+}
+
+func (guilds *Guilds) findByID(guildID discord.Snowflake) (*Guild, *GuildFolder) {
+	return guilds.find(func(g *Guild) bool {
+		return g.ID == guildID
+	})
+}
+
+func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
+	for _, guild := range guilds.Guilds {
+		if guild.Folder == nil && fn(guild) {
+			return guild, nil
+		}
+
+		if guild.Folder != nil {
+			folder := guild.Folder
+
+			for _, guild := range folder.Guilds {
+				if fn(guild) {
+					return guild, folder
 				}
 			}
 		}
-	}()
+	}
 
-	return g, nil
+	return nil, nil
 }
 
 func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
@@ -202,7 +228,9 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	must(r.SetVAlign, gtk.ALIGN_CENTER)
 	must(r.SetTooltipMarkup, bold(g.Name))
 	must(r.SetActivatable, true)
-	gtkutils.InjectCSS(r, "guild", "")
+
+	style := must(r.GetStyleContext).(*gtk.StyleContext)
+	must(style.AddClass, "guild")
 
 	i := must(gtk.ImageNewFromIconName, "user-available", gtk.ICON_SIZE_DIALOG).(*gtk.Image)
 	must(r.Add, i)
@@ -210,17 +238,37 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	guild := &Guild{
 		ExtendedWidget: r,
 
-		Row:   r,
-		ID:    g.ID,
-		Name:  g.Name,
-		IURL:  g.IconURL(),
-		Image: i,
+		Row:       r,
+		Style:     style,
+		ID:        guildID,
+		Name:      g.Name,
+		IURL:      g.IconURL(),
+		Image:     i,
+		BannerURL: g.BannerURL(),
 	}
 
 	// Check if the guild is unavailable:
 	if fetcherr != nil {
 		must(guild.SetUnavailable, true)
+		return guild, nil
 	}
+
+	// Prefetch unread state:
+	go func() {
+		if err := guild.prefetchChannels(); err != nil {
+			log.Errorln("Failed to prefetch guild", guild.Name)
+			return
+		}
+
+		for _, ch := range guild.Channels.Channels {
+			if rs := App.State.FindLastRead(ch.ID); rs != nil {
+				if ch.LastMsg != rs.LastMessageID {
+					guild.setUnread(true)
+					break
+				}
+			}
+		}
+	}()
 
 	return guild, nil
 }

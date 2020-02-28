@@ -113,52 +113,60 @@ func newMessage(m discord.Message) (*Message, error) {
 	return message, nil
 }
 
-func newMessageCustom(m discord.Message) (*Message, error) {
-	main := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
-	mstyle := must(main.GetStyleContext).(*gtk.StyleContext)
-
-	gtkutils.InjectCSS(main, "message", `
-		.message {
-			border-left: 2px solid transparent;
-		}
-		.message.mentioned {
-			border-left: 2px solid rgb(250, 166, 26);
-			background-color: rgba(250, 166, 26, 0.05);
-		}
-	`)
-
-	message := &Message{
-		Nonce:     m.Nonce,
-		ID:        m.ID,
-		AuthorID:  m.Author.ID,
-		Timestamp: m.Timestamp.Time().Local(),
-		Edited:    m.EditedTimestamp.Time().Local(),
-
-		ExtendedWidget: main,
-		Condensed:      false,
-
-		main:      main,
-		mainStyle: mstyle,
-		avatarEv:  must(gtk.EventBoxNew).(*gtk.EventBox),
-		avatar: must(
-			gtk.ImageNewFromPixbuf, App.parser.GetIcon("user-info", AvatarSize)).(*gtk.Image),
-		right: must(
-			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
-		rightTop: must(
-			gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box),
-		author: must(
-			gtk.LabelNew, "").(*gtk.Label),
-		timestamp: must(
-			gtk.LabelNew, "").(*gtk.Label),
-		rightBottom: must(
-			gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box),
-	}
-
-	defer message.markBusy()()
-	gtkutils.InjectCSS(message.avatar, "avatar", "")
+func newMessageCustom(m discord.Message) (message *Message, err error) {
+	icon := App.parser.GetIcon("user-info", AvatarSize)
 
 	// What the fuck?
 	must(func() {
+		var (
+			avatar, _   = gtk.ImageNewFromPixbuf(icon)
+			avatarEv, _ = gtk.EventBoxNew()
+
+			main, _        = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+			right, _       = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+			rightTop, _    = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+			rightBottom, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+
+			author, _    = gtk.LabelNew("???")
+			timestamp, _ = gtk.LabelNew("")
+		)
+
+		mstyle, _ := main.GetStyleContext()
+		gtkutils.InjectCSSUnsafe(main, "message", `
+			.message {
+				border-left: 2px solid transparent;
+			}
+			.message.mentioned {
+				border-left: 2px solid rgb(250, 166, 26);
+				background-color: rgba(250, 166, 26, 0.05);
+			}
+		`)
+
+		message = &Message{
+			Nonce:     m.Nonce,
+			ID:        m.ID,
+			AuthorID:  m.Author.ID,
+			Timestamp: m.Timestamp.Time().Local(),
+			Edited:    m.EditedTimestamp.Time().Local(),
+
+			ExtendedWidget: main,
+			Condensed:      false,
+
+			main:        main,
+			mainStyle:   mstyle,
+			avatarEv:    avatarEv,
+			avatar:      avatar,
+			right:       right,
+			rightTop:    rightTop,
+			author:      author,
+			timestamp:   timestamp,
+			rightBottom: rightBottom,
+		}
+
+		defer message.markBusy()()
+
+		gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
+
 		message.rightBottom.SetHExpand(true)
 		message.rightBottom.SetMarginBottom(5)
 		message.rightBottom.SetMarginEnd(AvatarPadding * 2)
@@ -243,7 +251,6 @@ func (m *Message) SetCondensed(condensed bool) {
 
 func (m *Message) setCondensed() {
 	if m.Condensed {
-		m.main.SetMarginTop(2)
 		m.mainStyle.AddClass("condensed")
 		m.timestamp.SetXAlign(0.5)
 		m.timestamp.SetMarkup(smaller("+" + m.CondenseOffset.String()))
@@ -261,7 +268,6 @@ func (m *Message) setCondensed() {
 		return
 	}
 
-	m.main.SetMarginTop(5)
 	m.mainStyle.RemoveClass("condensed")
 	m.timestamp.SetXAlign(0.0) // left align
 	m.timestamp.SetMarkup(smaller(humanize.TimeAgo(m.Timestamp)))
@@ -331,10 +337,10 @@ func (m *Message) updateContent(s string) {
 	defer m.markBusy()()
 
 	m.assertContent()
-	must(func(m *Message) {
+	must(func() {
 		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
 		m.content.InsertMarkup(m.content.GetEndIter(), s)
-	}, m)
+	})
 }
 
 func (m *Message) UpdateContent(update discord.Message) {
@@ -377,23 +383,24 @@ func (m *Message) assertContent() {
 func (m *Message) UpdateExtras(update discord.Message) {
 	defer m.markBusy()()
 
-	must(func(m *Message) {
+	must(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Remove(extra)
 		}
-	}, m)
+	})
 
-	m.extras = m.extras[:0]
+	// set to nil so the old slice can be GC'd
+	m.extras = nil
 	m.extras = append(m.extras, NewEmbed(update)...)
 	m.extras = append(m.extras, NewAttachment(update)...)
 
-	must(func(m *Message) {
+	must(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Add(extra)
 		}
 
 		m.rightBottom.ShowAll()
-	}, m)
+	})
 }
 
 func smaller(text string) string {

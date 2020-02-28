@@ -50,23 +50,39 @@ type Channel struct {
 	LastMsg  discord.Snowflake
 
 	Messages *Messages
+
+	unread bool
+	muted  bool
 }
 
-func (g *Guild) loadChannels() error {
-	if g.Channels != nil {
-		return nil
-	}
-
-	guild, err := App.State.Guild(g.ID)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get guild "+g.ID.String())
-	}
-
-	chs, err := App.State.Channels(guild.ID)
+func (g *Guild) prefetchChannels() error {
+	chs, err := App.State.Channels(g.ID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get channels")
 	}
 	chs = filterChannels(chs)
+
+	g.Channels = &Channels{
+		Guild: g,
+	}
+
+	if err := transformChannels(g.Channels, chs); err != nil {
+		return errors.Wrap(err, "Failed to transform channels")
+	}
+
+	return nil
+}
+
+func (g *Guild) loadChannels() error {
+	if g.Channels != nil && g.Channels.Main != nil {
+		return nil
+	}
+
+	if g.Channels == nil {
+		if err := g.prefetchChannels(); err != nil {
+			return errors.Wrap(err, "Failed to load prefetched channel")
+		}
+	}
 
 	/*
 	 * === Main box ===
@@ -75,27 +91,15 @@ func (g *Guild) loadChannels() error {
 	cs := must(gtk.ScrolledWindowNew,
 		nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
 	must(cs.SetPolicy, gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+	g.Channels.ExtendedWidget = cs
+	g.Channels.Scroll = cs
 
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	must(main.SetSizeRequest, ChannelsWidth, -1)
 	gtkutils.InjectCSS(main, "channels", "")
+	g.Channels.Main = main
 
 	must(cs.Add, main)
-
-	g.Channels = &Channels{
-		Guild:          g,
-		ExtendedWidget: cs,
-		Scroll:         cs,
-		Main:           main,
-	}
-
-	/*
-	 * === Header ===
-	 */
-
-	if guild.Banner != "" {
-		go g.Channels.UpdateBanner(guild.BannerURL())
-	}
 
 	/*
 	 * === Channels list ===
@@ -106,19 +110,34 @@ func (g *Guild) loadChannels() error {
 	must(cl.SetActivateOnSingleClick, true)
 	must(cl.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		row := g.Channels.Channels[r.GetIndex()]
-		row.setUnread(false)
-		go App.loadChannel(g, row)
+		go func() {
+			row.setUnread(false)
+			App.loadChannel(g, row)
+		}()
 	})
 
+	gtkutils.InjectCSS(cl, "channels", "")
 	must(main.Add, cl)
-
-	if err := transformChannels(g.Channels, chs); err != nil {
-		return errors.Wrap(err, "Failed to transform channels")
-	}
 
 	for _, ch := range g.Channels.Channels {
 		ch.Channels = g.Channels
 		must(cl.Add, ch)
+
+		if ch.Category || !ch.LastMsg.Valid() {
+			continue
+		}
+
+		if rs := App.State.FindLastRead(ch.ID); rs != nil {
+			ch.updateReadState(rs)
+		}
+	}
+
+	/*
+	 * === Header ===
+	 */
+
+	if g.BannerURL != "" {
+		go g.Channels.UpdateBanner(g.BannerURL)
 	}
 
 	return nil
@@ -153,7 +172,7 @@ func newCategory(ch discord.Channel) *Channel {
 
 	must(r.Add, l)
 
-	return &Channel{
+	chw := &Channel{
 		ExtendedWidget: r,
 
 		Row:      r,
@@ -164,6 +183,12 @@ func newCategory(ch discord.Channel) *Channel {
 		Topic:    ch.Topic,
 		Category: true,
 	}
+
+	if App.State.ChannelMuted(chw.ID) {
+		must(chw.SetOpacity, float64(0.25))
+	}
+
+	return chw
 }
 
 func newChannelRow(ch discord.Channel) *Channel {
@@ -187,10 +212,9 @@ func newChannelRow(ch discord.Channel) *Channel {
 		Topic:    ch.Topic,
 		Category: false,
 		LastMsg:  ch.LastMessageID,
+		unread:   true, // workaround to set opacity
 	}
-
-	rs := App.State.FindLastRead(ch.ID)
-	chw.updateReadState(rs)
+	chw.setUnread(false)
 
 	return chw
 }

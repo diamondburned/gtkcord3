@@ -127,9 +127,6 @@ func Ready(s *ningen.State) error {
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln("Discord error:", err)
 	}
-	// s.StateLog = func(err error) {
-	// 	log.Debugln("State error:", err)
-	// }
 
 	must(window.Resize, 1200, 850)
 
@@ -167,6 +164,7 @@ func Ready(s *ningen.State) error {
 			return errors.Wrap(err, "Failed to make guilds view")
 		}
 		App.Guilds = gs
+		gtkutils.InjectCSS(gs, "guilds", "")
 
 		must(gw.Add, gs)
 		must(App.Grid.Add, gw)
@@ -182,25 +180,11 @@ func Ready(s *ningen.State) error {
 	must(window.Display, App.Grid)
 	must(window.ShowAll)
 
+	// Finalize the spinner so it can be reused:
 	must(App.spinner.Stop)
-
-	// semaphore.Go(func() {
-	// 	for _, g := range App.Guilds.Guilds {
-	// 		_, err := s.Channels(g.ID)
-	// 		if err != nil {
-	// 			logWrap(err, "Failed to pre-fetch channels")
-	// 		}
-
-	// 		if g.Folder != nil {
-	// 			for _, g := range g.Folder.Guilds {
-	// 				_, err := s.Channels(g.ID)
-	// 				if err != nil {
-	// 					logWrap(err, "Failed to pre-fetch channels")
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// })
+	must(App.sbox.SetHExpand, true)
+	must(App.sbox.SetHAlign, gtk.ALIGN_CENTER)
+	must(App.sbox.SetVAlign, gtk.ALIGN_CENTER)
 
 	// Start the completion queue:
 	App.completionQueue = make(chan func())
@@ -244,6 +228,10 @@ func (a *application) close() {
 func (a *application) setChannelCol(w gtkutils.ExtendedWidget) {
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
+}
+func (a *application) setMessagesCol(w gtkutils.ExtendedWidget) {
+	a.Messages = w
+	a.Grid.Attach(w, 4, 0, 1, 1)
 }
 
 func (a *application) loadGuild(g *Guild) {
@@ -335,9 +323,7 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	}
 
 	must(a._loadChannelDone, g, ch)
-
-	a.Messages = ch.Messages
-	must(a.Grid.Attach, ch.Messages, 4, 0, 1, 1)
+	must(a.setMessagesCol, ch.Messages)
 	must(ch.Messages.Show)
 }
 

@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/glib"
@@ -33,8 +32,7 @@ func init() {
 
 		for call := range idleAdds {
 			glib.IdleAdd(func(call *idleCall) {
-				// log.Debugln(call.trace, "IdleAdd() called.")
-				now := time.Now()
+				// now := time.Now()
 
 				if fn, ok := call.fn.(func()); ok {
 					fn()
@@ -43,9 +41,9 @@ func init() {
 					call.done <- call.fn.(reflect.Value).Call(call.args)
 				}
 
-				if delta := time.Now().Sub(now); delta > time.Millisecond {
-					log.Infoln(call.trace, "took", time.Now().Sub(now))
-				}
+				// if delta := time.Now().Sub(now); delta > time.Millisecond {
+				// 	log.Infoln(call.trace, "took", time.Now().Sub(now))
+				// }
 			}, call)
 		}
 	}()

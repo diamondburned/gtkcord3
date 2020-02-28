@@ -84,6 +84,7 @@ func (ch *Channel) loadMessages() error {
 			// Main actually contains the scrolling window.
 			main.Add(s)
 			main.Show()
+			gtkutils.InjectCSSUnsafe(main, "messages", "")
 		})
 	}
 
@@ -255,10 +256,13 @@ func (m *Messages) ackLatest() {
 
 	m.guard.Lock()
 	id := m.messages[len(m.messages)-1].ID
-	m.Channel.LastMsg = id
+	// Apparently this sometimes happen.
+	if id > m.Channel.LastMsg {
+		m.Channel.LastMsg = id
+	}
 	m.guard.Unlock()
 
-	App.State.MarkRead(m.Channel.ID, id)
+	App.State.MarkRead(m.Channel.ID, m.Channel.LastMsg)
 }
 
 func (m *Messages) Insert(message discord.Message) error {

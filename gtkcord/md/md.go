@@ -35,7 +35,7 @@ var regexes = []string{
 	`(<(a?):\w+:(\d+)>)`,
 }
 
-var HighlightStyle = "monokai"
+var HighlightStyle = "monokailight"
 
 var (
 	style    = (*chroma.Style)(nil)

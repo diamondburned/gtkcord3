@@ -2,6 +2,7 @@ package gtkcord
 
 import (
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/diamondburned/arikawa/api"
@@ -213,6 +214,13 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	// If Enter isn't being pressed:
 	if !enter {
 		return false // propagate
+	}
+
+	// Check if the numbers of ``` are odd.
+	if strings.Count(i.getContent(), "```")%2 > 0 {
+		// If yes, assume shift is held. We want the Enter key to insert new
+		// lines.
+		shift = true
 	}
 
 	// If Shift is being held:

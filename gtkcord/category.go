@@ -37,8 +37,6 @@ func filterChannels(chs []discord.Channel) []discord.Channel {
 			discord.GuildCategory,
 			discord.GroupDM:
 
-			break
-
 		default:
 			continue
 		}
