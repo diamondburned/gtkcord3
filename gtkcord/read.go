@@ -20,6 +20,10 @@ func (guilds *Guilds) traverseReadState(rs *gateway.ReadState, ack bool) {
 
 	if guild == nil {
 		guild, _ = guilds.find(func(g *Guild) bool {
+			if g.Channels == nil {
+				return false
+			}
+
 			for _, ch := range g.Channels.Channels {
 				if ch.ID == rs.ChannelID {
 					return true
