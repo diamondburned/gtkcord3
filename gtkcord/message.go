@@ -63,6 +63,8 @@ type Message struct {
 }
 
 func newMessage(m discord.Message) (*Message, error) {
+	defer log.Benchmark("newMessage")()
+
 	message, err := newMessageCustom(m)
 	if err != nil {
 		return nil, err

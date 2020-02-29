@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/logrusorgru/aurora"
 )
@@ -111,4 +112,27 @@ func Fatalf(f string, v ...interface{}) {
 }
 func Fatalln(v ...interface{}) {
 	logPanic.Fatalln(v...)
+}
+
+func Benchmark(thing string) func() {
+	now := time.Now()
+
+	return func() {
+		Debugln(thing, "took", time.Now().Sub(now))
+	}
+}
+
+func BenchmarkLoop(thing string) (func(), func()) {
+	now := time.Now()
+	last := now
+	duras := []time.Duration{}
+
+	return func() {
+			looped := time.Now()
+			duras = append(duras, looped.Sub(last))
+			last = looped
+		},
+		func() {
+			Debugln(thing, "took cumulatively", time.Now().Sub(now), "individually:", duras)
+		}
 }

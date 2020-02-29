@@ -212,6 +212,8 @@ func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 }
 
 func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
+	defer log.Benchmark("newGuildRow")()
+
 	g, fetcherr := App.State.Guild(guildID)
 	if fetcherr != nil {
 		log.Errorln("Failed to get guild ID " + guildID.String() + ", using a placeholder...")
