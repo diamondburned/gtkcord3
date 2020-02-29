@@ -247,6 +247,8 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 		IURL:      g.IconURL(),
 		Image:     i,
 		BannerURL: g.BannerURL(),
+
+		requestingMembers: map[discord.Snowflake]struct{}{},
 	}
 
 	// Check if the guild is unavailable:
@@ -329,15 +331,8 @@ func (g *Guild) UpdateImage() {
 }
 
 func (g *Guild) requestMember(memID discord.Snowflake) {
-	g.requestingMemMutex.Lock()
-	defer g.requestingMemMutex.Unlock()
-
-	if g.requestingMembers == nil {
-		g.requestingMembers = map[discord.Snowflake]struct{}{}
-	} else {
-		if _, ok := g.requestingMembers[memID]; ok {
-			return
-		}
+	if _, ok := g.requestingMembers[memID]; ok {
+		return
 	}
 
 	err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
@@ -350,19 +345,16 @@ func (g *Guild) requestMember(memID discord.Snowflake) {
 		log.Errorln("Failed to request guild members:", err)
 	}
 
+	g.requestingMemMutex.Lock()
 	g.requestingMembers[memID] = struct{}{}
+	g.requestingMemMutex.Unlock()
 	return
 }
 
 func (g *Guild) requestedMember(memID discord.Snowflake) {
 	g.requestingMemMutex.Lock()
-	defer g.requestingMemMutex.Unlock()
-
-	if g.requestingMembers == nil {
-		g.requestingMembers = map[discord.Snowflake]struct{}{}
-	} else {
-		delete(g.requestingMembers, memID)
-	}
+	delete(g.requestingMembers, memID)
+	g.requestingMemMutex.Unlock()
 }
 
 func escape(str string) string {

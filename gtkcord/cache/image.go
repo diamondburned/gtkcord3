@@ -58,7 +58,7 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 }
 
 var pngEncoder = png.Encoder{
-	CompressionLevel: png.BestSpeed,
+	CompressionLevel: png.NoCompression,
 }
 
 func Process(data []byte, processors ...Processor) []byte {

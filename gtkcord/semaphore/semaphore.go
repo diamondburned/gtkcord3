@@ -34,11 +34,19 @@ func init() {
 			glib.IdleAdd(func(call *idleCall) {
 				// now := time.Now()
 
+				log.Debugln(call.trace, "main thread")
+
+				var val []reflect.Value
+
 				if fn, ok := call.fn.(func()); ok {
 					fn()
-					call.done <- nil
+					val = nil
 				} else {
-					call.done <- call.fn.(reflect.Value).Call(call.args)
+					val = call.fn.(reflect.Value).Call(call.args)
+				}
+
+				if call.done != nil {
+					call.done <- val
 				}
 
 				// if delta := time.Now().Sub(now); delta > time.Millisecond {
@@ -49,9 +57,12 @@ func init() {
 	}()
 }
 
-func idleAdd(trace string, fn interface{}, v ...interface{}) []reflect.Value {
-	ch := recvPool.Get().(chan []reflect.Value)
-	defer recvPool.Put(ch)
+func idleAdd(trace string, sync bool, fn interface{}, v ...interface{}) []reflect.Value {
+	var ch chan []reflect.Value
+	if !sync {
+		ch = recvPool.Get().(chan []reflect.Value)
+		defer recvPool.Put(ch)
+	}
 
 	switch fn := fn.(type) {
 	case func():
@@ -70,11 +81,14 @@ func idleAdd(trace string, fn interface{}, v ...interface{}) []reflect.Value {
 		}
 	}
 
-	return <-ch
+	if !sync {
+		return <-ch
+	}
+	return nil
 }
 
 func IdleNow(fn interface{}, v ...interface{}) []interface{} {
-	var values = idleAdd(log.Trace(1), fn, v...)
+	var values = idleAdd(log.Trace(1), false, fn, v...)
 	var interfaces = make([]interface{}, len(values))
 
 	for i, v := range values {
@@ -88,8 +102,12 @@ func Idle(fn interface{}, v ...interface{}) (interface{}, error) {
 	return idle(log.Trace(1), fn, v...)
 }
 
+func Async(fn interface{}, v ...interface{}) {
+	idleAdd(log.Trace(1), true, fn, v...)
+}
+
 func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
-	var values = idleAdd(trace, fn, v...)
+	var values = idleAdd(trace, false, fn, v...)
 	switch len(values) {
 	case 2:
 		if v := values[1].Interface(); v != nil {

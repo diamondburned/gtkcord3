@@ -118,11 +118,7 @@ func (channel *Channel) updateReadState(rs *gateway.ReadState) {
 
 func (channel *Channel) setUnread(unread bool) {
 	if App.State.ChannelMuted(channel.ID) {
-		if !channel.muted {
-			channel.muted = true
-			must(channel.SetOpacity, float64(0.25))
-		}
-
+		channel.setOpacity(0.25)
 		channel.unread = false
 		return
 	}
@@ -131,11 +127,10 @@ func (channel *Channel) setUnread(unread bool) {
 		return
 	}
 	channel.unread = unread
-	channel.muted = false
 
 	if unread {
-		must(channel.SetOpacity, float64(1.0))
+		channel.setOpacity(1)
 	} else {
-		must(channel.SetOpacity, float64(0.5))
+		channel.setOpacity(0.5)
 	}
 }

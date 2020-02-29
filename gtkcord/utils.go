@@ -10,6 +10,7 @@ import (
 )
 
 var must = semaphore.IdleMust
+var async = semaphore.Async
 
 func idleWait(fn func()) {
 	must(fn)

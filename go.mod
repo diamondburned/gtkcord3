@@ -16,6 +16,7 @@ require (
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/peterbourgon/diskv/v3 v3.0.0
 	github.com/pkg/errors v0.8.1
+	github.com/pkg/profile v1.4.0
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/stretchr/objx v0.1.1 // indirect

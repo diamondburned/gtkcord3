@@ -301,16 +301,20 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 		must(a.Grid.Remove, old)
 		defer must(old.Destroy)
 	} else {
-		s := must(gtk.SeparatorNew, gtk.ORIENTATION_VERTICAL).(*gtk.Separator)
-		must(s.Show)
-		must(App.Grid.Add, s)
+		must(func() {
+			s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+			s.Show()
+			App.Grid.Add(s)
+		})
 	}
 
 	a.Messages = nil
 
-	must(a.spinner.Start)
-	must(a.sbox.SetSizeRequest, -1, -1)
-	must(a.Grid.Attach, a.sbox, 4, 0, 1, 1)
+	must(func() {
+		a.spinner.Start()
+		a.sbox.SetSizeRequest(-1, -1)
+		a.Grid.Attach(a.sbox, 4, 0, 1, 1)
+	})
 
 	// Run hook
 	a.Header.UpdateChannel(ch.Name, ch.Topic)
@@ -322,9 +326,11 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 		return
 	}
 
-	must(a._loadChannelDone, g, ch)
-	must(a.setMessagesCol, ch.Messages)
-	must(ch.Messages.Show)
+	must(func() {
+		a._loadChannelDone(g, ch)
+		a.setMessagesCol(ch.Messages)
+		ch.Messages.Show()
+	})
 }
 
 func (a *application) _loadChannelDone(g *Guild, ch *Channel) {

@@ -53,7 +53,9 @@ type Parser struct {
 	UserPressed    func(ev *gdk.EventButton, user discord.GuildUser)
 
 	theme *gtk.IconTheme
-	icons sync.Map
+
+	icons map[string]*gdk.Pixbuf
+	icoMu sync.Mutex
 }
 
 func NewParser(s *state.State) *Parser {
@@ -77,6 +79,7 @@ func NewParser(s *state.State) *Parser {
 	p := &Parser{
 		State: s,
 		theme: i,
+		icons: map[string]*gdk.Pixbuf{},
 	}
 	p.pool = newPool(p)
 
@@ -86,14 +89,23 @@ func NewParser(s *state.State) *Parser {
 func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
 	var key = name + "#" + strconv.Itoa(size)
 
-	if v, ok := p.icons.Load(key); ok {
-		return v.(*gdk.Pixbuf)
+	p.icoMu.Lock()
+	defer p.icoMu.Unlock()
+
+	if v, ok := p.icons[key]; ok {
+		return v
 	}
 
-	pb := semaphore.IdleMust(p.theme.LoadIcon, name, size,
-		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
+	// pb := semaphore.IdleMust(p.theme.LoadIcon, name, size,
+	// gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
 
-	p.icons.Store(key, pb)
+	pb, err := p.theme.LoadIcon(name, size,
+		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
+	if err != nil {
+		log.Panicln("Failed to load icon", name, err)
+	}
+
+	p.icons[key] = pb
 	return pb
 }
 
@@ -120,9 +132,9 @@ func (p *Parser) ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk
 	s.iterMu.Lock()
 
 	// Wipe the buffer clean
-	semaphore.IdleMust(func(buf *gtk.TextBuffer) {
+	semaphore.IdleMust(func() {
 		buf.Delete(buf.GetStartIter(), buf.GetEndIter())
-	}, buf)
+	})
 
 	for i := 0; i < len(s.matches); i++ {
 		s.prev = md[s.last:s.matches[i][0].from]

@@ -109,9 +109,11 @@ func (h *Header) UpdateGuild(name string) {
 
 func (h *Header) UpdateChannel(name, topic string) {
 	if name != "" {
-		name = ChannelHash + name
+		name = bold(ChannelHash + name)
 	}
 
-	must(h.ChannelName.SetMarkup, bold(name))
-	must(h.ChannelTopic.SetText, topic)
+	async(func() {
+		h.ChannelName.SetMarkup(name)
+		h.ChannelTopic.SetText(topic)
+	})
 }

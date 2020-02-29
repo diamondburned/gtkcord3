@@ -60,14 +60,18 @@ func InjectCSSUnsafe(g StyleContextGetter, class, CSS string) {
 	}
 
 	if CSS != "" {
-		css, _ := gtk.CssProviderNew()
-		css.LoadFromData(CSS)
-		style.AddProvider(css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		AddCSSUnsafe(style, CSS)
 	}
 }
 
 func InjectCSS(g StyleContextGetter, class, CSS string) {
 	semaphore.IdleMust(InjectCSSUnsafe, g, class, CSS)
+}
+
+func AddCSSUnsafe(style *gtk.StyleContext, CSS string) {
+	css, _ := gtk.CssProviderNew()
+	css.LoadFromData(CSS)
+	style.AddProvider(css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 }
 
 func Escape(str string) string {

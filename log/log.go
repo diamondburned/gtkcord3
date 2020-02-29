@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync/atomic"
 	"time"
 
 	"github.com/logrusorgru/aurora"
@@ -52,7 +51,12 @@ func ResetLoggers() {
 // Trace, n is the argument to skip callers. 0 shows the location of the Trace
 // function.
 func Trace(n int) string {
-	i := atomic.AddUint64(&traceCtr, 1)
+	if !EnableDebug {
+		return "<TRACE N/A>"
+	}
+
+	// i := atomic.AddUint64(&traceCtr, 1)
+	i := 0
 
 	_, file1, line1, _ := runtime.Caller(n + 1)
 	_, file2, line2, _ := runtime.Caller(n + 2)

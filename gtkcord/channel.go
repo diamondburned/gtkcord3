@@ -52,7 +52,10 @@ type Channel struct {
 	Messages *Messages
 
 	unread bool
-	muted  bool
+
+	// we keep track of opacity changes, since we don't want thousands of
+	// queued up functions only to change the opacity.
+	opacity float64
 }
 
 func (g *Guild) prefetchChannels() error {
@@ -157,63 +160,66 @@ func newChannel(ch discord.Channel) *Channel {
 	return nil
 }
 
-func newCategory(ch discord.Channel) *Channel {
+func newCategory(ch discord.Channel) (chw *Channel) {
 	name := `<span font_size="smaller">` + escape(strings.ToUpper(ch.Name)) + "</span>"
 
-	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
-	must(r.SetSelectable, false)
-	must(r.SetSensitive, false)
+	must(func() {
+		l, _ := gtk.LabelNew(name)
+		l.SetUseMarkup(true)
+		l.SetXAlign(0.0)
+		l.SetMarginStart(15)
+		l.SetMarginTop(15)
 
-	l := must(gtk.LabelNew, name).(*gtk.Label)
-	must(l.SetUseMarkup, true)
-	must(l.SetXAlign, 0.0)
-	must(l.SetMarginStart, 15)
-	must(l.SetMarginTop, 15)
+		r, _ := gtk.ListBoxRowNew()
+		r.SetSelectable(false)
+		r.SetSensitive(false)
+		r.Add(l)
 
-	must(r.Add, l)
+		chw = &Channel{
+			ExtendedWidget: r,
 
-	chw := &Channel{
-		ExtendedWidget: r,
-
-		Row:      r,
-		Label:    l,
-		ID:       ch.ID,
-		Guild:    ch.GuildID,
-		Name:     ch.Name,
-		Topic:    ch.Topic,
-		Category: true,
-	}
+			Row:      r,
+			Label:    l,
+			ID:       ch.ID,
+			Guild:    ch.GuildID,
+			Name:     ch.Name,
+			Topic:    ch.Topic,
+			Category: true,
+		}
+	})
 
 	if App.State.ChannelMuted(chw.ID) {
-		must(chw.SetOpacity, float64(0.25))
+		chw.setOpacity(0.25)
 	}
 
 	return chw
 }
 
-func newChannelRow(ch discord.Channel) *Channel {
-	r := must(gtk.ListBoxRowNew).(*gtk.ListBoxRow)
+func newChannelRow(ch discord.Channel) (chw *Channel) {
+	must(func() {
+		l, _ := gtk.LabelNew(ChannelHash + bold(escape(ch.Name)))
+		l.SetUseMarkup(true)
+		l.SetXAlign(0.0)
+		l.SetMarginStart(8)
 
-	l := must(gtk.LabelNew, ChannelHash+bold(escape(ch.Name))).(*gtk.Label)
-	must(l.SetUseMarkup, true)
-	must(l.SetXAlign, 0.0)
-	must(l.SetMarginStart, 8)
+		r, _ := gtk.ListBoxRowNew()
+		r.Add(l)
 
-	must(r.Add, l)
+		chw = &Channel{
+			ExtendedWidget: r,
 
-	chw := &Channel{
-		ExtendedWidget: r,
+			Row:      r,
+			Label:    l,
+			ID:       ch.ID,
+			Guild:    ch.GuildID,
+			Name:     ch.Name,
+			Topic:    ch.Topic,
+			Category: false,
+			LastMsg:  ch.LastMessageID,
+			unread:   true, // workaround to set opacity
+		}
+	})
 
-		Row:      r,
-		Label:    l,
-		ID:       ch.ID,
-		Guild:    ch.GuildID,
-		Name:     ch.Name,
-		Topic:    ch.Topic,
-		Category: false,
-		LastMsg:  ch.LastMessageID,
-		unread:   true, // workaround to set opacity
-	}
 	chw.setUnread(false)
 
 	return chw
@@ -248,4 +254,13 @@ func (chs *Channels) First() int {
 		return i
 	}
 	return -1
+}
+
+func (ch *Channel) setOpacity(opacity float64) {
+	if opacity == ch.opacity {
+		return
+	}
+
+	ch.opacity = opacity
+	must(ch.SetOpacity, opacity)
 }

@@ -106,7 +106,7 @@ func newMessage(m discord.Message) (*Message, error) {
 	}
 
 	if messageText == "" {
-		message.UpdateContent(m)
+		go message.UpdateContent(m)
 	} else {
 		message.updateContent(`<i>` + messageText + `</i>`)
 		message.setAvailable(false)
@@ -134,7 +134,7 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		)
 
 		mstyle, _ := main.GetStyleContext()
-		gtkutils.InjectCSSUnsafe(main, "message", `
+		gtkutils.AddCSSUnsafe(mstyle, `
 			.message {
 				border-left: 2px solid transparent;
 			}
@@ -164,7 +164,6 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 			timestamp:   timestamp,
 			rightBottom: rightBottom,
 		}
-
 		defer message.markBusy()()
 
 		gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
@@ -299,7 +298,7 @@ func (m *Message) updateAuthorName(n discord.Member) {
 		}
 	}
 
-	must(m.author.SetMarkup, name)
+	async(m.author.SetMarkup, name)
 }
 
 func (m *Message) UpdateAuthor(user discord.User) {
@@ -308,14 +307,14 @@ func (m *Message) UpdateAuthor(user discord.User) {
 	if guildID := m.Messages.Channel.Guild; guildID.Valid() {
 		n, err := App.State.Store.Member(guildID, user.ID)
 		if err != nil {
-			m.Messages.Channel.Channels.Guild.requestMember(user.ID)
+			go m.Messages.Channel.Channels.Guild.requestMember(user.ID)
 		} else {
 			// Update the author name:
 			m.updateAuthorName(*n)
 			m.markBusy()
 		}
 	} else {
-		must(m.author.SetMarkup, bold(escape(user.Username)))
+		async(m.author.SetMarkup, bold(escape(user.Username)))
 	}
 
 	var url = user.AvatarURL()
@@ -355,12 +354,16 @@ func (m *Message) UpdateContent(update discord.Message) {
 
 	for _, mention := range update.Mentions {
 		if mention.ID == App.Me.ID {
-			must(m.mainStyle.AddClass, "mentioned")
+			async(m.mainStyle.AddClass, "mentioned")
 			return
 		}
 	}
 
-	must(m.mainStyle.RemoveClass, "mentioned")
+	// We only try this if we know the message is edited. If it's new, there
+	// wouldn't be a .mentioned class to remove.
+	if update.EditedTimestamp.Valid() {
+		async(m.mainStyle.RemoveClass, "mentioned")
+	}
 }
 
 func (m *Message) assertContent() {
@@ -396,7 +399,7 @@ func (m *Message) UpdateExtras(update discord.Message) {
 	m.extras = append(m.extras, NewEmbed(update)...)
 	m.extras = append(m.extras, NewAttachment(update)...)
 
-	must(func() {
+	async(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Add(extra)
 		}

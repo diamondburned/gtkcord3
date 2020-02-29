@@ -108,7 +108,7 @@ func (ch *Channel) loadMessages() error {
 	var newMessages = make([]*Message, 0, DefaultFetch)
 
 	// WaitGroup for the background goroutines that were spawned:
-	var wg sync.WaitGroup
+	var loads = make([]func(), 0, DefaultFetch)
 
 	// Iterate from earliest to latest.
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -131,13 +131,10 @@ func (ch *Channel) loadMessages() error {
 		must(msg.SetCondensed, condensed)
 		must(m.Messages.Add, msg)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		loads = append(loads, func() {
 			msg.UpdateAuthor(message.Author)
 			msg.UpdateExtras(message)
-		}()
+		})
 	}
 
 	// Set the new slice.
@@ -150,38 +147,11 @@ func (ch *Channel) loadMessages() error {
 	go func() {
 		m.ackLatest()
 
-		wg.Wait()
+		for i := len(loads) - 1; i >= 0; i-- {
+			loads[i]()
+		}
 		m.Resetting.Store(false)
 	}()
-
-	// // Hack around the mutex
-	// copiedMsg := append([]*Message{}, newMessages...)
-
-	// // Revert to latest is last, earliest is first.
-	// for L, R := 0, len(messages)-1; L < R; L, R = L+1, R-1 {
-	// 	messages[L], messages[R] = messages[R], messages[L]
-	// }
-
-	// var wg sync.WaitGroup
-
-	// // Iterate in reverse, so latest first.
-	// for i := len(copiedMsg) - 1; i >= 0; i-- {
-	// 	message, discordm := copiedMsg[i], messages[i]
-	// 	wg.Add(1)
-
-	// 	go func() {
-	// 		defer wg.Done()
-
-	// 		message.UpdateAuthor(discordm.Author)
-	// 		message.UpdateExtras(discordm)
-	// 	}()
-	// }
-
-	// go func() {
-	// 	// When we're done resetting, set this to false.
-	// 	wg.Wait()
-	// 	m.Resetting.Store(false)
-	// }()
 
 	return nil
 }
