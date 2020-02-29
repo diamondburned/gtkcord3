@@ -47,7 +47,7 @@ func filterChannels(chs []discord.Channel) []discord.Channel {
 	return filtered
 }
 
-func transformChannels(widget *Channels, chs []discord.Channel) error {
+func transformChannels(chs []discord.Channel) []*Channel {
 	var tree = map[discord.Snowflake]*_sortStructure{}
 
 	for _, ch := range chs {
@@ -105,17 +105,17 @@ func transformChannels(widget *Channels, chs []discord.Channel) error {
 		return list[i].children == nil
 	})
 
-	widget.Channels = make([]*Channel, 0, len(chs))
+	var channels = make([]*Channel, 0, len(chs))
 
 	for _, sch := range list {
 		if sch.hasParent {
-			widget.Channels = append(widget.Channels, newChannel(sch.parent))
+			channels = append(channels, newChannel(sch.parent))
 		}
 
 		for _, ch := range sch.children {
-			widget.Channels = append(widget.Channels, newChannel(ch))
+			channels = append(channels, newChannel(ch))
 		}
 	}
 
-	return nil
+	return channels
 }

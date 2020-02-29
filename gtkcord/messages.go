@@ -139,6 +139,14 @@ func (ch *Channel) loadMessages() error {
 
 	// Set the new slice.
 	m.messages = newMessages
+
+	// If there are no messages, don't bother.
+	if len(newMessages) == 0 {
+		m.Resetting.Store(false)
+		return nil
+	}
+
+	// Show all messages.
 	must(m.ShowAll)
 
 	// Set the latest message ID.

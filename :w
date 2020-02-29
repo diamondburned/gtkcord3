@@ -143,12 +143,10 @@ func newGuilds() (*Guilds, error) {
 		Guilds:  rows,
 	}
 
-	must(func() {
-		for i := 0; i < len(rows); i++ {
-			l.Add(rows[i])
-			rows[i].ShowAll()
-		}
-	})
+	for i := 0; i < len(rows); i++ {
+		must(l.Add, rows[i])
+		must(rows[i].ShowAll)
+	}
 
 	must(l.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		index := r.GetIndex()
@@ -262,10 +260,6 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 			guild.SetUnavailable(true)
 		}
 	})
-
-	if fetcherr != nil {
-		return guild, nil
-	}
 
 	// Prefetch unread state:
 	go func() {

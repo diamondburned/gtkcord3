@@ -33,6 +33,10 @@ type Channels struct {
 	// Channel list
 	ChList   *gtk.ListBox
 	Channels []*Channel
+
+	// we keep the sorted channel structure, so we could reuse them after
+	// prefetching.
+	sortedChs []*_sortStructure
 }
 
 type Channel struct {
@@ -66,11 +70,8 @@ func (g *Guild) prefetchChannels() error {
 	chs = filterChannels(chs)
 
 	g.Channels = &Channels{
-		Guild: g,
-	}
-
-	if err := transformChannels(g.Channels, chs); err != nil {
-		return errors.Wrap(err, "Failed to transform channels")
+		Guild:    g,
+		Channels: transformChannels(chs),
 	}
 
 	return nil
@@ -121,6 +122,10 @@ func (g *Guild) loadChannels() error {
 
 	gtkutils.InjectCSS(cl, "channels", "")
 	must(main.Add, cl)
+
+	/*
+	 * === Populating channels ===
+	 */
 
 	for _, ch := range g.Channels.Channels {
 		ch.Channels = g.Channels
@@ -186,11 +191,12 @@ func newCategory(ch discord.Channel) (chw *Channel) {
 			Topic:    ch.Topic,
 			Category: true,
 		}
-	})
 
-	if App.State.ChannelMuted(chw.ID) {
-		chw.setOpacity(0.25)
-	}
+		if App.State.ChannelMuted(chw.ID) {
+			chw.opacity = 0.25
+			chw.SetOpacity(0.25)
+		}
+	})
 
 	return chw
 }
@@ -216,11 +222,15 @@ func newChannelRow(ch discord.Channel) (chw *Channel) {
 			Topic:    ch.Topic,
 			Category: false,
 			LastMsg:  ch.LastMessageID,
-			unread:   true, // workaround to set opacity
 		}
-	})
 
-	chw.setUnread(false)
+		if App.State.ChannelMuted(chw.ID) {
+			chw.opacity = 0.25
+		} else {
+			chw.opacity = 0.5
+		}
+		chw.SetOpacity(chw.opacity)
+	})
 
 	return chw
 }
