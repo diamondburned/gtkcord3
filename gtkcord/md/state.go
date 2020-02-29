@@ -87,6 +87,11 @@ func (s *mdState) tagAttr(token []byte) []byte {
 }
 
 func (s *mdState) switchTree(i int) {
+	if bytes.Count(s.prev, []byte(`\`))%2 != 0 {
+		s.insertWithTag(s.matches[i][0].str, nil)
+		return
+	}
+
 	switch {
 	case len(s.matches[i][1].str) > 0, len(s.matches[i][2].str) > 0:
 		code := string(s.renderCodeBlock(
@@ -123,9 +128,6 @@ func (s *mdState) switchTree(i int) {
 		var animated = len(s.matches[i][10].str) > 0
 		s.InsertAsyncPixbuf(EmojiURL(string(s.matches[i][11].str), animated))
 
-	case bytes.Count(s.prev, []byte(`\`))%2 != 0:
-		// Escaped:
-		fallthrough
 	default:
 		s.insertWithTag(s.matches[i][0].str, nil)
 	}

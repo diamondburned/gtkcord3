@@ -13,7 +13,6 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/pkg/errors"
-	"github.com/pkg/profile"
 )
 
 var ErrTokenNotProvided = errors.New("Token not in -t, $TOKEN, or keyring")
@@ -84,7 +83,7 @@ func Finish(s *state.State) {
 }
 
 func main() {
-	defer profile.Start(profile.BlockProfile).Stop()
+	// defer profile.Start(profile.BlockProfile).Stop()
 
 	// Spawn a new window:
 	if err := window.Init(); err != nil {

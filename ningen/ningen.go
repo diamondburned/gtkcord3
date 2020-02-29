@@ -1,6 +1,7 @@
 package ningen
 
 import (
+	"context"
 	"sync"
 
 	"github.com/diamondburned/arikawa/api"
@@ -65,6 +66,13 @@ func Ningen(s *state.State) (*State, error) {
 			gateway.UserGuildSettings(*u),
 		})
 	})
+
+	if s.Ready.SessionID == "" {
+		s.WaitFor(context.Background(), func(v interface{}) bool {
+			_, ok := v.(*gateway.ReadyEvent)
+			return ok
+		})
+	}
 
 	state.UpdateReady(s.Ready)
 	return state, nil
