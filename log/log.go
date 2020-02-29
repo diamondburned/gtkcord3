@@ -21,7 +21,7 @@ var (
 	PrefixDebug  = "Debug: "
 	DebugGreyLvl = uint8(11)
 
-	EnableDebug = false
+	EnableDebug = true
 )
 
 var (

@@ -31,7 +31,9 @@ func init() {
 		runtime.LockOSThread()
 
 		for call := range idleAdds {
-			glib.IdleAdd(func(call *idleCall) {
+			call := call
+
+			glib.IdleAdd(func() {
 				// now := time.Now()
 
 				log.Debugln(call.trace, "main thread")
@@ -52,14 +54,14 @@ func init() {
 				// if delta := time.Now().Sub(now); delta > time.Millisecond {
 				// 	log.Infoln(call.trace, "took", time.Now().Sub(now))
 				// }
-			}, call)
+			})
 		}
 	}()
 }
 
-func idleAdd(trace string, sync bool, fn interface{}, v ...interface{}) []reflect.Value {
+func idleAdd(trace string, async bool, fn interface{}, v ...interface{}) []reflect.Value {
 	var ch chan []reflect.Value
-	if !sync {
+	if !async {
 		ch = recvPool.Get().(chan []reflect.Value)
 		defer recvPool.Put(ch)
 	}
@@ -81,7 +83,7 @@ func idleAdd(trace string, sync bool, fn interface{}, v ...interface{}) []reflec
 		}
 	}
 
-	if !sync {
+	if !async {
 		return <-ch
 	}
 	return nil

@@ -68,11 +68,13 @@ func (guild *Guild) setUnread(unread bool) {
 	}
 	guild.unread = unread
 
-	if unread {
-		must(guild.Style.AddClass, "unread")
-	} else {
-		must(guild.Style.RemoveClass, "unread")
-	}
+	must(func() {
+		if unread {
+			guild.Style.AddClass("unread")
+		} else {
+			guild.Style.RemoveClass("unread")
+		}
+	})
 
 	if guild.Parent != nil {
 		for _, guild := range guild.Parent.Folder.Guilds {

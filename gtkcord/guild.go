@@ -214,8 +214,6 @@ func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 }
 
 func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
-	defer log.Benchmark("newGuildRow")()
-
 	g, fetcherr := App.State.Guild(guildID)
 	if fetcherr != nil {
 		log.Errorln("Failed to get guild ID " + guildID.String() + ", using a placeholder...")
@@ -241,6 +239,8 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 		style.AddClass("guild")
 
 		i, _ := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
+		i.SetHAlign(gtk.ALIGN_CENTER)
+		i.SetVAlign(gtk.ALIGN_CENTER)
 		r.Add(i)
 
 		guild = &Guild{
@@ -341,9 +341,6 @@ func (g *Guild) UpdateImage() {
 		log.Errorln("Failed to update the pixbuf guild icon:", err)
 		return
 	}
-
-	must(g.Image.SetHAlign, gtk.ALIGN_CENTER)
-	must(g.Image.SetVAlign, gtk.ALIGN_CENTER)
 }
 
 func (g *Guild) requestMember(memID discord.Snowflake) {

@@ -209,7 +209,7 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 			return
 		}
 
-		semaphore.IdleMust(img.SetFromPixbuf, p)
+		semaphore.Async(img.SetFromPixbuf, p)
 	})
 
 	if _, err := l.Write(b); err != nil {
@@ -257,7 +257,7 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 				log.Errorln("Failed to get pixbuf during area-prepared:", err)
 				return
 			}
-			semaphore.IdleMust(img.SetFromAnimation, p)
+			semaphore.Async(img.SetFromAnimation, p)
 
 		} else {
 			p, err := l.GetPixbuf()
@@ -265,7 +265,7 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 				log.Errorln("Failed to get animation during area-prepared:", err)
 				return
 			}
-			semaphore.IdleMust(img.SetFromPixbuf, p)
+			semaphore.Async(img.SetFromPixbuf, p)
 		}
 	})
 
