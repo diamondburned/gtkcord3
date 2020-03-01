@@ -9,6 +9,28 @@ import (
 )
 
 const CSS = `
+	.status {
+		padding: 3px;
+		border-radius: 9999px;
+	}
+	.status.online {
+		background-color: #43B581;
+	}
+	.status.busy {
+		background-color: #F04747;
+	}
+	.status.idle {
+		background-color: #FAA61A;
+	}
+	.status.offline {
+		background-color: #747F8D;
+	}
+	.status.unknown {
+		background-color: #FFFFFF;
+	}
+
+	@define-color color_pinged rgb(240, 71, 71);
+
 	headerbar { padding: 0; }
 	headerbar button { box-shadow: none; }
 	textview, textview > text { background-color: transparent; }
@@ -26,6 +48,9 @@ const CSS = `
 	}
 	.guild-folder.unread {
 		background-color: alpha(@theme_selected_bg_color, 0.15);
+	}
+	.guild-folder.pinged {
+		background-color: alpha(@color_pinged, 0.15);
 	}
 	.guild-folder:selected {
 		border-top: 5px solid alpha(@theme_selected_bg_color, 0.5);
@@ -79,6 +104,30 @@ const CSS = `
 	.guild.unread > image {
 		border: 2px solid @theme_fg_color;
 		padding: 2px;
+	}
+	.guild.pinged > image {
+		border: 2px solid rgb(240, 71, 71);
+		padding: 2px;
+	}
+
+	.channel {
+		opacity: 0.5;
+		color: white;
+	}
+	.channel.muted {
+		opacity: 0.25;
+	}
+	.channel.unread {
+		opacity: 1;
+	}
+	.channel.pinged {
+		opacity: 1;
+		color: @color_pinged;
+		background-color: alpha(@color_pinged, 0.15);
+	}
+
+	.dmchannel.pinged {
+		background-color: alpha(@color_pinged, 0.15);
 	}
 `
 

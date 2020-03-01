@@ -243,7 +243,7 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 }
 
 func (i *MessageInput) editMessage(id discord.Snowflake) error {
-	m, err := App.State.Store.Message(i.Messages.Channel.ID, id)
+	m, err := App.State.Store.Message(i.Messages.ChannelID, id)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get message")
 	}
@@ -288,8 +288,8 @@ func (i *MessageInput) popContent() string {
 func (i *MessageInput) makeMessage(content string) discord.Message {
 	return discord.Message{
 		Type:      discord.DefaultMessage,
-		ChannelID: i.Messages.Channel.ID,
-		GuildID:   i.Messages.Channel.Guild,
+		ChannelID: i.Messages.ChannelID,
+		GuildID:   i.Messages.GuildID,
 		Author:    *App.Me,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),

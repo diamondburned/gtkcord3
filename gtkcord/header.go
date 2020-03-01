@@ -104,7 +104,7 @@ func newHeader() (*Header, error) {
 }
 
 func (h *Header) UpdateGuild(name string) {
-	must(h.GuildName.SetMarkup, bold(name))
+	async(h.GuildName.SetMarkup, bold(name))
 }
 
 func (h *Header) UpdateChannel(name, topic string) {

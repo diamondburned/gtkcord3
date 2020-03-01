@@ -17,7 +17,8 @@ const DefaultFetch = 25
 
 type Messages struct {
 	gtkutils.ExtendedWidget
-	Channel *Channel
+	ChannelID discord.Snowflake
+	GuildID   discord.Snowflake
 
 	Main *gtk.Box
 
@@ -31,77 +32,124 @@ type Messages struct {
 	Resetting atomic.Value
 
 	Input *MessageInput
+
+	OnInsert func()
+}
+
+func newMessages(chID discord.Snowflake) (*Messages, error) {
+	m := &Messages{
+		ChannelID: chID,
+	}
+
+	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	m.Main = main
+	m.ExtendedWidget = main
+
+	b := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	m.Messages = b
+
+	v := must(gtk.ViewportNew,
+		nilAdjustment(), nilAdjustment()).(*gtk.Viewport)
+	m.Viewport = v
+
+	s := must(gtk.ScrolledWindowNew,
+		nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
+	m.Scroll = s
+
+	if err := m.loadMessageInput(); err != nil {
+		return nil, errors.Wrap(err, "Failed to load message input")
+	}
+
+	must(func() {
+		b.SetVExpand(true)
+		b.SetHExpand(true)
+		b.SetMarginBottom(15)
+		b.Show()
+
+		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
+		s.Show()
+
+		v.Connect("size-allocate", m.onSizeAlloc)
+		v.Add(b)
+		v.Show()
+
+		s.Add(v)
+		s.Show()
+
+		// Main actually contains the scrolling window.
+		main.Add(s)
+		main.Show()
+		gtkutils.InjectCSSUnsafe(main, "messages", "")
+	})
+
+	return m, nil
 }
 
 func (ch *Channel) loadMessages() error {
 	if ch.Messages == nil {
-		ch.Messages = &Messages{
-			Channel: ch,
+		m, err := newMessages(ch.ID)
+		if err != nil {
+			return err
 		}
+
+		m.GuildID = ch.Guild
+		m.OnInsert = ch.ackLatest
+
+		ch.Messages = m
 	}
 
-	m := ch.Messages
+	if err := ch.Messages.reset(); err != nil {
+		return errors.Wrap(err, "Failed to reset messages")
+	}
 
+	// Set the latest message ID.
+	messages := ch.Messages.messages
+	ch.LastMsg = messages[len(messages)-1].ID
+
+	go ch.ackLatest()
+	return nil
+}
+
+func (ch *Channel) ackLatest() {
+	ch.LastMsg = ch.Messages.LastID()
+	if ch.LastMsg.Valid() {
+		App.State.MarkRead(ch.ID, ch.LastMsg)
+	}
+}
+
+func (ch *Channel) GetMessages() *Messages {
+	return ch.Messages
+}
+
+func (m *Messages) LastID() discord.Snowflake {
 	m.guard.Lock()
 	defer m.guard.Unlock()
-
-	if m.Main == nil {
-		main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-		m.Main = main
-		m.ExtendedWidget = main
-
-		b := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-		m.Messages = b
-
-		v := must(gtk.ViewportNew,
-			nilAdjustment(), nilAdjustment()).(*gtk.Viewport)
-		m.Viewport = v
-
-		s := must(gtk.ScrolledWindowNew,
-			nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
-		m.Scroll = s
-
-		if err := m.loadMessageInput(); err != nil {
-			return errors.Wrap(err, "Failed to load message input")
-		}
-
-		must(func() {
-			b.SetVExpand(true)
-			b.SetHExpand(true)
-			b.SetMarginBottom(15)
-			b.Show()
-
-			s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
-			s.Show()
-
-			v.Connect("size-allocate", m.onSizeAlloc)
-			v.Add(b)
-			v.Show()
-
-			s.Add(v)
-			s.Show()
-
-			// Main actually contains the scrolling window.
-			main.Add(s)
-			main.Show()
-			gtkutils.InjectCSSUnsafe(main, "messages", "")
-		})
+	if len(m.messages) == 0 {
+		return 0
 	}
+	return m.messages[len(m.messages)-1].ID
+}
+
+func (m *Messages) reset() error {
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
 
 	// Order: latest is first.
-	messages, err := App.State.Messages(ch.ID)
+	messages, err := App.State.Messages(m.ChannelID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
-	for _, w := range m.messages {
-		if w != nil {
-			must(m.Messages.Remove, w)
+	must(func() {
+		for _, w := range m.messages {
+			if w != nil {
+				m.Messages.Remove(w)
+			}
 		}
-	}
+	})
 
 	// Allocate a new empty slice. This is a trade-off to re-using the old
 	// slice to re-use messages.
@@ -149,12 +197,7 @@ func (ch *Channel) loadMessages() error {
 	// Show all messages.
 	must(m.ShowAll)
 
-	// Set the latest message ID.
-	m.Channel.LastMsg = messages[len(messages)-1].ID
-
 	go func() {
-		m.ackLatest()
-
 		for i := len(loads) - 1; i >= 0; i-- {
 			loads[i]()
 		}
@@ -192,6 +235,8 @@ func (m *Messages) Destroy() {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
+	log.Infoln("Destroying messages from old channel.")
+
 	for i, msg := range m.messages {
 		if msg.isBusy() {
 			continue
@@ -227,22 +272,6 @@ func (m *Messages) onSizeAlloc() {
 	m.Resetting.Store(false)
 }
 
-func (m *Messages) ackLatest() {
-	if len(m.messages) == 0 {
-		return
-	}
-
-	m.guard.Lock()
-	id := m.messages[len(m.messages)-1].ID
-	// Apparently this sometimes happen.
-	if id > m.Channel.LastMsg {
-		m.Channel.LastMsg = id
-	}
-	m.guard.Unlock()
-
-	App.State.MarkRead(m.Channel.ID, m.Channel.LastMsg)
-}
-
 func (m *Messages) Insert(message discord.Message) error {
 	// Are we sure this is not our message?
 	if m.Update(message) {
@@ -254,7 +283,10 @@ func (m *Messages) Insert(message discord.Message) error {
 		return errors.Wrap(err, "Failed to render message")
 	}
 
-	defer m.ackLatest()
+	if m.OnInsert != nil {
+		defer m.OnInsert()
+	}
+
 	return m.insert(w, message)
 }
 

@@ -9,7 +9,14 @@ import (
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/pkg/errors"
 )
+
+func init() {
+	gateway.Presence = &gateway.UpdateStatusData{
+		Status: discord.OnlineStatus,
+	}
+}
 
 type State struct {
 	*state.State
@@ -33,6 +40,19 @@ type Mute struct {
 
 	// guild only
 	Everyone bool // @everyone
+}
+
+func Connect(token string) (*State, error) {
+	s, err := state.New(token)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create a new Discord session")
+	}
+
+	if err := s.Open(); err != nil {
+		return nil, errors.Wrap(err, "Failed to connect to Discord")
+	}
+
+	return Ningen(s)
 }
 
 func Ningen(s *state.State) (*State, error) {

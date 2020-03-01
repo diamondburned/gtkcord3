@@ -2,6 +2,7 @@ package humanize
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Xuanwo/go-locale"
@@ -59,4 +60,15 @@ func TimeAgo(t time.Time) string {
 
 func DuraCeil(d, acc time.Duration) time.Duration {
 	return d.Truncate(acc) + acc
+}
+
+func Strings(list []string) string {
+	switch len(list) {
+	case 0:
+		return ""
+	case 1:
+		return list[0]
+	default:
+		return strings.Join(list[len(list)-1:], ", ") + " and " + list[len(list)-1]
+	}
 }

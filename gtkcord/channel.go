@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
 )
 
@@ -33,10 +34,6 @@ type Channels struct {
 	// Channel list
 	ChList   *gtk.ListBox
 	Channels []*Channel
-
-	// we keep the sorted channel structure, so we could reuse them after
-	// prefetching.
-	sortedChs []*_sortStructure
 }
 
 type Channel struct {
@@ -44,6 +41,8 @@ type Channel struct {
 	Channels *Channels
 
 	Row   *gtk.ListBoxRow
+	Style *gtk.StyleContext
+
 	Label *gtk.Label
 
 	ID       discord.Snowflake
@@ -59,7 +58,10 @@ type Channel struct {
 
 	// we keep track of opacity changes, since we don't want thousands of
 	// queued up functions only to change the opacity.
-	opacity float64
+	// opacity float64
+	// replaced with class
+
+	stateClass string
 }
 
 func (g *Guild) prefetchChannels() error {
@@ -88,49 +90,51 @@ func (g *Guild) loadChannels() error {
 		}
 	}
 
-	/*
-	 * === Main box ===
-	 */
+	must(func() {
+		/*
+		 * === Main box ===
+		 */
 
-	cs := must(gtk.ScrolledWindowNew,
-		nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
-	must(cs.SetPolicy, gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-	g.Channels.ExtendedWidget = cs
-	g.Channels.Scroll = cs
+		cs, _ := gtk.ScrolledWindowNew(nil, nil)
+		cs.SetSizeRequest(ChannelsWidth, -1)
+		g.Channels.ExtendedWidget = cs
+		g.Channels.Scroll = cs
 
-	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	must(main.SetSizeRequest, ChannelsWidth, -1)
-	gtkutils.InjectCSS(main, "channels", "")
-	g.Channels.Main = main
+		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		main.SetSizeRequest(ChannelsWidth, -1)
+		g.Channels.Main = main
 
-	must(cs.Add, main)
+		cs.Add(main)
 
-	/*
-	 * === Channels list ===
-	 */
+		/*
+		 * === Channels list ===
+		 */
 
-	cl := must(gtk.ListBoxNew).(*gtk.ListBox)
-	must(cl.SetVExpand, true)
-	must(cl.SetActivateOnSingleClick, true)
-	must(cl.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-		row := g.Channels.Channels[r.GetIndex()]
-		go func() {
-			row.setUnread(false)
-			App.loadChannel(g, row)
-		}()
+		cl, _ := gtk.ListBoxNew()
+		cl.SetVExpand(true)
+		cl.SetActivateOnSingleClick(true)
+		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+			var row = g.Channels.Channels[r.GetIndex()]
+			go func() {
+				row.setUnread(false, false)
+				App.loadChannel(g, row)
+			}()
+		})
+
+		gtkutils.InjectCSSUnsafe(cl, "channels", "")
+		main.Add(cl)
+
+		/*
+		 * === Populating channels ===
+		 */
+
+		for _, ch := range g.Channels.Channels {
+			ch.Channels = g.Channels
+			cl.Add(ch)
+		}
 	})
 
-	gtkutils.InjectCSS(cl, "channels", "")
-	must(main.Add, cl)
-
-	/*
-	 * === Populating channels ===
-	 */
-
 	for _, ch := range g.Channels.Channels {
-		ch.Channels = g.Channels
-		must(cl.Add, ch)
-
 		if ch.Category || !ch.LastMsg.Valid() {
 			continue
 		}
@@ -157,8 +161,6 @@ func newChannel(ch discord.Channel) *Channel {
 		return newChannelRow(ch)
 	case discord.GuildCategory:
 		return newCategory(ch)
-	case discord.DirectMessage, discord.GroupDM:
-		return newDMChannel(ch)
 	}
 
 	log.Panicln("Unknown channel type " + strconv.Itoa(int(ch.Type)))
@@ -174,16 +176,23 @@ func newCategory(ch discord.Channel) (chw *Channel) {
 		l.SetXAlign(0.0)
 		l.SetMarginStart(15)
 		l.SetMarginTop(15)
+		l.SetEllipsize(pango.ELLIPSIZE_END)
+		l.SetSingleLineMode(true)
+		l.SetMaxWidthChars(40)
 
 		r, _ := gtk.ListBoxRowNew()
 		r.SetSelectable(false)
 		r.SetSensitive(false)
 		r.Add(l)
 
+		s, _ := r.GetStyleContext()
+		s.AddClass("channel")
+
 		chw = &Channel{
 			ExtendedWidget: r,
 
 			Row:      r,
+			Style:    s,
 			Label:    l,
 			ID:       ch.ID,
 			Guild:    ch.GuildID,
@@ -191,12 +200,11 @@ func newCategory(ch discord.Channel) (chw *Channel) {
 			Topic:    ch.Topic,
 			Category: true,
 		}
-
-		if App.State.ChannelMuted(chw.ID) {
-			chw.opacity = 0.25
-			chw.SetOpacity(0.25)
-		}
 	})
+
+	if App.State.ChannelMuted(chw.ID) {
+		chw.setClass("muted")
+	}
 
 	return chw
 }
@@ -211,10 +219,14 @@ func newChannelRow(ch discord.Channel) (chw *Channel) {
 		r, _ := gtk.ListBoxRowNew()
 		r.Add(l)
 
+		s, _ := r.GetStyleContext()
+		s.AddClass("channel")
+
 		chw = &Channel{
 			ExtendedWidget: r,
 
 			Row:      r,
+			Style:    s,
 			Label:    l,
 			ID:       ch.ID,
 			Guild:    ch.GuildID,
@@ -223,19 +235,13 @@ func newChannelRow(ch discord.Channel) (chw *Channel) {
 			Category: false,
 			LastMsg:  ch.LastMessageID,
 		}
-
-		if App.State.ChannelMuted(chw.ID) {
-			chw.opacity = 0.25
-		} else {
-			chw.opacity = 0.5
-		}
-		chw.SetOpacity(chw.opacity)
 	})
 
+	if App.State.ChannelMuted(chw.ID) {
+		chw.setClass("muted")
+	}
+
 	return chw
-}
-func newDMChannel(ch discord.Channel) *Channel {
-	panic("Implement me")
 }
 
 func (chs *Channels) UpdateBanner(url string) {
@@ -260,17 +266,11 @@ func (chs *Channels) First() int {
 		if ch.Category {
 			continue
 		}
-
 		return i
 	}
 	return -1
 }
 
-func (ch *Channel) setOpacity(opacity float64) {
-	if opacity == ch.opacity {
-		return
-	}
-
-	ch.opacity = opacity
-	must(ch.SetOpacity, opacity)
+func (ch *Channel) setClass(class string) {
+	gtkutils.DiffClass(&ch.stateClass, class, ch.Style)
 }

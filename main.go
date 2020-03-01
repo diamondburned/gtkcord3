@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/login"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -29,13 +28,13 @@ func LoadToken() string {
 	return token
 }
 
-func LoadKeyring() (*state.State, error) {
+func LoadKeyring() (*ningen.State, error) {
 	// Check if env vars or flags are set:
 	token := LoadToken()
 
 	// If it is, override it in the keyring and use it:
 	if token != "" {
-		return login.CreateState(token)
+		return ningen.Connect(token)
 	}
 
 	// Does the keyring have the token?
@@ -43,14 +42,14 @@ func LoadKeyring() (*state.State, error) {
 
 	// Yes.
 	if token != "" {
-		return login.CreateState(token)
+		return ningen.Connect(token)
 	}
 
 	// No.
 	return nil, ErrTokenNotProvided
 }
 
-func Login(finish func(s *state.State)) error {
+func Login(finish func(s *ningen.State)) error {
 	s, err := LoadKeyring()
 	if err == nil {
 		go finish(s)
@@ -68,16 +67,11 @@ func Login(finish func(s *state.State)) error {
 	return nil
 }
 
-func Finish(s *state.State) {
+func Finish(s *ningen.State) {
 	// Store the token:
 	keyring.Set(s.Token)
 
-	n, err := ningen.Ningen(s)
-	if err != nil {
-		log.Fatalln("Failed to start the Discord wrapper:", err)
-	}
-
-	if err := gtkcord.Ready(n); err != nil {
+	if err := gtkcord.Ready(s); err != nil {
 		log.Fatalln("Failed to get gtkcord ready:", err)
 	}
 }

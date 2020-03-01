@@ -11,6 +11,8 @@ func (a *application) hookEvents() {
 		a.busy.RLock()
 		defer a.busy.RUnlock()
 
+		// TODO: presence update
+
 		switch v := v.(type) {
 		case *gateway.MessageCreateEvent:
 			onMessageCreate(v)
@@ -40,13 +42,14 @@ func onMessageCreate(m *gateway.MessageCreateEvent) {
 		return
 	}
 
-	if m.ChannelID != mw.Channel.ID {
+	if m.ChannelID != mw.ChannelID {
 		return
 	}
 
 	go func() {
 		if err := mw.Insert(discord.Message(*m)); err != nil {
 			logWrap(err, "Failed to insert message from "+m.Author.Username)
+			return
 		}
 	}()
 }
@@ -57,7 +60,7 @@ func onMessageUpdate(m *gateway.MessageUpdateEvent) {
 		return
 	}
 
-	if m.ChannelID != mw.Channel.ID {
+	if m.ChannelID != mw.ChannelID {
 		return
 	}
 
@@ -70,7 +73,7 @@ func onMessageDelete(m *gateway.MessageDeleteEvent) {
 		return
 	}
 
-	if m.ChannelID != mw.Channel.ID {
+	if m.ChannelID != mw.ChannelID {
 		return
 	}
 
@@ -83,7 +86,7 @@ func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
 		return
 	}
 
-	if m.ChannelID != mw.Channel.ID {
+	if m.ChannelID != mw.ChannelID {
 		return
 	}
 
@@ -96,16 +99,22 @@ func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 		return
 	}
 
-	if c.GuildID != mw.Channel.Guild {
+	if c.GuildID != mw.GuildID {
 		return
 	}
 
-	if guild := mw.Channel.Channels.Guild; guild != nil {
+	for _, guild := range App.Guilds.Guilds {
+		if guild.ID != mw.GuildID {
+			continue
+		}
+
 		go func() {
 			for _, m := range c.Members {
 				guild.requestedMember(m.User.ID)
 			}
 		}()
+
+		break
 	}
 
 	go func() {
@@ -184,6 +193,8 @@ Find:
 			}
 		}
 	}
+
+	// TODO: presences
 
 	if target == nil {
 		log.Errorln("Couldn't find guild with ID", g.ID, "for update.")

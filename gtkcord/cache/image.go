@@ -97,8 +97,13 @@ func Resize(w, h int) Processor {
 func Round(img image.Image) image.Image {
 	r := img.Bounds().Dx() / 2
 
-	dst, ok := img.(draw.Image)
-	if !ok {
+	var dst draw.Image
+
+	switch img.(type) {
+	// alpha-supported:
+	case *image.RGBA, *image.RGBA64, *image.NRGBA, *image.NRGBA64:
+		dst = img.(draw.Image)
+	default:
 		dst = image.NewRGBA(image.Rect(
 			0, 0,
 			r*2, r*2,

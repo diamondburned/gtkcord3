@@ -8,7 +8,6 @@ import (
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -33,8 +32,11 @@ type UserPopup struct {
 	Style    *gtk.StyleContext
 	oldClass string
 
-	Status   *gtk.Image
-	Avatar   *gtk.Image
+	Avatar      *gtk.Image
+	AvatarStyle *gtk.StyleContext // .avatar
+	// check window/css.go header for status_* colors
+	lastAvatarClass string
+
 	Username *gtk.Label
 
 	Activity *UserPopupActivity
@@ -66,24 +68,15 @@ func NewUserPopup(relative gtk.IWidget) *UserPopup {
 	b.SetMarginBottom(10)
 	main.Add(b)
 
-	iStatus, _ := gtk.ImageNew()
-	iStatus.SetSizeRequest(HeaderStatusSize, HeaderStatusSize)
-
-	circle := icons.SolidCircle(HeaderStatusSize, OfflineColor)
-
-	if err := icons.SetImage(circle, iStatus); err != nil {
-		log.Panicln("Failed to set status image to solid circle 0x000000:", err)
-	}
-
 	iAvatar, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
 	iAvatar.SetSizeRequest(HeaderAvatarSize, HeaderAvatarSize)
+	iAvatar.SetMarginStart(7)
+	iAvatar.SetMarginEnd(7)
+	b.Add(iAvatar)
 
-	avaOverlay, _ := gtk.OverlayNew()
-	avaOverlay.SetMarginStart(7)
-	avaOverlay.SetMarginEnd(7)
-	avaOverlay.Add(iStatus)
-	avaOverlay.AddOverlay(iAvatar)
-	b.Add(avaOverlay)
+	sAvatar, _ := iAvatar.GetStyleContext()
+	sAvatar.AddClass("avatar")
+	sAvatar.AddClass("status")
 
 	l, _ := gtk.LabelNew("?")
 	l.SetXAlign(0.0)
@@ -93,12 +86,12 @@ func NewUserPopup(relative gtk.IWidget) *UserPopup {
 	b.Add(l)
 
 	return &UserPopup{
-		Popover:  p,
-		Main:     main,
-		Style:    style,
-		Status:   iStatus,
-		Avatar:   iAvatar,
-		Username: l,
+		Popover:     p,
+		Main:        main,
+		Style:       style,
+		Avatar:      iAvatar,
+		AvatarStyle: sAvatar,
+		Username:    l,
 	}
 }
 
@@ -122,6 +115,20 @@ func (b *UserPopup) setClass(class string) {
 	b.Style.AddClass(class)
 }
 
+func (b *UserPopup) setAvatarClass(class string) {
+	if b.lastAvatarClass != "" {
+		b.AvatarStyle.RemoveClass(b.lastAvatarClass)
+		b.lastAvatarClass = ""
+	}
+
+	if class == "" {
+		return
+	}
+
+	b.lastAvatarClass = class
+	b.AvatarStyle.AddClass(class)
+}
+
 func (b *UserPopup) Update(u discord.User) {
 	b.Username.SetMarkup(b.formatUser(u))
 
@@ -134,7 +141,7 @@ func (b *UserPopup) UpdateMember(m discord.Member) {
 	var body = b.formatUser(m.User)
 	if m.Nick != "" {
 		body = fmt.Sprintf(
-			`<span weight="bold">%s</span>`+"\n%s",
+			`<span weight="bold">%s</span>`+"\n"+`<span size="smaller">%s</span>`,
 			escape(m.Nick), body,
 		)
 	}
@@ -183,27 +190,20 @@ func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 }
 
 func (b *UserPopup) UpdateStatus(status discord.Status) {
-	var color uint32
-
-	switch status {
-	case discord.OnlineStatus:
-		color = OnlineColor
-	case discord.DoNotDisturbStatus:
-		color = BusyColor
-	case discord.IdleStatus:
-		color = IdleColor
-	case discord.InvisibleStatus:
-		color = OfflineColor
-	case discord.OfflineStatus:
-		color = OfflineColor
-	case discord.UnknownStatus:
-		color = 0xFFFFFF
-	}
-
-	circle := icons.SolidCircle(HeaderStatusSize, color)
-	if err := icons.SetImage(circle, b.Status); err != nil {
-		log.Errorln("Failed to set status image:", err)
-	}
+	must(func() {
+		switch status {
+		case discord.OnlineStatus:
+			b.setAvatarClass("online")
+		case discord.DoNotDisturbStatus:
+			b.setAvatarClass("busy")
+		case discord.IdleStatus:
+			b.setAvatarClass("idle")
+		case discord.InvisibleStatus, discord.OfflineStatus:
+			b.setAvatarClass("offline")
+		case discord.UnknownStatus:
+			b.setAvatarClass("unknown")
+		}
+	})
 }
 
 type UserPopupRoles struct {
@@ -292,7 +292,7 @@ func NewUserPopupRoles(guild discord.Snowflake, ids []discord.Snowflake) (*UserP
 	return popup, nil
 }
 
-func NewGuildMemberPopup(guildID, userID discord.Snowflake) *gtk.Popover {
+func SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Popover {
 	popup := NewUserPopup(nil)
 
 	go func() {
@@ -303,11 +303,19 @@ func NewGuildMemberPopup(guildID, userID discord.Snowflake) *gtk.Popover {
 		}
 
 		p, err := App.State.Presence(guildID, u.ID)
-		if err != nil {
-			requestMember(guildID, userID)
-		} else {
+		if err == nil {
 			popup.UpdateStatus(p.Status)
 			popup.UpdateActivity(p.Game)
+		}
+
+		if !guildID.Valid() {
+			popup.Update(*u)
+			return
+		}
+
+		// fetch above presence if error not nil
+		if err != nil {
+			requestMember(guildID, userID)
 		}
 
 		m, err := App.State.Member(guildID, u.ID)
@@ -332,13 +340,13 @@ func NewGuildMemberPopup(guildID, userID discord.Snowflake) *gtk.Popover {
 }
 
 func requestMember(guild discord.Snowflake, user ...discord.Snowflake) {
-	err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+	data := gateway.RequestGuildMembersData{
 		GuildID:   []discord.Snowflake{guild},
 		UserIDs:   user,
 		Presences: true,
-	})
+	}
 
-	if err != nil {
+	if err := App.State.Gateway.RequestGuildMembers(data); err != nil {
 		log.Errorln("Failed to request guild members:", err)
 	}
 }

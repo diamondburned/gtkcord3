@@ -56,8 +56,12 @@ type application struct {
 	Messages gtkutils.ExtendedWidget
 
 	// Stuff
-	Guilds *Guilds
-	Guild  *Guild
+	Privates *PrivateChannels
+	Guilds   *Guilds
+
+	// current stuff
+	Guild   *Guild
+	Channel *Channel
 
 	// nil after finalize()
 	sbox      *gtk.Box
@@ -159,7 +163,11 @@ func Ready(s *ningen.State) error {
 		}
 		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
-		gs, err := newGuilds()
+		// spawned by passing nil to loadGuild
+		ps := newPrivateChannels(App.State.Ready.PrivateChannels)
+		App.Privates = ps
+
+		gs, err := newGuilds(ps.GuildRow)
 		if err != nil {
 			return errors.Wrap(err, "Failed to make guilds view")
 		}
@@ -169,11 +177,13 @@ func Ready(s *ningen.State) error {
 		must(gw.Add, gs)
 		must(App.Grid.Add, gw)
 
-		s, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		if err != nil {
-			return errors.Wrap(err, "Failed to create separator")
-		}
-		must(App.Grid.Add, s)
+		s1, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+		s1.Show()
+		must(App.Grid.Attach, s1, 1, 0, 1, 1)
+
+		s2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+		s2.Show()
+		must(App.Grid.Attach, s2, 3, 0, 1, 1)
 	}
 
 	// Finalize the window:
@@ -216,7 +226,7 @@ func (a *application) ChannelID() discord.Snowflake {
 	if !ok {
 		return 0
 	}
-	return mw.Channel.ID
+	return mw.ChannelID
 }
 
 func (a *application) close() {
@@ -226,29 +236,62 @@ func (a *application) close() {
 }
 
 func (a *application) setChannelCol(w gtkutils.ExtendedWidget) {
+	if w == nil {
+		if a.Sidebar != nil {
+			a.Grid.Remove(a.Sidebar)
+			a.Sidebar = nil
+		}
+
+		return
+	}
+
 	a.Sidebar = w
 	a.Grid.Attach(w, 2, 0, 1, 1)
 }
+
 func (a *application) setMessagesCol(w gtkutils.ExtendedWidget) {
+	if w == nil {
+		if a.Messages != nil {
+			a.Grid.Remove(a.Messages)
+			a.Messages = nil
+		}
+
+		return
+	}
+
 	a.Messages = w
 	a.Grid.Attach(w, 4, 0, 1, 1)
 }
 
 func (a *application) loadGuild(g *Guild) {
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
+	// We don't need a spinner if it's a DM guild:
+	if g == nil {
+		a.Guild = nil
+		a.Header.UpdateGuild("Private Messages")
+
+		must(func() {
+			App.Privates.ensureSelected()
+			a.setChannelCol(App.Privates)
+			a.setMessagesCol(nil)
+		})
+		return
+	}
+
 	a._loadGuild(g)
 
 	ch := g.Current()
 	if ch == nil {
 		return
 	}
-	a.loadChannel(g, ch)
+
+	go a.loadChannel(g, ch)
 }
 
 func (a *application) _loadGuild(g *Guild) {
 	must(a.Guilds.SetSensitive, false)
-
-	a.busy.Lock()
-	defer a.busy.Unlock()
 
 	if a.Sidebar != nil {
 		must(a.Grid.Remove, a.Sidebar)
@@ -289,24 +332,60 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	must(g.Channels.Main.SetSensitive, false)
 	defer must(g.Channels.Main.SetSensitive, true)
 
+	done := a.checkMessages(ch.Messages)
+	if done == nil {
+		return
+	}
+	defer done()
+
+	a._loadMessages(func() (*Messages, error) {
+		must(a.Header.UpdateChannel, ch.Name, ch.Topic)
+		if err := g.GoTo(ch); err != nil {
+			return nil, err
+		}
+		return ch.Messages, nil
+	})
+}
+
+func (a *application) loadPrivate(p *PrivateChannel) {
+	must(a.Privates.SetSensitive, false)
+	defer must(a.Privates.SetSensitive, true)
+
+	done := a.checkMessages(p.Messages)
+	if done == nil {
+		return
+	}
+	defer done()
+
+	a._loadMessages(func() (*Messages, error) {
+		must(a.Header.UpdateChannel, p.Name, "")
+		if err := p.loadMessages(); err != nil {
+			return nil, err
+		}
+		return p.Messages, nil
+	})
+}
+
+func (a *application) checkMessages(m *Messages) func() {
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
 	old := a.Messages
 	if old != nil {
-		if old == ch.Messages {
-			return
+		if old == m {
+			return nil
 		}
 
 		must(a.Grid.Remove, old)
-		defer must(old.Destroy)
-	} else {
-		must(func() {
-			s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-			s.Show()
-			App.Grid.Add(s)
-		})
+		return func() { must(old.Destroy) }
 	}
+
+	return func() {}
+}
+
+func (a *application) _loadMessages(load func() (*Messages, error)) {
+	a.busy.Lock()
+	defer a.busy.Unlock()
 
 	a.Messages = nil
 
@@ -316,24 +395,21 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 		a.Grid.Attach(a.sbox, 4, 0, 1, 1)
 	})
 
-	// Run hook
-	a.Header.UpdateChannel(ch.Name, ch.Topic)
-
-	if err := g.GoTo(ch); err != nil {
-		must(a._loadChannelDone, g, ch)
-
+	m, err := load()
+	if err != nil {
+		must(a._loadChannelDone)
 		logWrap(err, "Failed to go to channel")
 		return
 	}
 
 	must(func() {
-		a._loadChannelDone(g, ch)
-		a.setMessagesCol(ch.Messages)
-		ch.Messages.Show()
+		a._loadChannelDone()
+		a.setMessagesCol(m)
+		m.Show()
 	})
 }
 
-func (a *application) _loadChannelDone(g *Guild, ch *Channel) {
+func (a *application) _loadChannelDone() {
 	a.spinner.Stop()
 	a.Grid.Remove(a.sbox)
 }

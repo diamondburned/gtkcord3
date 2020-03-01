@@ -101,7 +101,7 @@ func SanitizeString(str string) string {
 }
 
 func Get(url string) ([]byte, error) {
-	b, err := get(url, "")
+	b, err := get(url)
 	if err != nil {
 		return b, err
 	}
@@ -109,12 +109,8 @@ func Get(url string) ([]byte, error) {
 	return b, nil
 }
 
-func get(url, suffix string) ([]byte, error) {
-	if suffix != "" {
-		suffix = "#" + suffix
-	}
-
-	b, err := store.Read(url + suffix)
+func get(url string) ([]byte, error) {
+	b, err := store.Read(url)
 	if err == nil {
 		return b, nil
 	}
@@ -138,7 +134,7 @@ func get(url, suffix string) ([]byte, error) {
 		return nil, errors.New("nil body")
 	}
 
-	if err := store.Write(url+suffix, b); err != nil {
+	if err := store.Write(url, b); err != nil {
 		log.Errorln("Failed to store:", err)
 	}
 
@@ -150,7 +146,7 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 }
 
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
-	b, err := get(url, "image")
+	b, err := get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +161,10 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 	}
 
 	if w > 0 && h > 0 {
-		l.SetSize(w, h)
+		gtkutils.Connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
+			w, h = maxSize(_w, _h, w, h)
+			l.SetSize(w, h)
+		})
 	}
 
 	pixbuf, err := l.WriteAndReturnPixbuf(b)
@@ -181,7 +180,7 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 }
 
 func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
-	b, err := get(url, "image")
+	b, err := get(url)
 	if err != nil {
 		return err
 	}

@@ -22,9 +22,7 @@ const (
 
 type Guilds struct {
 	*gtk.ListBox
-
-	Friends *gtk.TreeIter // TODO
-	Guilds  []*Guild
+	Guilds []*Guild
 }
 
 type Guild struct {
@@ -52,7 +50,7 @@ type Guild struct {
 	requestingMembers  map[discord.Snowflake]struct{}
 	requestingMemMutex sync.Mutex
 
-	unread bool
+	stateClass string
 }
 
 func newGuildsFromFolders() ([]*Guild, error) {
@@ -120,7 +118,7 @@ func newGuildsLegacy() ([]*Guild, error) {
 	return rows, nil
 }
 
-func newGuilds() (*Guilds, error) {
+func newGuilds(dm gtkutils.ExtendedWidget) (*Guilds, error) {
 	var rows []*Guild
 	var err error
 
@@ -144,6 +142,10 @@ func newGuilds() (*Guilds, error) {
 	}
 
 	must(func() {
+		// Add the button to the first of the list:
+		l.Add(dm)
+
+		// Add the rest:
 		for i := 0; i < len(rows); i++ {
 			l.Add(rows[i])
 			rows[i].ShowAll()
@@ -152,6 +154,12 @@ func newGuilds() (*Guilds, error) {
 
 	must(l.Connect, "row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		index := r.GetIndex()
+		if index < 1 {
+			go App.loadGuild(nil)
+			return
+		}
+
+		index--
 		row := rows[index]
 
 		// Collapse all revealers:
@@ -174,9 +182,7 @@ func newGuilds() (*Guilds, error) {
 			row = row.Folder.Guilds[index]
 		}
 
-		go func() {
-			App.loadGuild(row)
-		}()
+		go App.loadGuild(row)
 	})
 
 	g.find(func(g *Guild) bool {
@@ -226,6 +232,8 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	var name = bold(g.Name)
 	var guild *Guild
 
+	icon := App.parser.GetIcon("system-users-symbolic", IconSize/3*2)
+
 	must(func() {
 		r, _ := gtk.ListBoxRowNew()
 		// Set paddings:
@@ -238,7 +246,7 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 		style, _ := r.GetStyleContext()
 		style.AddClass("guild")
 
-		i, _ := gtk.ImageNewFromIconName("user-available", gtk.ICON_SIZE_DIALOG)
+		i, _ := gtk.ImageNewFromPixbuf(icon)
 		i.SetHAlign(gtk.ALIGN_CENTER)
 		i.SetVAlign(gtk.ALIGN_CENTER)
 		r.Add(i)
@@ -282,8 +290,15 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 			}
 
 			if rs := App.State.FindLastRead(ch.ID); rs != nil {
-				if ch.LastMessageID != rs.LastMessageID {
-					guild.setUnread(true)
+				if ch.LastMessageID == rs.LastMessageID {
+					continue
+				}
+
+				pinged := rs.MentionCount > 0
+				guild.setUnread(true, pinged)
+
+				// only break if we know one of the channel pinged us.
+				if pinged {
 					break
 				}
 			}
@@ -291,6 +306,11 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	}()
 
 	return guild, nil
+}
+
+// thread safe
+func (g *Guild) setClass(class string) {
+	gtkutils.DiffClass(&g.stateClass, class, g.Style)
 }
 
 func (g *Guild) SetUnavailable(unavailable bool) {

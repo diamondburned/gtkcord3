@@ -59,7 +59,7 @@ type Message struct {
 	Condensed      bool
 	CondenseOffset time.Duration
 
-	busy atomic.Value
+	busy int32
 }
 
 func newMessage(m discord.Message) (*Message, error) {
@@ -177,7 +177,8 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 		message.avatarEv.Add(message.avatar)
 		message.avatarEv.Connect("button_press_event", func() {
-			p := NewGuildMemberPopup(message.Messages.Channel.Guild, message.AuthorID)
+			// App.GuildID is a hack
+			p := SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
 			p.SetRelativeTo(message.avatar)
 			p.Show()
 		})
@@ -210,13 +211,12 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 }
 
 func (m *Message) markBusy() func() {
-	m.busy.Store(true)
-	return func() { m.busy.Store(false) }
+	atomic.AddInt32(&m.busy, 1)
+	return func() { atomic.AddInt32(&m.busy, -1) }
 }
 
 func (m *Message) isBusy() bool {
-	v, ok := m.busy.Load().(bool)
-	return v && ok
+	return atomic.LoadInt32(&m.busy) == 0
 }
 
 func (m *Message) getAvailable() bool {
@@ -292,9 +292,11 @@ func (m *Message) updateAuthorName(n discord.Member) {
 		name = bold(escape(n.Nick))
 	}
 
-	if g, err := App.State.Guild(m.Messages.Channel.Guild); err == nil {
-		if color := discord.MemberColor(*g, n); color > 0 {
-			name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
+	if gID := m.Messages.GuildID; gID.Valid() {
+		if g, err := App.State.Guild(gID); err == nil {
+			if color := discord.MemberColor(*g, n); color > 0 {
+				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
+			}
 		}
 	}
 
@@ -304,10 +306,10 @@ func (m *Message) updateAuthorName(n discord.Member) {
 func (m *Message) UpdateAuthor(user discord.User) {
 	defer m.markBusy()()
 
-	if guildID := m.Messages.Channel.Guild; guildID.Valid() {
+	if guildID := m.Messages.GuildID; guildID.Valid() {
 		n, err := App.State.Store.Member(guildID, user.ID)
 		if err != nil {
-			go m.Messages.Channel.Channels.Guild.requestMember(user.ID)
+			go App.Guild.requestMember(user.ID)
 		} else {
 			// Update the author name:
 			m.updateAuthorName(*n)

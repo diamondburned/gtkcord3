@@ -6,10 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
@@ -30,7 +30,7 @@ type Login struct {
 	LastError error
 
 	displayed bool
-	finish    func(s *state.State)
+	finish    func(s *ningen.State)
 }
 
 func NewHeader() gtkutils.ExtendedWidget {
@@ -40,7 +40,7 @@ func NewHeader() gtkutils.ExtendedWidget {
 	return l
 }
 
-func NewLogin(finish func(s *state.State)) *Login {
+func NewLogin(finish func(s *ningen.State)) *Login {
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	main.SetMarginTop(15)
 	main.SetMarginBottom(50)
@@ -199,17 +199,8 @@ func openDiscordLoginPage() {
 	}
 }
 
-func CreateState(token string) (*state.State, error) {
-	s, err := state.New(token)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a new Discord session")
-	}
-
-	if err := s.Open(); err != nil {
-		return nil, errors.Wrap(err, "Failed to connect to Discord")
-	}
-
-	return s, nil
+func CreateState(token string) (*ningen.State, error) {
+	return ningen.Connect(token)
 }
 
 func LookPathExtras(file string) (string, error) {

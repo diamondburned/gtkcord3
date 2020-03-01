@@ -47,6 +47,11 @@ func (i *MessageInput) initCompleter() {
 }
 
 func (c *Completer) requestMember(prefix string) {
+	guildID := c.Input.Messages.GuildID
+	if !guildID.Valid() {
+		return
+	}
+
 	if time.Now().Before(c.lastRequested) {
 		return
 	}
@@ -55,7 +60,7 @@ func (c *Completer) requestMember(prefix string) {
 
 	go func() {
 		err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.Snowflake{c.Input.Messages.Channel.Guild},
+			GuildID:   []discord.Snowflake{guildID},
 			Query:     prefix,
 			Presences: true,
 		})
@@ -236,7 +241,7 @@ func (c *Completer) loadCompletion(word string) {
 
 	switch word[0] {
 	case '@':
-		c.completeMentions(word[1:])
+		c.completeMentions(strings.ToLower(word[1:]))
 	case '#':
 		c.completeChannels(word[1:])
 	case ':':
@@ -253,24 +258,21 @@ func (c *Completer) completeChannels(word string) {
 	for _, ch := range sb.Channels {
 		if strings.HasPrefix(ch.Name, word) {
 			l := completerLeftLabel("#" + ch.Name)
-			c.addCompletionEntry(l, "<#"+ch.ID.String()+">")
+
+			if !c.addCompletionEntry(l, "<#"+ch.ID.String()+">") {
+				break
+			}
 		}
 	}
 }
 
 func (c *Completer) completeMentions(word string) {
-	sb, ok := App.Sidebar.(*Channels)
-	if !ok {
-		log.Errorln("App.Sidebar is not of type *Channels")
+	if !c.Input.Messages.GuildID.Valid() {
+		c.completeMentionsDM(word)
 		return
 	}
 
-	if !sb.Guild.ID.Valid() {
-		// TODO: DM
-		return
-	}
-
-	members, err := App.State.Store.Members(sb.Guild.ID)
+	members, err := App.State.Store.Members(c.Input.Messages.GuildID)
 	if err != nil {
 		log.Errorln("Failed to get members:", err)
 		return
@@ -280,7 +282,6 @@ func (c *Completer) completeMentions(word string) {
 		var (
 			name = strings.ToLower(m.User.Username)
 			nick = strings.ToLower(m.Nick)
-			word = strings.ToLower(word)
 		)
 
 		if strings.Contains(name, word) || strings.Contains(nick, word) {
@@ -300,13 +301,43 @@ func (c *Completer) completeMentions(word string) {
 			must(b.Add, completerLeftLabel(name))
 			must(b.Add, completerRightLabel(m.User.Username+"#"+m.User.Discriminator))
 
-			c.addCompletionEntry(b, m.User.Mention())
+			if !c.addCompletionEntry(b, m.User.Mention()) {
+				break
+			}
 		}
 	}
 
 	if len(c.Entries) == 0 {
 		// Request the member in a background goroutine
 		c.requestMember(word)
+	}
+}
+
+func (c *Completer) completeMentionsDM(word string) {
+	ch, err := App.State.Channel(c.Input.Messages.ChannelID)
+	if err != nil {
+		log.Errorln("Failed to get DM channel:", err)
+		return
+	}
+
+	for _, u := range ch.DMRecipients {
+		var name = strings.ToLower(u.Username)
+		if strings.Contains(name, word) {
+			b := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+
+			var url = u.AvatarURL()
+			if url != "" {
+				url += "?size=64"
+			}
+
+			must(b.Add, completerImage(url))
+			must(b.Add, completerLeftLabel(u.Username))
+			must(b.Add, completerRightLabel(u.Username+"#"+u.Discriminator))
+
+			if !c.addCompletionEntry(b, u.Mention()) {
+				break
+			}
+		}
 	}
 }
 
@@ -346,7 +377,11 @@ func completerRightLabel(markup string) *gtk.Label {
 	return l
 }
 
-func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) {
+func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) bool {
+	if len(c.Entries) > 15 {
+		return false
+	}
+
 	entry := &CompleterEntry{
 		Child: w,
 		Text:  text,
@@ -366,4 +401,5 @@ func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) {
 	})
 
 	c.Entries = append(c.Entries, entry)
+	return true
 }

@@ -101,3 +101,21 @@ func Connect(connector connector, event string, cb interface{}, data ...interfac
 		log.Panicln("Failed to connect:", err)
 	}
 }
+
+func DiffClass(old *string, new string, style *gtk.StyleContext) {
+	if *old == new {
+		return
+	}
+
+	if *old != "" {
+		semaphore.IdleMust(style.RemoveClass, *old)
+	}
+
+	*old = new
+
+	if new == "" {
+		return
+	}
+
+	semaphore.IdleMust(style.AddClass, new)
+}
