@@ -2,7 +2,6 @@ package gtkcord
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
@@ -27,9 +26,8 @@ type PrivateChannels struct {
 	List   *gtk.ListBox
 	Scroll *gtk.ScrolledWindow
 
-	Channels []*PrivateChannel
-	// channels map[discord.Snowflake]*PrivateChannel
-
+	// Channels map[discord.Snowflake]*PrivateChannel
+	Channels map[string]*PrivateChannel
 }
 
 type PrivateChannel struct {
@@ -52,6 +50,7 @@ type PrivateChannel struct {
 	Group bool
 
 	Messages *Messages
+	LastMsg  discord.Snowflake
 
 	lastStatusClass string // avatar
 	stateClass      string // row styl
@@ -59,6 +58,7 @@ type PrivateChannel struct {
 
 // thread-safe
 func newPrivateChannels(chs []discord.Channel) (pcs *PrivateChannels) {
+	log.Infoln("Ch count:", len(chs))
 	must(func() {
 		l, _ := gtk.ListBoxNew()
 		gtkutils.InjectCSSUnsafe(l, "dmchannels", "")
@@ -79,8 +79,13 @@ func newPrivateChannels(chs []discord.Channel) (pcs *PrivateChannels) {
 				return
 			}
 
-			row := pcs.Channels[r.GetIndex()]
-			go App.loadPrivate(row)
+			rw, ok := pcs.Channels[_ChIDFromRow(r)]
+			if !ok {
+				log.Errorln("Failed to find channel")
+				return
+			}
+
+			go App.loadPrivate(rw)
 		})
 	})
 
@@ -110,38 +115,22 @@ func newPrivateChannels(chs []discord.Channel) (pcs *PrivateChannels) {
 	return pcs
 }
 
-func (pcs *PrivateChannels) ensureSelected() {
-	if r := pcs.List.GetSelectedRow(); r != nil {
-		return
-	}
-
-	if len(pcs.Channels) == 0 {
-		return
-	}
-
-	pcs.List.SelectRow(pcs.Channels[0].ListBoxRow)
-	go App.loadPrivate(pcs.Channels[0])
-}
-
 // thread-safe
 func (pcs *PrivateChannels) load(channels []discord.Channel) {
-	// Sort the direct message channels, so that the latest messages come first.
-	sort.Slice(channels, func(i, j int) bool {
-		return channels[i].LastMessageID > channels[j].LastMessageID
-	})
-
 	// fuck diffing.
 	if len(pcs.Channels) > 0 {
 		must(func() {
 			for _, ch := range pcs.Channels {
 				pcs.List.Remove(ch)
-				// delete(pcs.channels, ch.ID)
 			}
+
+			// Stop sorting for now:
+			pcs.List.SetSortFunc(nil, 0)
 		})
 	}
 
 	// TODO: mutex
-	pcs.Channels = make([]*PrivateChannel, 0, len(channels))
+	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
 
 	for _, channel := range channels {
 		w := newPrivateChannel(channel)
@@ -151,15 +140,57 @@ func (pcs *PrivateChannels) load(channels []discord.Channel) {
 			pcs.setUnread(true)
 		}
 
-		pcs.Channels = append(pcs.Channels, w)
+		pcs.Channels[channel.ID.String()] = w
 	}
 
 	async(func() {
 		for _, chw := range pcs.Channels {
 			pcs.List.Insert(chw, -1)
 		}
+		pcs.List.SetSortFunc(pcs.sort, 0)
+		pcs.List.InvalidateSort()
 		pcs.ShowAll()
 	})
+}
+
+func (pcs *PrivateChannels) Selected() *PrivateChannel {
+	if len(pcs.Channels) == 0 {
+		return nil
+	}
+
+	r := pcs.List.GetSelectedRow()
+	if r == nil {
+		r = pcs.List.GetRowAtIndex(0)
+		pcs.List.SelectRow(r)
+	}
+
+	rw, ok := pcs.Channels[_ChIDFromRow(r)]
+	if !ok || rw == nil {
+		log.Errorln("Failed to find channel row")
+	}
+	return rw
+}
+
+func (pcs *PrivateChannels) sort(r1, r2 *gtk.ListBoxRow, _ uintptr) int {
+	p1, ok := pcs.Channels[_ChIDFromRow(r1)]
+	if !ok {
+		log.Errorln("Failed to get channel 1")
+		return 0
+	}
+	p2, ok := pcs.Channels[_ChIDFromRow(r2)]
+	if !ok {
+		log.Errorln("Failed to get channel 2")
+		return 0
+	}
+
+	switch {
+	case p1.LastMsg < p2.LastMsg:
+		return 1
+	case p1.LastMsg > p2.LastMsg:
+		return -1
+	default:
+		return 0
+	}
 }
 
 func (pcs *PrivateChannels) setButtonClass(class string) {
@@ -209,6 +240,8 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 
 		r, _ := gtk.ListBoxRowNew()
 		r.Add(b)
+		// set the channel ID to name
+		r.SetProperty("name", ch.ID.String())
 
 		rs, _ := r.GetStyleContext()
 		rs.AddClass("dmchannel")
@@ -226,6 +259,8 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 			ID:    ch.ID,
 			Name:  name,
 			Group: true,
+			// Set the property. We'll need this for sorting.
+			LastMsg: ch.LastMessageID,
 		}
 
 		if len(ch.DMRecipients) > 0 {
@@ -234,7 +269,7 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	})
 
 	if rs := App.State.FindLastRead(pc.ID); rs != nil {
-		pc.setUnread(rs.LastMessageID != ch.LastMessageID)
+		pc.setUnread(rs.LastMessageID != pc.LastMsg)
 	}
 
 	if ch.Type != discord.DirectMessage {
@@ -264,12 +299,17 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	return pc
 }
 
-func (pc *PrivateChannel) ackLatest() {
-	last := pc.Messages.LastID()
-	if !last.Valid() {
-		return
+func _ChIDFromRow(row *gtk.ListBoxRow) string {
+	v, err := row.GetProperty("name")
+	if err != nil {
+		log.Errorln("Failed to get channel ID:", err)
+		return ""
 	}
-	App.State.MarkRead(pc.ID, last)
+	return v.(string)
+}
+
+func (pc *PrivateChannel) ackLatest() {
+	App.State.MarkRead(pc.ID, pc.LastMsg)
 }
 
 func (pc *PrivateChannel) loadMessages() error {
@@ -278,23 +318,7 @@ func (pc *PrivateChannel) loadMessages() error {
 		if err != nil {
 			return err
 		}
-
-		if pc.Parent != nil {
-			m.OnInsert = func() {
-				sort.Slice(pc.Parent.Channels, func(i, j int) bool {
-					return pc.Parent.Channels[i] == pc
-				})
-
-				must(func() {
-					// Bring this channel to the top:
-					pc.Parent.List.Remove(pc.ListBoxRow)
-					pc.Parent.List.Prepend(pc.ListBoxRow)
-				})
-
-				pc.ackLatest()
-			}
-		}
-
+		m.OnInsert = pc.ackLatest
 		pc.Messages = m
 	}
 

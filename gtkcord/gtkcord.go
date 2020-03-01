@@ -270,13 +270,11 @@ func (a *application) loadGuild(g *Guild) {
 	// We don't need a spinner if it's a DM guild:
 	if g == nil {
 		a.Guild = nil
-		a.Header.UpdateGuild("Private Messages")
 
-		must(func() {
-			App.Privates.ensureSelected()
-			a.setChannelCol(App.Privates)
-			a.setMessagesCol(nil)
-		})
+		a.Header.UpdateGuild("Private Messages")
+		must(a.setChannelCol, App.Privates)
+
+		go a.loadPrivate(App.Privates.Selected())
 		return
 	}
 

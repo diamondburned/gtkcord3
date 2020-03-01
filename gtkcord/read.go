@@ -17,6 +17,7 @@ func (guilds *Guilds) traverseReadState(rs *gateway.ReadState, ack bool) {
 	if err == nil && !ch.GuildID.Valid() {
 		for _, pc := range App.Privates.Channels {
 			if pc.ID == ch.ID {
+				pc.LastMsg = rs.LastMessageID
 				pc.setUnread(!ack)
 				break
 			}
@@ -168,6 +169,7 @@ func (pcs *PrivateChannels) setUnread(unread bool) {
 
 	if unread {
 		pcs.setButtonClass("pinged")
+		// must(pcs.List.InvalidateSort)
 	} else {
 		pcs.setButtonClass("")
 	}
