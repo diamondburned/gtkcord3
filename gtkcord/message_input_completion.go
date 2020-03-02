@@ -189,8 +189,7 @@ func (c *Completer) run() {
 	}
 
 	c.loadCompletion(word)
-	c.ListBox.Show()
-
+	must(c.ListBox.Show)
 }
 
 func (c *Completer) ClearCompletion() {
