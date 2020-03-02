@@ -2,7 +2,7 @@
 
 A lightweight Discord client which uses GTK3 for the user interface.
 
-![Screenshot of gtkcord](.readme-resources/images/screenshot1.png)
+![Screenshot of gtkcord](.readme-resources/images/screenshot2.png)
 
 ## It's time to ditch the Discord Electron application (soon).
 
@@ -37,30 +37,16 @@ go get -u github.com/diamondburned/gtkcord3
 3. Search `api library` then look for the "Authorization" header in the right column.
 5. Copy this token into the Token field, then click Login.
 
-## Current features
+## (Missing) features
 
-- [X] See a list with Discord servers
-	- [X] Folders
-	- [X] Async loading
-- [X] See a list of channels
-	- [X] Server banner
-	- [X] Async loading
-- [X] See the messages of the selected channel
-	- [X] Emojis
-	- [X] Async loading
+- See the messages of the selected channel
 	- [ ] Message reactions
-	- [X] Rich content
-		- [X] Images
-		- [x] Embeds
-- [X] Send messages
-  - [X] Text
-  - [X] Images & files
+- Send messages
 	- [ ] Emojis
 	- [ ] Message reactions
-- [x] Graphical login
+- Graphical login
 	- [ ] Graphical logout
-- [X] Hamburger menu
-	- [X] User avatar view
+- Hamburger menu
 	- [ ] Change the visibility of your online state
 		- [ ] Custom Rich Presence
 		- [ ] Rich Presence IPC server
@@ -74,7 +60,7 @@ go get -u github.com/diamondburned/gtkcord3
 ## Known Bugs/Limitations
 
 - [x] Emojis always appear large
-- [ ] Random crashes
+- [ ] Random crashes (very rare)
 - [x] Thread (un)safety with Xorg/xcb
 - [x] Rampant concurrency
 - [x] Semaphore limits
