@@ -23,6 +23,7 @@ type Completer struct {
 	End   *gtk.TextIter
 
 	lastRequested time.Time
+	lastword      string
 }
 
 type CompleterEntry struct {
@@ -183,6 +184,11 @@ func (c *Completer) run() {
 	if !c.IsEmpty() {
 		must(c.ClearCompletion)
 	}
+
+	if word == c.lastword {
+		return
+	}
+	c.lastword = word
 
 	if word == "" {
 		return

@@ -2,6 +2,7 @@ package gtkcord
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
@@ -26,6 +27,9 @@ type PrivateChannels struct {
 
 	List   *gtk.ListBox
 	Scroll *gtk.ScrolledWindow
+
+	Search *gtk.Entry
+	search string
 
 	// Channels map[discord.Snowflake]*PrivateChannel
 	Channels map[string]*PrivateChannel
@@ -66,15 +70,36 @@ func newPrivateChannels(chs []discord.Channel) (pcs *PrivateChannels) {
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
 		cs.SetSizeRequest(ChannelsWidth, -1)
+		cs.SetVExpand(true)
 		cs.Add(l)
 
+		e, _ := gtk.EntryNew()
+		e.SetPlaceholderText("Find conversation...")
+
+		b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		b.Add(e)
+		b.Add(cs)
+
 		pcs = &PrivateChannels{
-			ExtendedWidget: cs,
+			ExtendedWidget: b,
 
 			List:   l,
 			Scroll: cs,
+			Search: e,
 		}
 
+		e.Connect("changed", func() {
+			t, err := e.GetText()
+			if err != nil {
+				log.Errorln("Failed to get text from dmchannels entry:", err)
+				return
+			}
+
+			pcs.search = strings.ToLower(t)
+			pcs.List.InvalidateFilter()
+		})
+
+		l.SetFilterFunc(pcs.filter, 0)
 		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 			if len(pcs.Channels) == 0 {
 				return
@@ -170,6 +195,20 @@ func (pcs *PrivateChannels) Selected() *PrivateChannel {
 		log.Errorln("Failed to find channel row")
 	}
 	return rw
+}
+
+func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ uintptr) bool {
+	if pcs.search == "" {
+		return true
+	}
+
+	pc, ok := pcs.Channels[_ChIDFromRow(r)]
+	if !ok {
+		log.Errorln("Failed to get channel for filter")
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(pc.Name), pcs.search)
 }
 
 func (pcs *PrivateChannels) sort(r1, r2 *gtk.ListBoxRow, _ uintptr) int {
