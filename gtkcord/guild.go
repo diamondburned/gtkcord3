@@ -162,13 +162,13 @@ func newGuilds(dm gtkutils.ExtendedWidget) (*Guilds, error) {
 		index--
 		row := rows[index]
 
-		// Collapse all revealers:
+		// Unselect all guild folders except the current one:
 		for i, r := range rows {
 			if i == index {
 				continue
 			}
 			if r.Folder != nil {
-				r.Folder.Revealer.SetRevealChild(false)
+				r.Folder.List.SelectRow(nil)
 			}
 		}
 

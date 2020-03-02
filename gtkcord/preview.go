@@ -101,6 +101,10 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 		pd.Dialog.Destroy()
 	})
 
+	// Calculate the sizee so that the image is just slightly (90%) smaller:
+	w = w * 9 / 10
+	h = h * 9 / 10
+
 	go pd.Fetch(w, h)
 
 	d.Run()

@@ -42,6 +42,8 @@ github.com/diamondburned/arikawa v0.1.5-0.20200301030903-04a33c3ee4b0 h1:xc1rbkx
 github.com/diamondburned/arikawa v0.1.5-0.20200301030903-04a33c3ee4b0/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/diamondburned/arikawa v0.1.5-0.20200301222554-14b9d8f43acd h1:ItFjU56IISCBnW4cQoCDbl+39etIGElIYv01ax3kAxM=
 github.com/diamondburned/arikawa v0.1.5-0.20200301222554-14b9d8f43acd/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
+github.com/diamondburned/arikawa v0.1.5-0.20200302003940-0aebea60bd12 h1:UnS4Ylx0uMV7q1xyYftASQHW1RcT+WF+vfBxObIbpJM=
+github.com/diamondburned/arikawa v0.1.5-0.20200302003940-0aebea60bd12/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/diamondburned/discordlogin v0.0.1 h1:AZnI3YP4sdoxG6fxe2DoqD00SCj7nB1w6jU0o53ajQg=
 github.com/diamondburned/discordlogin v0.0.1/go.mod h1:DhHldcgI1XocGngAMaZE17WkRboFF2l8aIUKmGCd01s=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
