@@ -388,5 +388,6 @@ func (i *MessageInput) _upload(content string, paths []string) error {
 		return errors.Wrap(err, "Failed to upload message")
 	}
 	must(w.rightBottom.Remove, u)
+
 	return nil
 }

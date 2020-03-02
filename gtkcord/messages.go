@@ -1,6 +1,7 @@
 package gtkcord
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,7 +34,8 @@ type Messages struct {
 
 	Input *MessageInput
 
-	OnInsert func()
+	// self indicates if the message is from self or not
+	OnInsert func(m *Message)
 }
 
 func newMessages(chID discord.Snowflake) (*Messages, error) {
@@ -102,32 +104,44 @@ func (ch *Channel) loadMessages() error {
 		return errors.Wrap(err, "Failed to reset messages")
 	}
 
-	// Set the latest message ID.
-	messages := ch.Messages.messages
-	ch.LastMsg = messages[len(messages)-1].ID
-
-	go ch.ackLatest()
 	return nil
 }
 
-func (ch *Channel) ackLatest() {
-	ch.LastMsg = ch.Messages.LastID()
-	if ch.LastMsg.Valid() {
-		App.State.MarkRead(ch.ID, ch.LastMsg)
-	}
+func (ch *Channel) ackLatest(m *Message) {
+	ch.LastMsg = m.ID
+	App.State.MarkRead(ch.ID, ch.LastMsg, m.AuthorID != App.Me.ID)
 }
 
 func (ch *Channel) GetMessages() *Messages {
 	return ch.Messages
 }
 
-func (m *Messages) LastID() discord.Snowflake {
+func (m *Messages) triggerInsert() {
+	if m.OnInsert == nil {
+		return
+	}
+	last := m.Last()
+	if last == nil {
+		return
+	}
+
+	m.OnInsert(last)
+}
+
+func (m *Messages) Last() *Message {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 	if len(m.messages) == 0 {
-		return 0
+		return nil
 	}
-	return m.messages[len(m.messages)-1].ID
+	return m.messages[len(m.messages)-1]
+}
+
+func (m *Messages) LastID() discord.Snowflake {
+	if msg := m.Last(); msg != nil {
+		return msg.ID
+	}
+	return 0
 }
 
 func (m *Messages) reset() error {
@@ -142,6 +156,11 @@ func (m *Messages) reset() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
+
+	// Sort so that latest is last:
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].ID < messages[j].ID
+	})
 
 	must(func() {
 		for _, w := range m.messages {
@@ -159,7 +178,7 @@ func (m *Messages) reset() error {
 	var loads = make([]func(), 0, DefaultFetch)
 
 	// Iterate from earliest to latest.
-	for i := len(messages) - 1; i >= 0; i-- {
+	for i := 0; i < len(messages); i++ {
 		message := messages[i]
 
 		msg, err := newMessage(message)
@@ -198,6 +217,9 @@ func (m *Messages) reset() error {
 	must(m.ShowAll)
 
 	go func() {
+		m.triggerInsert()
+
+		// Iterate backwards, from latest to earliest.
 		for i := len(loads) - 1; i >= 0; i-- {
 			loads[i]()
 		}
@@ -273,6 +295,12 @@ func (m *Messages) onSizeAlloc() {
 }
 
 func (m *Messages) Insert(message discord.Message) error {
+	defer func() {
+		if message.ID.Valid() {
+			m.triggerInsert()
+		}
+	}()
+
 	// Are we sure this is not our message?
 	if m.Update(message) {
 		return nil
@@ -281,10 +309,6 @@ func (m *Messages) Insert(message discord.Message) error {
 	w, err := newMessage(message)
 	if err != nil {
 		return errors.Wrap(err, "Failed to render message")
-	}
-
-	if m.OnInsert != nil {
-		defer m.OnInsert()
 	}
 
 	return m.insert(w, message)

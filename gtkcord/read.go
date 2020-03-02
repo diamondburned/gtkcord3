@@ -2,7 +2,6 @@ package gtkcord
 
 import (
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/log"
 )
 
 func (a *application) hookReads() {
@@ -15,15 +14,8 @@ func (guilds *Guilds) traverseReadState(rs *gateway.ReadState, ack bool) {
 	ch, err := App.State.Channel(rs.ChannelID)
 	// maybe DM?
 	if err == nil && !ch.GuildID.Valid() {
-		for _, pc := range App.Privates.Channels {
-			if pc.ID == ch.ID {
-				pc.LastMsg = rs.LastMessageID
-				pc.setUnread(!ack)
-				break
-			}
-		}
-
-		App.Privates.setUnread(!ack)
+		App.Privates.traverseReadState(rs, ack)
+		return
 	}
 
 	if err == nil && ch.GuildID.Valid() {
@@ -115,6 +107,7 @@ func (channels *Channels) traverseReadState(rs *gateway.ReadState, ack bool) {
 
 		// ack == read
 		ch.setUnread(!ack, rs.MentionCount > 0)
+		break
 	}
 }
 
@@ -141,9 +134,6 @@ func (channel *Channel) setUnread(unread, pinged bool) {
 		return
 	}
 
-	if channel.unread == unread {
-		return
-	}
 	channel.unread = unread
 
 	switch {
@@ -156,12 +146,43 @@ func (channel *Channel) setUnread(unread, pinged bool) {
 	}
 }
 
+func (pcs *PrivateChannels) traverseReadState(rs *gateway.ReadState, ack bool) {
+	if App.ChannelID() == rs.ChannelID {
+		ack = true
+	}
+
+	ch, ok := pcs.Channels[rs.ChannelID.String()]
+	if !ok {
+		return
+	}
+
+	ch.LastMsg = rs.LastMessageID
+	ch.setUnread(!ack)
+}
+
+func (pc *PrivateChannel) updateReadState(rs *gateway.ReadState) {
+	if rs == nil {
+		pc.setUnread(false)
+		return
+	}
+
+	unread := pc.LastMsg != rs.LastMessageID
+	pc.setUnread(unread)
+
+	if pc.Parent != nil {
+		must(func() {
+			if pc.ListBoxRow.GetIndex() != 0 {
+				pc.Parent.List.InvalidateSort()
+			}
+		})
+	}
+}
+
 func (pcs *PrivateChannels) setUnread(unread bool) {
 	if !unread {
 		for _, ch := range pcs.Channels {
 			if ch.stateClass == "pinged" {
 				unread = true
-				log.Infoln(ch.Name, "unread")
 				break
 			}
 		}
@@ -169,7 +190,6 @@ func (pcs *PrivateChannels) setUnread(unread bool) {
 
 	if unread {
 		pcs.setButtonClass("pinged")
-		// must(pcs.List.InvalidateSort)
 	} else {
 		pcs.setButtonClass("")
 	}
@@ -179,5 +199,16 @@ func (pc *PrivateChannel) setUnread(unread bool) {
 		pc.setClass("pinged")
 	} else {
 		pc.setClass("")
+	}
+
+	if pc.Parent != nil {
+		pc.Parent.setUnread(unread)
+
+		must(func() {
+			if pc.ListBoxRow.GetIndex() == 0 {
+				return
+			}
+			pc.Parent.List.InvalidateSort()
+		})
 	}
 }

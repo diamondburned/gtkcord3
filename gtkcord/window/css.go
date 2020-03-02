@@ -112,7 +112,6 @@ const CSS = `
 
 	.channel {
 		opacity: 0.5;
-		color: white;
 	}
 	.channel.muted {
 		opacity: 0.25;
@@ -125,7 +124,6 @@ const CSS = `
 		color: @color_pinged;
 		background-color: alpha(@color_pinged, 0.15);
 	}
-
 	.dmchannel.pinged {
 		background-color: alpha(@color_pinged, 0.15);
 	}

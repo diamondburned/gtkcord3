@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
+	"github.com/pkg/errors"
 )
 
 const DMAvatarSize = 38
@@ -269,7 +270,7 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	})
 
 	if rs := App.State.FindLastRead(pc.ID); rs != nil {
-		pc.setUnread(rs.LastMessageID != pc.LastMsg)
+		pc.updateReadState(rs)
 	}
 
 	if ch.Type != discord.DirectMessage {
@@ -308,8 +309,8 @@ func _ChIDFromRow(row *gtk.ListBoxRow) string {
 	return v.(string)
 }
 
-func (pc *PrivateChannel) ackLatest() {
-	App.State.MarkRead(pc.ID, pc.LastMsg)
+func (pc *PrivateChannel) ackLatest(m *Message) {
+	App.State.MarkRead(pc.ID, m.ID, m.AuthorID != App.Me.ID)
 }
 
 func (pc *PrivateChannel) loadMessages() error {
@@ -322,11 +323,11 @@ func (pc *PrivateChannel) loadMessages() error {
 		pc.Messages = m
 	}
 
-	defer func() {
-		go pc.ackLatest()
-	}()
+	if err := pc.Messages.reset(); err != nil {
+		return errors.Wrap(err, "Failed to reset private messages")
+	}
 
-	return pc.Messages.reset()
+	return nil
 }
 
 func (pc *PrivateChannel) setStatusClass(class string) {

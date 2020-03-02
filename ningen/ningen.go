@@ -66,11 +66,11 @@ func Ningen(s *state.State) (*State, error) {
 	}
 
 	s.AddHandler(func(a *gateway.MessageAckEvent) {
-		state.hookIncomingMessage(a.ChannelID, a.MessageID, true, true)
+		state.hookIncomingMessage(a.ChannelID, a.MessageID, true)
 	})
 
 	s.AddHandler(func(c *gateway.MessageCreateEvent) {
-		state.hookIncomingMessage(c.ChannelID, c.ID, true, false)
+		state.hookIncomingMessage(c.ChannelID, c.ID, false)
 	})
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
@@ -149,7 +149,7 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 }
 
 // returns *ReadState if updated, marks the message as unread.
-func (s *State) hookIncomingMessage(channel, message discord.Snowflake, call, ack bool) bool {
+func (s *State) hookIncomingMessage(channel, message discord.Snowflake, ack bool) bool {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
 
@@ -163,9 +163,7 @@ func (s *State) hookIncomingMessage(channel, message discord.Snowflake, call, ac
 
 	st.LastMessageID = message
 
-	if call {
-		s.OnReadChange(st, ack)
-	}
+	s.OnReadChange(st, ack)
 	return true
 }
 
@@ -184,9 +182,13 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	return nil
 }
 
-func (s *State) MarkRead(channelID, messageID discord.Snowflake) {
+func (s *State) MarkRead(channelID, messageID discord.Snowflake, trigger bool) {
 	// Update ReadState as well as the callback.
-	if !s.hookIncomingMessage(channelID, messageID, false, false) {
+	if !s.hookIncomingMessage(channelID, messageID, true) {
+		return
+	}
+
+	if !trigger {
 		return
 	}
 
