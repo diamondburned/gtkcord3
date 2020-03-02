@@ -172,14 +172,9 @@ func newGuilds(dm gtkutils.ExtendedWidget) (*Guilds, error) {
 			}
 		}
 
+		// We ignore folders, as that'll be handled by its own handler.
 		if row.Folder != nil {
-			index := row.Folder.List.GetSelectedRow().GetIndex()
-			if index < 0 {
-				index = 0
-				row.Folder.List.SelectRow(row.Folder.Guilds[0].Row)
-			}
-
-			row = row.Folder.Guilds[index]
+			return
 		}
 
 		go App.loadGuild(row)

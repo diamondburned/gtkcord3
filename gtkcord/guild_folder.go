@@ -14,6 +14,7 @@ type GuildFolder struct {
 	Revealer *gtk.Revealer
 	List     *gtk.ListBox
 	Guilds   []*Guild
+	Revealed bool
 }
 
 func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
@@ -69,11 +70,6 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 	}
 	folderRev.Add(guildList)
 
-	// On click, toggle revealer
-	folderEv.Connect("button_press_event", func() {
-		folderRev.SetRevealChild(!folderRev.GetRevealChild())
-	})
-
 	// Add the revealer into the main box
 	mainBox.Add(folderRev)
 
@@ -92,6 +88,17 @@ func newGuildFolder(folder gateway.GuildFolder) (*Guild, error) {
 		ID:   folder.ID,
 		Name: folder.Name,
 	}
+
+	// On click, toggle revealer
+	folderEv.Connect("button_press_event", func() {
+		f.Folder.Revealed = !folderRev.GetRevealChild()
+		folderRev.SetRevealChild(f.Folder.Revealed)
+	})
+
+	guildList.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		row := f.Folder.Guilds[r.GetIndex()]
+		go App.loadGuild(row)
+	})
 
 	for _, id := range folder.GuildIDs {
 		r, err := newGuildRow(id)
