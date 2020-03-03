@@ -23,6 +23,9 @@ const (
 type Guilds struct {
 	*gtk.ListBox
 	Guilds []*Guild
+
+	submutex   sync.Mutex
+	subscribed map[discord.Snowflake]struct{}
 }
 
 type Guild struct {
@@ -139,6 +142,8 @@ func newGuilds(dm gtkutils.ExtendedWidget) (*Guilds, error) {
 	g := &Guilds{
 		ListBox: l,
 		Guilds:  rows,
+
+		subscribed: map[discord.Snowflake]struct{}{},
 	}
 
 	must(func() {
@@ -177,6 +182,7 @@ func newGuilds(dm gtkutils.ExtendedWidget) (*Guilds, error) {
 			return
 		}
 
+		// load the guild, then subscribe to typing events
 		go App.loadGuild(row)
 	})
 
@@ -212,6 +218,35 @@ func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 	}
 
 	return nil, nil
+}
+
+func (guilds *Guilds) subscribe(guildID discord.Snowflake) {
+	guilds.submutex.Lock()
+	defer guilds.submutex.Unlock()
+
+	if _, ok := guilds.subscribed[guildID]; ok {
+		return
+	}
+
+	// temp unlock
+	guilds.submutex.Unlock()
+
+	// subscribe
+	err := App.State.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+		GuildID:    guildID,
+		Typing:     true,
+		Activities: true,
+	})
+
+	// relock
+	guilds.submutex.Lock()
+
+	if err != nil {
+		log.Errorln("Failed to subscribe:", err)
+		return
+	}
+
+	guilds.subscribed[guildID] = struct{}{}
 }
 
 func newGuildRow(guildID discord.Snowflake) (*Guild, error) {

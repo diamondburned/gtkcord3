@@ -77,6 +77,7 @@ type application struct {
 	done chan struct{}
 
 	completionQueue chan func()
+	typingHandler   chan *TypingState
 }
 
 func Init() error {
@@ -204,6 +205,49 @@ func Ready(s *ningen.State) error {
 		}
 	}()
 
+	// Start the typing loop:
+	App.typingHandler = make(chan *TypingState)
+	go func() {
+		var tOld *TypingState
+		var tick = time.Tick(time.Second)
+
+		for {
+			// First, catch a TypingState
+			for tOld == nil {
+				tOld = <-App.typingHandler
+				// stop until we get something
+			}
+
+			// Block until a tick or a typing state
+			select {
+			case <-tick:
+			case t := <-App.typingHandler:
+				// If the incoming t is nil, but we still have the old t, close
+				// the old t.
+				if t == nil {
+					tOld.Stop()
+				}
+
+				// Then set the new tOld.
+				tOld = t
+			}
+
+			// if tOld is nil, skip this turn and let the above for loop do its
+			// work.
+			if tOld == nil {
+				continue
+			}
+
+			// Render the typing state:
+			tOld.render()
+
+			// If there's nothing left to update, mark it.
+			if tOld.Empty() {
+				tOld = nil
+			}
+		}
+	}()
+
 	App.hookEvents()
 	App.hookReads()
 
@@ -316,6 +360,9 @@ func (a *application) _loadGuild(g *Guild) {
 	}
 
 	a.Header.UpdateGuild(g.Name)
+
+	// Subscribe to guild:
+	App.Guilds.subscribe(g.ID)
 }
 
 func (a *application) _loadGuildDone(g *Guild) {

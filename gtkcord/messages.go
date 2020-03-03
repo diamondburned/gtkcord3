@@ -25,14 +25,16 @@ type Messages struct {
 
 	Scroll   *gtk.ScrolledWindow
 	Viewport *gtk.Viewport
-	Messages *gtk.Box
+	Messages *gtk.ListBox
 
 	messages []*Message
 	guard    sync.RWMutex
 
 	Resetting atomic.Value
 
-	Input *MessageInput
+	// Additional components
+	Input  *MessageInput
+	Typing *TypingState
 
 	// self indicates if the message is from self or not
 	OnInsert func(m *Message)
@@ -47,7 +49,7 @@ func newMessages(chID discord.Snowflake) (*Messages, error) {
 	m.Main = main
 	m.ExtendedWidget = main
 
-	b := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	b := must(gtk.ListBoxNew).(*gtk.ListBox)
 	m.Messages = b
 
 	v := must(gtk.ViewportNew,
@@ -58,15 +60,20 @@ func newMessages(chID discord.Snowflake) (*Messages, error) {
 		nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
 	m.Scroll = s
 
-	if err := m.loadMessageInput(); err != nil {
-		return nil, errors.Wrap(err, "Failed to load message input")
-	}
+	m.loadTypingState()
+	m.loadMessageInput()
 
 	must(func() {
+		b.SetSelectionMode(gtk.SELECTION_NONE)
 		b.SetVExpand(true)
 		b.SetHExpand(true)
-		b.SetMarginBottom(15)
 		b.Show()
+
+		gtkutils.InjectCSSUnsafe(b, "messagelist", `
+			.messagelist {
+				padding-bottom: 4px;
+			}
+		`)
 
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
 		s.Show()
@@ -79,9 +86,20 @@ func newMessages(chID discord.Snowflake) (*Messages, error) {
 		s.Show()
 
 		// Main actually contains the scrolling window.
-		main.Add(s)
 		main.Show()
+		main.SetHExpand(true)
+		main.SetVExpand(true)
 		gtkutils.InjectCSSUnsafe(main, "messages", "")
+
+		// Add the message window:
+		main.Add(s)
+
+		// Add what's needed afterwards:
+		main.PackEnd(m.Input, false, false, 0)
+
+		// Hijack Input's box and add the typing indicator:
+		m.Input.Main.Add(m.Typing)
+		m.Typing.ShowAll()
 	})
 
 	return m, nil
@@ -196,7 +214,7 @@ func (m *Messages) reset() error {
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
 		must(msg.SetCondensed, condensed)
-		must(m.Messages.Add, msg)
+		must(m.Messages.Insert, msg, -1)
 
 		loads = append(loads, func() {
 			msg.UpdateAuthor(message.Author)
@@ -214,7 +232,7 @@ func (m *Messages) reset() error {
 	}
 
 	// Show all messages.
-	must(m.ShowAll)
+	must(m.Messages.ShowAll)
 
 	go func() {
 		m.triggerInsert()
@@ -332,7 +350,7 @@ func (m *Messages) insert(w *Message, message discord.Message) error {
 	}
 
 	must(func() {
-		m.Messages.Add(w)
+		m.Messages.Insert(w, -1)
 		w.ShowAll()
 	})
 

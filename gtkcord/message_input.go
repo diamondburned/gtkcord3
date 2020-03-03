@@ -37,7 +37,7 @@ type MessageInput struct {
 	// emojiButton
 }
 
-func (messages *Messages) loadMessageInput() error {
+func (messages *Messages) loadMessageInput() {
 	if messages.Input == nil {
 		messages.Input = &MessageInput{
 			Messages: messages,
@@ -47,7 +47,7 @@ func (messages *Messages) loadMessageInput() error {
 	i := messages.Input
 
 	if i.Input != nil {
-		return nil
+		return
 	}
 
 	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
@@ -87,18 +87,20 @@ func (messages *Messages) loadMessageInput() error {
 		main.Add(i.Completer)
 
 		// Prepare the message input box:
-		margin2(ibox, 8, AvatarPadding)
+		margin2(ibox, 4, AvatarPadding*2)
+		ibox.SetMarginBottom(0) // doing it legit by using label as padding
+
 		upload.SetVAlign(gtk.ALIGN_START)
 		upload.Connect("clicked", func() {
 			go SpawnUploader(i.upload)
 		})
 		emoji.SetVAlign(gtk.ALIGN_START)
 
-		margin2(input, 6, 12)
-
+		margin2(input, 4, AvatarPadding)
 		input.AddEvents(int(gdk.KEY_PRESS_MASK))
 		input.Connect("key-press-event", i.keyDown)
 		input.SetWrapMode(gtk.WRAP_WORD_CHAR)
+		input.SetVAlign(gtk.ALIGN_CENTER)
 
 		// Add the message input box:
 		main.Add(ibox)
@@ -107,11 +109,8 @@ func (messages *Messages) loadMessageInput() error {
 		ibox.PackEnd(input, true, true, 0)
 		ibox.PackEnd(emoji, false, false, 0)
 
-		messages.Main.PackEnd(i.Main, false, false, 0)
-		messages.Main.ShowAll()
+		i.Main.ShowAll()
 	})
-
-	return nil
 }
 
 func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {

@@ -63,7 +63,6 @@ type PrivateChannel struct {
 
 // thread-safe
 func newPrivateChannels(chs []discord.Channel) (pcs *PrivateChannels) {
-	log.Infoln("Ch count:", len(chs))
 	must(func() {
 		l, _ := gtk.ListBoxNew()
 		gtkutils.InjectCSSUnsafe(l, "dmchannels", "")

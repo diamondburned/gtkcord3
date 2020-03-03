@@ -62,7 +62,7 @@ const CSS = `
 		background-color: alpha(@theme_selected_bg_color, 0.5);
 	}
 
-	.message:not(.condensed), .message-input {
+	.message:not(.condensed) {
 		border-top: 1px solid rgba(0, 0, 0, 0.12);
 	}
 
@@ -74,17 +74,16 @@ const CSS = `
 	}
 
 	.message-input {
-		background-image: linear-gradient(transparent, rgba(10, 10, 10, 0.3));
+		background-image: linear-gradient(transparent, rgba(10, 10, 10, 0.3) 60px);
 		transition-property: background-image;
 		transition: 75ms background-image linear;
 	}
 	.message-input.editing {
-		background-image: linear-gradient(transparent, rgba(114, 137, 218, 0.3));
+		background-image: linear-gradient(transparent, rgba(114, 137, 218, 0.3) 60px);
 	}
 
 	.message-input .completer {
 		background-color: transparent;
-		border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 	}
 
 	.message-input button {

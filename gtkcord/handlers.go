@@ -14,6 +14,8 @@ func (a *application) hookEvents() {
 		// TODO: presence update
 
 		switch v := v.(type) {
+		case *gateway.TypingStartEvent:
+			onTypingStart(v)
 		case *gateway.MessageCreateEvent:
 			onMessageCreate(v)
 		case *gateway.MessageUpdateEvent:
@@ -36,6 +38,14 @@ func (a *application) hookEvents() {
 	})
 }
 
+func onTypingStart(t *gateway.TypingStartEvent) {
+	mw, ok := App.Messages.(*Messages)
+	if !ok {
+		return
+	}
+	mw.Typing.Add(t)
+}
+
 func onMessageCreate(m *gateway.MessageCreateEvent) {
 	mw, ok := App.Messages.(*Messages)
 	if !ok {
@@ -51,6 +61,9 @@ func onMessageCreate(m *gateway.MessageCreateEvent) {
 			logWrap(err, "Failed to insert message from "+m.Author.Username)
 			return
 		}
+
+		// Check typing
+		mw.Typing.Remove(m.Author.ID)
 	}()
 }
 
