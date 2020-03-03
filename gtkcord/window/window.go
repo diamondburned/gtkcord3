@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"runtime"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -58,6 +59,10 @@ func Init() error {
 
 	if err := loadCSS(s); err != nil {
 		return errors.Wrap(err, "Failed to load CSS")
+	}
+
+	if err := animations.LoadCSS(s); err != nil {
+		return errors.Wrap(err, "Failed to load animations CSS")
 	}
 
 	w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)

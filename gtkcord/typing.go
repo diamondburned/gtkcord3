@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/animations"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -14,7 +15,8 @@ import (
 const TypingTimeout = 10 * time.Second
 
 type TypingState struct {
-	*gtk.Label
+	*gtk.Box
+	Label *gtk.Label
 
 	mu sync.Mutex
 
@@ -37,33 +39,52 @@ func (m *Messages) loadTypingState() {
 
 	t := m.Typing
 
-	if t.Label != nil {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.Box != nil {
 		return
 	}
 
 	must(func() {
+		// the breathing 3 dot thing
+		breathing, _ := animations.NewBreathing()
+
 		t.Label, _ = gtk.LabelNew("")
-		t.Label.SetHAlign(gtk.ALIGN_START)
-		t.Label.SetVAlign(gtk.ALIGN_END)
 		t.Label.SetSizeRequest(-1, 22) // 22px is a magic number
+		t.Label.SetMarginStart(4)
 
-		margin2(t.Label, 2, AvatarPadding*2)
-		t.Label.SetMarginTop(0)
+		t.Box, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		t.Box.SetHAlign(gtk.ALIGN_START)
+		t.Box.SetVAlign(gtk.ALIGN_END)
+		t.Box.Add(breathing)
+		t.Box.Add(t.Label)
+		t.Box.SetOpacity(0)
 
-		t.Label.Show()
+		margin2(t.Box, 2, AvatarPadding*2)
+		t.Box.SetMarginTop(0)
 	})
 
 	return
 }
 
 func (t *TypingState) Empty() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	return len(t.Users) == 0
 }
 
 func (t *TypingState) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.Users = t.Users[:0]
 
-	must(t.Label.SetMarkup, "")
+	must(func() {
+		t.Label.SetText("")
+		t.Box.SetOpacity(0)
+	})
 }
 
 func (t *TypingState) Stop() {
@@ -102,7 +123,15 @@ func (t *TypingState) render() {
 
 	t.mu.Unlock()
 
-	must(t.Label.SetMarkup, text)
+	must(func() {
+		t.Label.SetMarkup(text)
+		// Show or hide the breathing animation as well:
+		if text == "" {
+			t.Box.SetOpacity(0)
+		} else {
+			t.Box.SetOpacity(1)
+		}
+	})
 }
 
 func (t *TypingState) Update() {

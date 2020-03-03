@@ -146,7 +146,7 @@ func loadCSS(s *gdk.Screen) error {
 	Window.CSS = css
 
 	gtk.AddProviderForScreen(s, css,
-		uint(gtk.STYLE_PROVIDER_PRIORITY_USER))
+		uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
 
 	return nil
 }
