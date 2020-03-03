@@ -276,6 +276,7 @@ func (m *Messages) Destroy() {
 	defer m.guard.Unlock()
 
 	log.Infoln("Destroying messages from old channel.")
+	m.Typing.Stop()
 
 	for i, msg := range m.messages {
 		if msg.isBusy() {

@@ -43,6 +43,11 @@ func onTypingStart(t *gateway.TypingStartEvent) {
 	if !ok {
 		return
 	}
+
+	if t.ChannelID != mw.ChannelID {
+		return
+	}
+
 	mw.Typing.Add(t)
 }
 
