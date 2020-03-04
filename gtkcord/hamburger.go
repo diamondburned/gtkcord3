@@ -2,13 +2,14 @@ package gtkcord
 
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/message"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 type HeaderMenu struct {
 	gtkutils.ExtendedWidget
-	User *UserPopup
+	User *message.UserPopup
 
 	// About
 }
@@ -34,7 +35,7 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	mb.Add(i)
 
 	// Header box
-	u := NewUserPopup(mb)
+	u := message.NewUserPopup(mb)
 	u.Main.ShowAll()
 
 	mb.SetPopover(u.Popover)

@@ -2,7 +2,6 @@ package md
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -51,11 +50,6 @@ type Parser struct {
 
 	ChannelPressed func(ev *gdk.EventButton, ch discord.Channel)
 	UserPressed    func(ev *gdk.EventButton, user discord.GuildUser)
-
-	theme *gtk.IconTheme
-
-	icons map[string]*gdk.Pixbuf
-	icoMu sync.Mutex
 }
 
 func NewParser(s *state.State) *Parser {
@@ -70,43 +64,12 @@ func NewParser(s *state.State) *Parser {
 		css = styleToCSS(style)
 	}
 
-	i, err := gtk.IconThemeGetDefault()
-	if err != nil {
-		// We can panic here, as nothing would work if this ever panics.
-		log.Panicln("Couldn't get default GTK Icon Theme:", err)
-	}
-
 	p := &Parser{
 		State: s,
-		theme: i,
-		icons: map[string]*gdk.Pixbuf{},
 	}
 	p.pool = newPool(p)
 
 	return p
-}
-
-func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
-	var key = name + "#" + strconv.Itoa(size)
-
-	p.icoMu.Lock()
-	defer p.icoMu.Unlock()
-
-	if v, ok := p.icons[key]; ok {
-		return v
-	}
-
-	// pb := semaphore.IdleMust(p.theme.LoadIcon, name, size,
-	// gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
-
-	pb, err := p.theme.LoadIcon(name, size,
-		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
-	if err != nil {
-		log.Panicln("Failed to load icon", name, err)
-	}
-
-	p.icons[key] = pb
-	return pb
 }
 
 func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {

@@ -3,12 +3,11 @@ package gtkcord
 import (
 	"html"
 	"sort"
-	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -23,9 +22,6 @@ const (
 type Guilds struct {
 	*gtk.ListBox
 	Guilds []*Guild
-
-	submutex   sync.Mutex
-	subscribed map[discord.Snowflake]struct{}
 }
 
 type Guild struct {
@@ -49,9 +45,6 @@ type Guild struct {
 	// nil if Folder
 	Channels *Channels
 	current  *Channel
-
-	requestingMembers  map[discord.Snowflake]struct{}
-	requestingMemMutex sync.Mutex
 
 	stateClass string
 }
@@ -142,8 +135,6 @@ func newGuilds(dm gtkutils.ExtendedWidget) (*Guilds, error) {
 	g := &Guilds{
 		ListBox: l,
 		Guilds:  rows,
-
-		subscribed: map[discord.Snowflake]struct{}{},
 	}
 
 	must(func() {
@@ -220,35 +211,6 @@ func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 	return nil, nil
 }
 
-func (guilds *Guilds) subscribe(guildID discord.Snowflake) {
-	guilds.submutex.Lock()
-	defer guilds.submutex.Unlock()
-
-	if _, ok := guilds.subscribed[guildID]; ok {
-		return
-	}
-
-	// temp unlock
-	guilds.submutex.Unlock()
-
-	// subscribe
-	err := App.State.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-		GuildID:    guildID,
-		Typing:     true,
-		Activities: true,
-	})
-
-	// relock
-	guilds.submutex.Lock()
-
-	if err != nil {
-		log.Errorln("Failed to subscribe:", err)
-		return
-	}
-
-	guilds.subscribed[guildID] = struct{}{}
-}
-
 func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	g, fetcherr := App.State.Guild(guildID)
 	if fetcherr != nil {
@@ -262,7 +224,7 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 	var name = bold(g.Name)
 	var guild *Guild
 
-	icon := App.parser.GetIcon("system-users-symbolic", IconSize/3*2)
+	icon := icons.GetIcon("system-users-symbolic", IconSize/3*2)
 
 	must(func() {
 		r, _ := gtk.ListBoxRowNew()
@@ -291,8 +253,6 @@ func newGuildRow(guildID discord.Snowflake) (*Guild, error) {
 			IURL:      g.IconURL(),
 			Image:     i,
 			BannerURL: g.BannerURL(),
-
-			requestingMembers: map[discord.Snowflake]struct{}{},
 		}
 
 		// Check if the guild is unavailable:
@@ -391,33 +351,6 @@ func (g *Guild) UpdateImage() {
 		log.Errorln("Failed to update the pixbuf guild icon:", err)
 		return
 	}
-}
-
-func (g *Guild) requestMember(memID discord.Snowflake) {
-	if _, ok := g.requestingMembers[memID]; ok {
-		return
-	}
-
-	err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-		GuildID:   []discord.Snowflake{g.ID},
-		UserIDs:   []discord.Snowflake{memID},
-		Presences: true,
-	})
-
-	if err != nil {
-		log.Errorln("Failed to request guild members:", err)
-	}
-
-	g.requestingMemMutex.Lock()
-	g.requestingMembers[memID] = struct{}{}
-	g.requestingMemMutex.Unlock()
-	return
-}
-
-func (g *Guild) requestedMember(memID discord.Snowflake) {
-	g.requestingMemMutex.Lock()
-	delete(g.requestingMembers, memID)
-	g.requestingMemMutex.Unlock()
 }
 
 func escape(str string) string {

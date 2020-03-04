@@ -1,4 +1,4 @@
-package gtkcord
+package message
 
 import (
 	"fmt"

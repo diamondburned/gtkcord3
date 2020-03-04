@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/gtkcord/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/diamondburned/gtkcord3/ningen"
@@ -49,6 +50,8 @@ type application struct {
 	// self stufff
 	Me *discord.User
 
+	MessageNew *message.Constructor
+
 	Header *Header
 
 	// Dynamic sidebars and main pages
@@ -77,7 +80,6 @@ type application struct {
 	done chan struct{}
 
 	completionQueue chan func()
-	typingHandler   chan *TypingState
 }
 
 func Init() error {
@@ -145,9 +147,8 @@ func Ready(s *ningen.State) error {
 
 	// Set variables, etc.
 	App.State = s
-	App.parser = md.NewParser(s.State)
-	App.parser.UserPressed = userMentionPressed
-	App.parser.ChannelPressed = channelMentionPressed
+	App.MessageNew = message.NewConstructor(s.State)
+	App.MessageNew.Parser = md.NewParser(s.State)
 
 	u, err := s.Me()
 	if err != nil {
@@ -198,53 +199,10 @@ func Ready(s *ningen.State) error {
 	must(App.sbox.SetVAlign, gtk.ALIGN_CENTER)
 
 	// Start the completion queue:
-	App.completionQueue = make(chan func())
+	App.completionQueue = make(chan func(), 1)
 	go func() {
 		for fn := range App.completionQueue {
 			fn()
-		}
-	}()
-
-	// Start the typing loop:
-	App.typingHandler = make(chan *TypingState)
-	go func() {
-		var tOld *TypingState
-		var tick = time.Tick(time.Second)
-
-		for {
-			// First, catch a TypingState
-			for tOld == nil {
-				tOld = <-App.typingHandler
-				// stop until we get something
-			}
-
-			// Block until a tick or a typing state
-			select {
-			case <-tick:
-			case t := <-App.typingHandler:
-				// If the incoming t is nil, but we still have the old t, close
-				// the old t.
-				if t == nil {
-					tOld.Stop()
-				}
-
-				// Then set the new tOld.
-				tOld = t
-			}
-
-			// if tOld is nil, skip this turn and let the above for loop do its
-			// work.
-			if tOld == nil {
-				continue
-			}
-
-			// Render the typing state:
-			tOld.render()
-
-			// If there's nothing left to update, mark it.
-			if tOld.Empty() {
-				tOld = nil
-			}
 		}
 	}()
 
@@ -266,7 +224,7 @@ func (a *application) GuildID() discord.Snowflake {
 }
 
 func (a *application) ChannelID() discord.Snowflake {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return 0
 	}
@@ -360,9 +318,6 @@ func (a *application) _loadGuild(g *Guild) {
 	}
 
 	a.Header.UpdateGuild(g.Name)
-
-	// Subscribe to guild:
-	App.Guilds.subscribe(g.ID)
 }
 
 func (a *application) _loadGuildDone(g *Guild) {
@@ -383,7 +338,7 @@ func (a *application) loadChannel(g *Guild, ch *Channel) {
 	}
 	defer done()
 
-	a._loadMessages(func() (*Messages, error) {
+	a._loadMessages(func() (*message.Messages, error) {
 		must(a.Header.UpdateChannel, ch.Name, ch.Topic)
 		if err := g.GoTo(ch); err != nil {
 			return nil, err
@@ -402,7 +357,7 @@ func (a *application) loadPrivate(p *PrivateChannel) {
 	}
 	defer done()
 
-	a._loadMessages(func() (*Messages, error) {
+	a._loadMessages(func() (*message.Messages, error) {
 		must(a.Header.UpdateChannel, p.Name, "")
 		if err := p.loadMessages(); err != nil {
 			return nil, err
@@ -411,7 +366,7 @@ func (a *application) loadPrivate(p *PrivateChannel) {
 	})
 }
 
-func (a *application) checkMessages(m *Messages) func() {
+func (a *application) checkMessages(m *message.Messages) func() {
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
@@ -428,7 +383,7 @@ func (a *application) checkMessages(m *Messages) func() {
 	return func() {}
 }
 
-func (a *application) _loadMessages(load func() (*Messages, error)) {
+func (a *application) _loadMessages(load func() (*message.Messages, error)) {
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
@@ -457,58 +412,4 @@ func (a *application) _loadMessages(load func() (*Messages, error)) {
 func (a *application) _loadChannelDone() {
 	a.spinner.Stop()
 	a.Grid.Remove(a.sbox)
-}
-
-func (a *application) cleanUp() {
-	for range time.Tick(30 * time.Second) {
-		a._cleanUp()
-	}
-}
-
-func (a *application) _cleanUp() {
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	if a.Guilds == nil {
-		return
-	}
-
-	for _, guild := range a.Guilds.Guilds {
-		if guild.Channels == nil {
-			continue
-		}
-
-		for _, channel := range guild.Channels.Channels {
-			if channel.Messages == nil {
-				continue
-			}
-			if channel.Messages == a.Messages {
-				continue
-			}
-
-			m := channel.Messages
-			m.guard.Lock()
-
-			var count = 0
-
-			for i, msg := range m.messages {
-				if msg == nil || msg.isBusy() {
-					continue
-				}
-				count++
-
-				m.Main.Remove(msg)
-				m.messages[i].main.Unref()
-				m.messages[i] = nil
-			}
-
-			m.guard.Unlock()
-
-			log.Infoln(
-				"Garbage collected", count,
-				"messages in channel",
-				channel.Name, "of guild", guild.Name,
-			)
-		}
-	}
 }

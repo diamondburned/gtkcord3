@@ -6,13 +6,42 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"strconv"
+	"sync"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
+
+var icons *gtk.IconTheme
+var iconMap map[string]*gdk.Pixbuf
+var iconMu sync.Mutex
+
+func GetIcon(icon string, size int) *gdk.Pixbuf {
+	var key = icon + "#" + strconv.Itoa(size)
+
+	iconMu.Lock()
+	defer iconMu.Unlock()
+
+	if icons == nil {
+		icons = semaphore.IdleMust(gtk.IconThemeGetDefault).(*gtk.IconTheme)
+		iconMap = map[string]*gdk.Pixbuf{}
+	}
+
+	if v, ok := iconMap[key]; ok {
+		return v
+	}
+
+	pb := semaphore.IdleMust(icons.LoadIcon, icon, size,
+		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
+
+	iconMap[key] = pb
+	return pb
+}
 
 func FromPNG(b64 string) image.Image {
 	b, err := base64.RawStdEncoding.DecodeString(b64)

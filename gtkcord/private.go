@@ -7,6 +7,8 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/icons"
+	"github.com/diamondburned/gtkcord3/gtkcord/message"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -54,7 +56,7 @@ type PrivateChannel struct {
 
 	Group bool
 
-	Messages *Messages
+	Messages *message.Messages
 	LastMsg  discord.Snowflake
 
 	lastStatusClass string // avatar
@@ -114,7 +116,7 @@ func newPrivateChannels(chs []discord.Channel) (pcs *PrivateChannels) {
 		})
 	})
 
-	icon := App.parser.GetIcon("system-users-symbolic", IconSize/3*2)
+	icon := icons.GetIcon("system-users-symbolic", IconSize/3*2)
 	must(func() {
 		r, _ := gtk.ListBoxRowNew()
 		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
@@ -259,7 +261,7 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	}
 
 	name = escape(name)
-	icon := App.parser.GetIcon("network-workgroup-symbolic", DMAvatarSize)
+	icon := icons.GetIcon("network-workgroup-symbolic", DMAvatarSize)
 
 	must(func() {
 		l, _ := gtk.LabelNew(name)
@@ -347,13 +349,13 @@ func _ChIDFromRow(row *gtk.ListBoxRow) string {
 	return v.(string)
 }
 
-func (pc *PrivateChannel) ackLatest(m *Message) {
+func (pc *PrivateChannel) ackLatest(m *message.Message) {
 	App.State.MarkRead(pc.ID, m.ID, m.AuthorID != App.Me.ID)
 }
 
 func (pc *PrivateChannel) loadMessages() error {
 	if pc.Messages == nil {
-		m, err := newMessages(pc.ID)
+		m, err := App.MessageNew.NewMessages(pc.ID, 0)
 		if err != nil {
 			return err
 		}
@@ -361,7 +363,7 @@ func (pc *PrivateChannel) loadMessages() error {
 		pc.Messages = m
 	}
 
-	if err := pc.Messages.reset(); err != nil {
+	if err := pc.Messages.Reset(); err != nil {
 		return errors.Wrap(err, "Failed to reset private messages")
 	}
 

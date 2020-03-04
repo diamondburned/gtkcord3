@@ -1,13 +1,16 @@
-package gtkcord
+package message
 
 import (
 	"fmt"
+	"html"
 	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/icons"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -62,10 +65,10 @@ type Message struct {
 	busy int32
 }
 
-func newMessage(m discord.Message) (*Message, error) {
+func (msgs *Messages) newMessage(m discord.Message) (*Message, error) {
 	defer log.Benchmark("newMessage")()
 
-	message, err := newMessageCustom(m)
+	message, err := msgs.newMessageCustom(m)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +118,11 @@ func newMessage(m discord.Message) (*Message, error) {
 	return message, nil
 }
 
-func newMessageCustom(m discord.Message) (message *Message, err error) {
-	icon := App.parser.GetIcon("user-info", AvatarSize)
+func (msgs *Messages) newMessageCustom(m discord.Message) (message *Message, err error) {
+	icon := icons.GetIcon("user-info", AvatarSize)
 
 	// What the fuck?
-	must(func() {
+	semaphore.IdleMust(func() {
 		var (
 			row, _ = gtk.ListBoxRowNew()
 
@@ -155,6 +158,7 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		`)
 
 		message = &Message{
+			Messages:  msgs,
 			Nonce:     m.Nonce,
 			ID:        m.ID,
 			AuthorID:  m.Author.ID,
@@ -194,8 +198,7 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 		message.avatarEv.Add(message.avatar)
 		message.avatarEv.Connect("button_press_event", func() {
-			// App.GuildID is a hack
-			p := SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
+			p := msgs.c.SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
 			p.SetRelativeTo(message.avatar)
 			p.Show()
 		})
@@ -203,7 +206,8 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
 		message.avatar.SetVAlign(gtk.ALIGN_START)
 
-		message.author.SetMarkup(bold(m.Author.Username))
+		message.author.SetMarkup(
+			`<span weight="bold">` + html.EscapeString(m.Author.Username) + `</span>`)
 		message.author.SetSingleLineMode(true)
 
 		message.rightTop.Add(message.author)
@@ -247,14 +251,14 @@ func (m *Message) isBusy() bool {
 }
 
 func (m *Message) getAvailable() bool {
-	return must(m.rightBottom.GetOpacity).(float64) > 0.9
+	return semaphore.IdleMust(m.rightBottom.GetOpacity).(float64) > 0.9
 }
 
 func (m *Message) setAvailable(available bool) {
 	if available {
-		must(m.rightBottom.SetOpacity, 1.0)
+		semaphore.IdleMust(m.rightBottom.SetOpacity, 1.0)
 	} else {
-		must(m.rightBottom.SetOpacity, 0.5)
+		semaphore.IdleMust(m.rightBottom.SetOpacity, 0.5)
 	}
 }
 
@@ -313,37 +317,38 @@ func (m *Message) setCondensed() {
 func (m *Message) updateAuthorName(n discord.Member) {
 	defer m.markBusy()()
 
-	var name = bold(escape(n.User.Username))
+	var name = `<span weight="bold">` + html.EscapeString(n.User.Username) + `</span>`
 
 	if n.Nick != "" {
-		name = bold(escape(n.Nick))
+		name = `<span weight="bold">` + html.EscapeString(n.Nick) + `</span>`
 	}
 
 	if gID := m.Messages.GuildID; gID.Valid() {
-		if g, err := App.State.Guild(gID); err == nil {
+		if g, err := m.Messages.c.State.Guild(gID); err == nil {
 			if color := discord.MemberColor(*g, n); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
 		}
 	}
 
-	async(m.author.SetMarkup, name)
+	semaphore.Async(m.author.SetMarkup, name)
 }
 
 func (m *Message) UpdateAuthor(user discord.User) {
 	defer m.markBusy()()
 
 	if guildID := m.Messages.GuildID; guildID.Valid() {
-		n, err := App.State.Store.Member(guildID, user.ID)
+		n, err := m.Messages.c.State.Store.Member(guildID, user.ID)
 		if err != nil {
-			go App.Guild.requestMember(user.ID)
+			go m.Messages.c.requestMember(guildID, user.ID)
 		} else {
 			// Update the author name:
 			m.updateAuthorName(*n)
 			m.markBusy()
 		}
 	} else {
-		async(m.author.SetMarkup, bold(escape(user.Username)))
+		semaphore.Async(m.author.SetMarkup,
+			`<span weight="bold">`+html.EscapeString(user.Username)+`</span>`)
 	}
 
 	var url = user.AvatarURL()
@@ -367,7 +372,7 @@ func (m *Message) updateContent(s string) {
 	defer m.markBusy()()
 
 	m.assertContent()
-	must(func() {
+	semaphore.IdleMust(func() {
 		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
 		m.content.InsertMarkup(m.content.GetEndIter(), s)
 	})
@@ -375,15 +380,16 @@ func (m *Message) updateContent(s string) {
 
 func (m *Message) UpdateContent(update discord.Message) {
 	defer m.markBusy()()
+	c := m.Messages.c
 
 	if update.Content != "" {
 		m.assertContent()
-		App.parser.ParseMessage(App.State.Store, &update, []byte(update.Content), m.content)
+		c.Parser.ParseMessage(c.State.Store, &update, []byte(update.Content), m.content)
 	}
 
 	for _, mention := range update.Mentions {
-		if mention.ID == App.Me.ID {
-			async(m.style.AddClass, "mentioned")
+		if mention.ID == c.Me.ID {
+			semaphore.Async(m.style.AddClass, "mentioned")
 			return
 		}
 	}
@@ -391,13 +397,13 @@ func (m *Message) UpdateContent(update discord.Message) {
 	// We only try this if we know the message is edited. If it's new, there
 	// wouldn't be a .mentioned class to remove.
 	if update.EditedTimestamp.Valid() {
-		async(m.style.RemoveClass, "mentioned")
+		semaphore.Async(m.style.RemoveClass, "mentioned")
 	}
 }
 
 func (m *Message) assertContent() {
 	if m.textView == nil {
-		must(func() {
+		semaphore.IdleMust(func() {
 			msgTv, _ := gtk.TextViewNew()
 			m.textView = msgTv
 			msgTb, _ := msgTv.GetBuffer()
@@ -417,18 +423,20 @@ func (m *Message) assertContent() {
 func (m *Message) UpdateExtras(update discord.Message) {
 	defer m.markBusy()()
 
-	must(func() {
+	semaphore.IdleMust(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Remove(extra)
 		}
 	})
 
+	c := m.Messages.c
+
 	// set to nil so the old slice can be GC'd
 	m.extras = nil
-	m.extras = append(m.extras, NewEmbed(update)...)
-	m.extras = append(m.extras, NewAttachment(update)...)
+	m.extras = append(m.extras, c.NewEmbed(update)...)
+	m.extras = append(m.extras, c.NewAttachment(update)...)
 
-	async(func() {
+	semaphore.Async(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Add(extra)
 		}

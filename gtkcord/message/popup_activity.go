@@ -1,11 +1,13 @@
-package gtkcord
+package message
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 )
@@ -33,7 +35,7 @@ func NewUserPopupActivity() *UserPopupActivity {
 	header.SetSingleLineMode(true)
 	header.SetEllipsize(pango.ELLIPSIZE_END)
 	header.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-	margin4(header, SectionPadding, SectionPadding-3, SectionPadding, SectionPadding)
+	gtkutils.Margin4(header, SectionPadding, SectionPadding-3, SectionPadding, SectionPadding)
 
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	main.Add(header)
@@ -54,28 +56,28 @@ func (a *UserPopupActivity) Update(ac discord.Activity) {
 	switch ac.Type {
 	case discord.GameActivity:
 		a.Custom = false
-		must(func() {
+		semaphore.IdleMust(func() {
 			a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
 			a.header("Playing " + ac.Name)
 		})
 
 	case discord.ListeningActivity:
 		a.Custom = false
-		must(func() {
+		semaphore.IdleMust(func() {
 			a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
 			a.header("Listening to " + ac.Name)
 		})
 
 	case discord.StreamingActivity:
 		a.Custom = false
-		must(func() {
+		semaphore.IdleMust(func() {
 			a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
 			a.header("Streaming " + ac.Details)
 		})
 
 	case discord.CustomActivity:
 		a.Custom = true
-		must(func() {
+		semaphore.IdleMust(func() {
 			a.image(0, "", "")
 			a.header(ac.State)
 		})
@@ -84,8 +86,8 @@ func (a *UserPopupActivity) Update(ac discord.Activity) {
 	}
 
 	if a.Info == nil {
-		l := must(gtk.LabelNew, "?").(*gtk.Label)
-		must(func() {
+		l := semaphore.IdleMust(gtk.LabelNew, "?").(*gtk.Label)
+		semaphore.IdleMust(func() {
 			l.SetMarginStart(SectionPadding)
 			l.SetMarginEnd(SectionPadding)
 			l.SetEllipsize(pango.ELLIPSIZE_END)
@@ -98,10 +100,10 @@ func (a *UserPopupActivity) Update(ac discord.Activity) {
 		a.Info = l
 	}
 
-	must(a.Info.SetTooltipText, ac.Details+"\n"+ac.State)
-	must(a.Info.SetMarkup, fmt.Sprintf(
+	semaphore.IdleMust(a.Info.SetTooltipText, ac.Details+"\n"+ac.State)
+	semaphore.IdleMust(a.Info.SetMarkup, fmt.Sprintf(
 		"<span weight=\"bold\">%s</span>\n<span size=\"smaller\">%s</span>",
-		escape(ac.Details), escape(ac.State),
+		html.EscapeString(ac.Details), html.EscapeString(ac.State),
 	))
 }
 
@@ -143,12 +145,12 @@ func (a *UserPopupActivity) image(id discord.Snowflake, asset, text string) {
 
 	if a.Image == nil {
 		a.Image, _ = gtk.ImageNew()
-		a.Image.SetSizeRequest(HeaderStatusSize, HeaderStatusSize)
+		a.Image.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
 		a.Image.SetMarginStart(SectionPadding)
 		a.Image.SetMarginBottom(SectionPadding)
 		a.Details.PackStart(a.Image, false, false, 0)
 	}
 
 	a.Image.SetTooltipText(text)
-	go asyncFetch(asset, a.Image, HeaderStatusSize, HeaderStatusSize)
+	go asyncFetch(asset, a.Image, PopupAvatarSize, PopupAvatarSize)
 }

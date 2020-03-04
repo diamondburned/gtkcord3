@@ -2,10 +2,10 @@ package gtkutils
 
 import (
 	"html"
-	"log"
 	"sync"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"

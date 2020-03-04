@@ -1,4 +1,4 @@
-package gtkcord
+package message
 
 import (
 	"io"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
@@ -25,7 +26,7 @@ type Uploader struct {
 func gostring(p unsafe.Pointer) string
 
 func SpawnUploader(callback func(absolutePath []string)) {
-	dialog := must(gtk.FileChooserDialogNewWith2Buttons,
+	dialog := semaphore.IdleMust(gtk.FileChooserDialogNewWith2Buttons,
 		"Upload File", window.Window,
 		gtk.FILE_CHOOSER_ACTION_OPEN,
 		"Cancel", gtk.RESPONSE_CANCEL,
@@ -35,17 +36,17 @@ func SpawnUploader(callback func(absolutePath []string)) {
 	WithPreviewer(dialog)
 
 	defaultDir := glib.GetUserDataDir()
-	must(dialog.SetCurrentFolder, defaultDir)
-	must(dialog.SetSelectMultiple, true)
+	semaphore.IdleMust(dialog.SetCurrentFolder, defaultDir)
+	semaphore.IdleMust(dialog.SetSelectMultiple, true)
 
-	defer must(dialog.Close)
+	defer semaphore.IdleMust(dialog.Close)
 
-	if res := must(dialog.Run).(gtk.ResponseType); res != gtk.RESPONSE_ACCEPT {
+	if res := semaphore.IdleMust(dialog.Run).(gtk.ResponseType); res != gtk.RESPONSE_ACCEPT {
 		return
 	}
 
 	// Glib's shitty singly linked list:
-	slist := must(dialog.GetFilenames).(*glib.SList)
+	slist := semaphore.IdleMust(dialog.GetFilenames).(*glib.SList)
 	var names = make([]string, 0, int(slist.Length()))
 	slist.Foreach(func(ptr unsafe.Pointer) {
 		names = append(names, gostring(ptr))
@@ -63,7 +64,7 @@ type MessageUploader struct {
 func NewMessageUploader(paths []string) (*MessageUploader, error) {
 	var m = &MessageUploader{}
 
-	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	main := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	m.Box = main
 
 	for _, path := range paths {
@@ -81,7 +82,7 @@ func NewMessageUploader(paths []string) (*MessageUploader, error) {
 			NewProgressUploader(s.Name(), f, s.Size()))
 	}
 
-	must(func(m *MessageUploader) {
+	semaphore.IdleMust(func(m *MessageUploader) {
 		for _, p := range m.progresses {
 			m.Box.PackEnd(p, false, false, 5)
 		}
@@ -126,13 +127,13 @@ type ProgressUploader struct {
 }
 
 func NewProgressUploader(Name string, r io.ReadCloser, s int64) *ProgressUploader {
-	box := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	bar := must(gtk.ProgressBarNew).(*gtk.ProgressBar)
-	name := must(gtk.LabelNew, Name).(*gtk.Label)
-	must(name.SetXAlign, float64(0))
+	box := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	bar := semaphore.IdleMust(gtk.ProgressBarNew).(*gtk.ProgressBar)
+	name := semaphore.IdleMust(gtk.LabelNew, Name).(*gtk.Label)
+	semaphore.IdleMust(name.SetXAlign, float64(0))
 
-	must(box.Add, name)
-	must(box.Add, bar)
+	semaphore.IdleMust(box.Add, name)
+	semaphore.IdleMust(box.Add, bar)
 
 	return &ProgressUploader{
 		Box:  box,
@@ -159,10 +160,10 @@ func (p *ProgressUploader) Close() error {
 }
 
 func WithPreviewer(fc *gtk.FileChooserDialog) {
-	img := must(gtk.ImageNew).(*gtk.Image)
+	img := semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
 
-	must(fc.SetPreviewWidget, img)
-	must(fc.Connect, "update-preview",
+	semaphore.IdleMust(fc.SetPreviewWidget, img)
+	semaphore.IdleMust(fc.Connect, "update-preview",
 		func(fc *gtk.FileChooserDialog, img *gtk.Image) {
 			file := fc.GetPreviewFilename()
 

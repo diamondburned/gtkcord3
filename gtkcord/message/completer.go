@@ -1,29 +1,52 @@
-package gtkcord
+package message
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 )
 
+const MaxCompletionEntries = 15
+
+var completionQueue chan func()
+var cQueueOnce sync.Once
+
+func initCQueue() {
+	cQueueOnce.Do(func() {
+		completionQueue = make(chan func(), 1)
+		go func() {
+			for fn := range completionQueue {
+				fn()
+			}
+		}()
+	})
+}
+
 type Completer struct {
 	*gtk.ListBox
 	Entries []*CompleterEntry
 
-	Input *MessageInput
+	RequestGuildMember func(prefix string)
+
+	Input *Input
 	Start *gtk.TextIter
 	End   *gtk.TextIter
 
 	lastRequested time.Time
 	lastword      string
+
+	channels []discord.Channel
+	members  []discord.Member
+	users    []discord.User
 }
 
 type CompleterEntry struct {
@@ -33,7 +56,7 @@ type CompleterEntry struct {
 	Text  string
 }
 
-func (i *MessageInput) initCompleter() {
+func (i *Input) initCompleter() {
 	if i.Completer == nil {
 		l, _ := gtk.ListBoxNew()
 		gtkutils.InjectCSSUnsafe(l, "completer", "")
@@ -47,35 +70,13 @@ func (i *MessageInput) initCompleter() {
 	}
 }
 
-func (c *Completer) requestMember(prefix string) {
-	guildID := c.Input.Messages.GuildID
-	if !guildID.Valid() {
-		return
-	}
-
-	if time.Now().Before(c.lastRequested) {
-		return
-	}
-
-	c.lastRequested = time.Now().Add(time.Second)
-
-	go func() {
-		err := App.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.Snowflake{guildID},
-			Query:     prefix,
-			Presences: true,
-		})
-
-		if err != nil {
-			log.Errorln("Failed to request guild members for completion:", err)
-		}
-	}()
-}
-
 func (c *Completer) keyDown(state, key uint) bool {
 	// Check if the key pressed is a visible letter:
 	if key == gdk.KEY_space {
-		c.ClearCompletion()
+		if !c.IsEmpty() {
+			c.clearCompletion()
+		}
+
 		return false
 	}
 
@@ -98,7 +99,7 @@ func (c *Completer) keyDown(state, key uint) bool {
 	}
 
 	if key == gdk.KEY_Escape {
-		c.ClearCompletion()
+		c.clearCompletion()
 		return true
 	}
 
@@ -174,15 +175,17 @@ func (c *Completer) getWord() string {
 
 func (c *Completer) Run() {
 	select {
-	case App.completionQueue <- c.run:
+	case completionQueue <- c.run:
 	default:
+		<-completionQueue
+		completionQueue <- c.run
 	}
 }
 
 func (c *Completer) run() {
-	word := must(c.getWord).(string)
+	word := semaphore.IdleMust(c.getWord).(string)
 	if !c.IsEmpty() {
-		must(c.ClearCompletion)
+		c.ClearCompletion()
 	}
 
 	if word == c.lastword {
@@ -195,7 +198,7 @@ func (c *Completer) run() {
 	}
 
 	c.loadCompletion(word)
-	must(c.ListBox.Show)
+	semaphore.IdleMust(c.ListBox.Show)
 }
 
 func (c *Completer) ClearCompletion() {
@@ -203,9 +206,12 @@ func (c *Completer) ClearCompletion() {
 		return
 	}
 
+	semaphore.IdleMust(c.clearCompletion)
+}
+
+func (c *Completer) clearCompletion() {
 	for i, entry := range c.Entries {
 		c.ListBox.Remove(entry)
-		entry.Destroy()
 		c.Entries[i] = nil
 	}
 	c.Entries = c.Entries[:0]
@@ -235,7 +241,7 @@ func (c *Completer) ApplyCompletion() {
 	c.Input.InputBuf.Delete(c.Start, c.End)
 	c.Input.InputBuf.Insert(c.Start, c.Entries[i].Text+" ")
 
-	c.ClearCompletion()
+	c.clearCompletion()
 }
 
 func (c *Completer) loadCompletion(word string) {
@@ -254,43 +260,80 @@ func (c *Completer) loadCompletion(word string) {
 }
 
 func (c *Completer) completeChannels(word string) {
-	sb, ok := App.Sidebar.(*Channels)
-	if !ok {
-		log.Errorln("App.Sidebar is not of type *Channels")
+	guildID := c.Input.Messages.GuildID
+	if !guildID.Valid() {
 		return
 	}
 
-	for _, ch := range sb.Channels {
-		if strings.HasPrefix(ch.Name, word) {
-			l := completerLeftLabel("#" + ch.Name)
+	chs, err := c.Input.Messages.c.State.Channels(guildID)
+	if err != nil {
+		log.Errorln("Failed to get channels:", err)
+		return
+	}
 
-			if !c.addCompletionEntry(l, "<#"+ch.ID.String()+">") {
+	c.channels = c.channels[:0]
+
+	for _, ch := range chs {
+		if strings.HasPrefix(ch.Name, word) {
+			c.channels = append(c.channels, ch)
+
+			if len(c.channels) > MaxCompletionEntries {
 				break
 			}
 		}
 	}
+
+	if len(c.channels) == 0 {
+		return
+	}
+
+	semaphore.IdleMust(func() {
+		for _, ch := range c.channels {
+			l := completerLeftLabel("#" + ch.Name)
+			c.addCompletionEntry(l, "<#"+ch.ID.String()+">")
+		}
+	})
 }
 
 func (c *Completer) completeMentions(word string) {
-	if !c.Input.Messages.GuildID.Valid() {
+	guildID := c.Input.Messages.GuildID
+	if !guildID.Valid() {
 		c.completeMentionsDM(word)
 		return
 	}
 
-	members, err := App.State.Store.Members(c.Input.Messages.GuildID)
+	members, err := c.Input.Messages.c.Store.Members(guildID)
 	if err != nil {
 		log.Errorln("Failed to get members:", err)
 		return
 	}
 
-	for _, m := range members {
+	c.members = c.members[:0]
+
+	for i, m := range members {
 		var (
 			name = strings.ToLower(m.User.Username)
 			nick = strings.ToLower(m.Nick)
 		)
 
 		if strings.Contains(name, word) || strings.Contains(nick, word) {
-			b := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+			c.members = append(c.members, members[i])
+
+			if len(c.members) > MaxCompletionEntries {
+				break
+			}
+		}
+	}
+
+	if len(c.members) == 0 {
+		// Request the member in a background goroutine
+		c.Input.Messages.c.searchMember(c.Input.Messages.GuildID, word)
+		return
+	}
+
+	semaphore.IdleMust(func() {
+		for _, m := range c.members {
+			b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 
 			var name = m.Nick
 			if m.Nick == "" {
@@ -302,88 +345,90 @@ func (c *Completer) completeMentions(word string) {
 				url += "?size=64"
 			}
 
-			must(b.Add, completerImage(url))
-			must(b.Add, completerLeftLabel(name))
-			must(b.Add, completerRightLabel(m.User.Username+"#"+m.User.Discriminator))
-
-			if !c.addCompletionEntry(b, m.User.Mention()) {
-				break
-			}
+			b.Add(completerImage(url))
+			b.Add(completerLeftLabel(name))
+			b.Add(completerRightLabel(m.User.Username + "#" + m.User.Discriminator))
+			c.addCompletionEntry(b, m.User.Mention())
 		}
-	}
+	})
 
-	if len(c.Entries) == 0 {
-		// Request the member in a background goroutine
-		c.requestMember(word)
-	}
 }
 
 func (c *Completer) completeMentionsDM(word string) {
-	ch, err := App.State.Channel(c.Input.Messages.ChannelID)
+	ch, err := c.Input.Messages.c.Channel(c.Input.Messages.ChannelID)
 	if err != nil {
 		log.Errorln("Failed to get DM channel:", err)
 		return
 	}
 
-	for _, u := range ch.DMRecipients {
+	c.users = c.users[:0]
+
+	for i, u := range ch.DMRecipients {
 		var name = strings.ToLower(u.Username)
 		if strings.Contains(name, word) {
-			b := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+			c.users = append(c.users, ch.DMRecipients[i])
+
+			if len(c.users) > MaxCompletionEntries {
+				break
+			}
+		}
+	}
+
+	if len(c.users) == 0 {
+		return
+	}
+
+	semaphore.IdleMust(func() {
+		for _, u := range c.users {
+			b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 
 			var url = u.AvatarURL()
 			if url != "" {
 				url += "?size=64"
 			}
 
-			must(b.Add, completerImage(url))
-			must(b.Add, completerLeftLabel(u.Username))
-			must(b.Add, completerRightLabel(u.Username+"#"+u.Discriminator))
-
-			if !c.addCompletionEntry(b, u.Mention()) {
-				break
-			}
+			b.Add(completerImage(url))
+			b.Add(completerLeftLabel(u.Username))
+			b.Add(completerRightLabel(u.Username + "#" + u.Discriminator))
+			c.addCompletionEntry(b, u.Mention())
 		}
-	}
+	})
 }
 
 func completerImage(url string) *gtk.Image {
-	i := must(gtk.ImageNewFromIconName,
-		"dialog-question-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR).(*gtk.Image)
-	if url != "" {
-		asyncFetch(url, i, 24, 24, cache.Round)
-	}
+	i, _ := gtk.ImageNewFromIconName(
+		"dialog-question-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	i.SetMarginEnd(10)
 
-	must(i.SetMarginEnd, AvatarPadding)
+	if url != "" {
+		go cache.AsyncFetch(url, i, 24, 24, cache.Round)
+	}
 
 	return i
 }
 
 func completerLeftLabel(markup string) *gtk.Label {
-	l, _ := must(gtk.LabelNew, "").(*gtk.Label)
-	must(func() {
-		l.SetMarkup(markup)
-		l.SetSingleLineMode(true)
-		l.SetLineWrap(true)
-		l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-		l.SetHAlign(gtk.ALIGN_START)
-	})
+	l, _ := gtk.LabelNew("")
+	l.SetMarkup(markup)
+	l.SetSingleLineMode(true)
+	l.SetLineWrap(true)
+	l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	l.SetHAlign(gtk.ALIGN_START)
 
 	return l
 }
 
 func completerRightLabel(markup string) *gtk.Label {
 	l := completerLeftLabel(markup)
-	must(func() {
-		l.SetOpacity(0.65)
-		l.SetHExpand(true)
-		l.SetHAlign(gtk.ALIGN_END)
-	})
+	l.SetOpacity(0.65)
+	l.SetHExpand(true)
+	l.SetHAlign(gtk.ALIGN_END)
 
 	return l
 }
 
 func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) bool {
-	if len(c.Entries) > 15 {
+	if len(c.Entries) > MaxCompletionEntries {
 		return false
 	}
 
@@ -392,18 +437,16 @@ func (c *Completer) addCompletionEntry(w gtkutils.ExtendedWidget, text string) b
 		Text:  text,
 	}
 
-	must(func() {
-		if w, ok := w.(gtkutils.Marginator); ok {
-			w.SetMarginStart(AvatarPadding + 5)
-			w.SetMarginEnd(AvatarPadding + 5)
-		}
+	if w, ok := w.(gtkutils.Marginator); ok {
+		w.SetMarginStart(10 + 5)
+		w.SetMarginEnd(10 + 5)
+	}
 
-		entry.ListBoxRow, _ = gtk.ListBoxRowNew()
-		entry.ListBoxRow.Add(w)
+	entry.ListBoxRow, _ = gtk.ListBoxRowNew()
+	entry.ListBoxRow.Add(w)
 
-		c.ListBox.Insert(entry, -1)
-		entry.ShowAll()
-	})
+	c.ListBox.Insert(entry, -1)
+	entry.ShowAll()
 
 	c.Entries = append(c.Entries, entry)
 	return true

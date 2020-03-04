@@ -2,6 +2,7 @@ package md
 
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -30,7 +31,7 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 
 	iter := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
 
-	i := s.p.GetIcon("image-missing", sz)
+	i := icons.GetIcon("image-missing", sz)
 	if i == nil {
 		semaphore.IdleMust(s.buf.Insert, iter, "[?]")
 		log.Errorln("Markdown: Failed to get image-missing icon")

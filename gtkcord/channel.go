@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/message"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -34,34 +35,6 @@ type Channels struct {
 	// Channel list
 	ChList   *gtk.ListBox
 	Channels []*Channel
-}
-
-type Channel struct {
-	gtkutils.ExtendedWidget
-	Channels *Channels
-
-	Row   *gtk.ListBoxRow
-	Style *gtk.StyleContext
-
-	Label *gtk.Label
-
-	ID       discord.Snowflake
-	Guild    discord.Snowflake
-	Name     string
-	Topic    string
-	Category bool
-	LastMsg  discord.Snowflake
-
-	Messages *Messages
-
-	unread bool
-
-	// we keep track of opacity changes, since we don't want thousands of
-	// queued up functions only to change the opacity.
-	// opacity float64
-	// replaced with class
-
-	stateClass string
 }
 
 func (g *Guild) prefetchChannels() error {
@@ -155,6 +128,65 @@ func (g *Guild) loadChannels() error {
 	return nil
 }
 
+func (chs *Channels) UpdateBanner(url string) {
+	if chs.BannerImage == nil {
+		chs.BannerImage = must(gtk.ImageNew).(*gtk.Image)
+		must(chs.BannerImage.SetSizeRequest, ChannelsWidth, BannerHeight)
+		must(chs.Main.PackStart, chs.BannerImage, false, false, uint(0))
+	}
+
+	if err := cache.SetImage(
+		url+"?size=512",
+		chs.BannerImage,
+		cache.Resize(ChannelsWidth, BannerHeight)); err != nil {
+
+		logWrap(err, "Failed to get the pixbuf guild icon")
+		return
+	}
+}
+
+func (chs *Channels) First() int {
+	for i, ch := range chs.Channels {
+		if ch.Category {
+			continue
+		}
+		return i
+	}
+	return -1
+}
+
+func (ch *Channel) setClass(class string) {
+	gtkutils.DiffClass(&ch.stateClass, class, ch.Style)
+}
+
+type Channel struct {
+	gtkutils.ExtendedWidget
+	Channels *Channels
+
+	Row   *gtk.ListBoxRow
+	Style *gtk.StyleContext
+
+	Label *gtk.Label
+
+	ID       discord.Snowflake
+	Guild    discord.Snowflake
+	Name     string
+	Topic    string
+	Category bool
+	LastMsg  discord.Snowflake
+
+	Messages *message.Messages
+
+	unread bool
+
+	// we keep track of opacity changes, since we don't want thousands of
+	// queued up functions only to change the opacity.
+	// opacity float64
+	// replaced with class
+
+	stateClass string
+}
+
 func newChannel(ch discord.Channel) *Channel {
 	switch ch.Type {
 	case discord.GuildText:
@@ -244,33 +276,30 @@ func newChannelRow(ch discord.Channel) (chw *Channel) {
 	return chw
 }
 
-func (chs *Channels) UpdateBanner(url string) {
-	if chs.BannerImage == nil {
-		chs.BannerImage = must(gtk.ImageNew).(*gtk.Image)
-		must(chs.BannerImage.SetSizeRequest, ChannelsWidth, BannerHeight)
-		must(chs.Main.PackStart, chs.BannerImage, false, false, uint(0))
-	}
-
-	if err := cache.SetImage(
-		url+"?size=512",
-		chs.BannerImage,
-		cache.Resize(ChannelsWidth, BannerHeight)); err != nil {
-
-		logWrap(err, "Failed to get the pixbuf guild icon")
-		return
-	}
-}
-
-func (chs *Channels) First() int {
-	for i, ch := range chs.Channels {
-		if ch.Category {
-			continue
+func (ch *Channel) loadMessages() error {
+	if ch.Messages == nil {
+		m, err := App.MessageNew.NewMessages(ch.ID, ch.Guild)
+		if err != nil {
+			return err
 		}
-		return i
+
+		m.OnInsert = ch.ackLatest
+
+		ch.Messages = m
 	}
-	return -1
+
+	if err := ch.Messages.Reset(); err != nil {
+		return errors.Wrap(err, "Failed to reset messages")
+	}
+
+	return nil
 }
 
-func (ch *Channel) setClass(class string) {
-	gtkutils.DiffClass(&ch.stateClass, class, ch.Style)
+func (ch *Channel) ackLatest(m *message.Message) {
+	ch.LastMsg = m.ID
+	App.State.MarkRead(ch.ID, ch.LastMsg, m.AuthorID != App.Me.ID)
+}
+
+func (ch *Channel) GetMessages() *message.Messages {
+	return ch.Messages
 }

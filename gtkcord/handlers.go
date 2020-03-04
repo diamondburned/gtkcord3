@@ -3,6 +3,7 @@ package gtkcord
 import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/message"
 	"github.com/diamondburned/gtkcord3/log"
 )
 
@@ -39,7 +40,7 @@ func (a *application) hookEvents() {
 }
 
 func onTypingStart(t *gateway.TypingStartEvent) {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return
 	}
@@ -52,7 +53,7 @@ func onTypingStart(t *gateway.TypingStartEvent) {
 }
 
 func onMessageCreate(m *gateway.MessageCreateEvent) {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return
 	}
@@ -73,7 +74,7 @@ func onMessageCreate(m *gateway.MessageCreateEvent) {
 }
 
 func onMessageUpdate(m *gateway.MessageUpdateEvent) {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return
 	}
@@ -86,7 +87,7 @@ func onMessageUpdate(m *gateway.MessageUpdateEvent) {
 }
 
 func onMessageDelete(m *gateway.MessageDeleteEvent) {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return
 	}
@@ -99,7 +100,7 @@ func onMessageDelete(m *gateway.MessageDeleteEvent) {
 }
 
 func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return
 	}
@@ -112,7 +113,7 @@ func onMessageDeleteBulk(m *gateway.MessageDeleteBulkEvent) {
 }
 
 func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	mw, ok := App.Messages.(*Messages)
+	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
 		return
 	}
@@ -128,7 +129,7 @@ func onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 
 		go func() {
 			for _, m := range c.Members {
-				guild.requestedMember(m.User.ID)
+				App.MessageNew.RequestedMember(guild.ID, m.User.ID)
 			}
 		}()
 

@@ -1,4 +1,4 @@
-package gtkcord
+package message
 
 import (
 	"sort"
@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/typing"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -16,10 +20,148 @@ import (
 
 const DefaultFetch = 25
 
+type Constructor struct {
+	*state.State
+
+	Parser *md.Parser
+	Me     *discord.User
+
+	// TODO: move this off to package guilds
+	gmu    sync.Mutex
+	guilds map[discord.Snowflake]*guildState
+}
+
+type guildState struct {
+	subscribed        bool
+	requestingMembers map[discord.Snowflake]struct{}
+
+	lastRequested time.Time
+}
+
+func NewConstructor(s *state.State) *Constructor {
+	p := md.NewParser(s)
+	p.UserPressed = userMentionPressed
+	p.ChannelPressed = channelMentionPressed
+	m := &s.Ready.User
+
+	return &Constructor{
+		Parser: p,
+		State:  s,
+		Me:     m,
+
+		guilds: map[discord.Snowflake]*guildState{},
+	}
+}
+
+func (c *Constructor) getGuild(id discord.Snowflake) *guildState {
+	gd, ok := c.guilds[id]
+	if !ok {
+		gd = &guildState{
+			requestingMembers: map[discord.Snowflake]struct{}{},
+		}
+		c.guilds[id] = gd
+	}
+	return gd
+}
+
+func (c *Constructor) searchMember(guildID discord.Snowflake, prefix string) {
+	c.gmu.Lock()
+	defer c.gmu.Unlock()
+
+	gd := c.getGuild(guildID)
+
+	if time.Now().Before(gd.lastRequested) {
+		return
+	}
+
+	gd.lastRequested = time.Now().Add(time.Second)
+
+	go func() {
+		err := c.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+			GuildID:   []discord.Snowflake{guildID},
+			Query:     prefix,
+			Presences: true,
+		})
+
+		if err != nil {
+			log.Errorln("Failed to request guild members for completion:", err)
+		}
+	}()
+}
+
+func (c *Constructor) subscribe(guildID discord.Snowflake) {
+	c.gmu.Lock()
+	defer c.gmu.Unlock()
+
+	gd := c.getGuild(guildID)
+	if gd.subscribed {
+		return
+	}
+
+	// temp unlock
+	c.gmu.Unlock()
+
+	// subscribe
+	err := c.State.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+		GuildID:    guildID,
+		Typing:     true,
+		Activities: true,
+	})
+
+	// relock
+	c.gmu.Lock()
+
+	if err != nil {
+		log.Errorln("Failed to subscribe:", err)
+		return
+	}
+
+	gd.subscribed = true
+}
+
+func (c *Constructor) requestMember(guildID, memID discord.Snowflake) {
+	c.gmu.Lock()
+	defer c.gmu.Unlock()
+
+	gd := c.getGuild(guildID)
+	if _, ok := gd.requestingMembers[memID]; ok {
+		return
+	}
+
+	// temp unlock
+	c.gmu.Unlock()
+
+	err := c.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+		GuildID:   []discord.Snowflake{guildID},
+		UserIDs:   []discord.Snowflake{memID},
+		Presences: true,
+	})
+
+	// relock
+	c.gmu.Lock()
+
+	if err != nil {
+		log.Errorln("Failed to request guild members:", err)
+	}
+
+	gd.requestingMembers[memID] = struct{}{}
+	return
+}
+
+func (c *Constructor) RequestedMember(guildID, memID discord.Snowflake) {
+	c.gmu.Lock()
+	defer c.gmu.Unlock()
+
+	gd := c.getGuild(guildID)
+	delete(gd.requestingMembers, memID)
+}
+
 type Messages struct {
 	gtkutils.ExtendedWidget
 	ChannelID discord.Snowflake
 	GuildID   discord.Snowflake
+
+	c *Constructor
 
 	Main *gtk.Box
 
@@ -33,37 +175,37 @@ type Messages struct {
 	Resetting atomic.Value
 
 	// Additional components
-	Input  *MessageInput
-	Typing *TypingState
+	Input  *Input
+	Typing *typing.State
 
-	// self indicates if the message is from self or not
 	OnInsert func(m *Message)
 }
 
-func newMessages(chID discord.Snowflake) (*Messages, error) {
+func (c *Constructor) NewMessages(channel, guild discord.Snowflake) (*Messages, error) {
 	m := &Messages{
-		ChannelID: chID,
+		ChannelID: channel,
+		GuildID:   guild,
+
+		c: c,
 	}
 
-	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	m.Main = main
-	m.ExtendedWidget = main
+	m.Typing = typing.NewState(c.State)
+	m.Input = NewInput(m)
 
-	b := must(gtk.ListBoxNew).(*gtk.ListBox)
-	m.Messages = b
+	semaphore.IdleMust(func() {
+		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		m.Main = main
+		m.ExtendedWidget = main
 
-	v := must(gtk.ViewportNew,
-		nilAdjustment(), nilAdjustment()).(*gtk.Viewport)
-	m.Viewport = v
+		b, _ := gtk.ListBoxNew()
+		m.Messages = b
 
-	s := must(gtk.ScrolledWindowNew,
-		nilAdjustment(), nilAdjustment()).(*gtk.ScrolledWindow)
-	m.Scroll = s
+		v, _ := gtk.ViewportNew(nil, nil)
+		m.Viewport = v
 
-	m.loadTypingState()
-	m.loadMessageInput()
+		s, _ := gtk.ScrolledWindowNew(nil, nil)
+		m.Scroll = s
 
-	must(func() {
 		// Main actually contains the scrolling window.
 		gtkutils.InjectCSSUnsafe(main, "messagecontainer", `
 			.messagecontainer {
@@ -106,36 +248,9 @@ func newMessages(chID discord.Snowflake) (*Messages, error) {
 		m.Typing.ShowAll()
 	})
 
+	go c.subscribe(guild)
+
 	return m, nil
-}
-
-func (ch *Channel) loadMessages() error {
-	if ch.Messages == nil {
-		m, err := newMessages(ch.ID)
-		if err != nil {
-			return err
-		}
-
-		m.GuildID = ch.Guild
-		m.OnInsert = ch.ackLatest
-
-		ch.Messages = m
-	}
-
-	if err := ch.Messages.reset(); err != nil {
-		return errors.Wrap(err, "Failed to reset messages")
-	}
-
-	return nil
-}
-
-func (ch *Channel) ackLatest(m *Message) {
-	ch.LastMsg = m.ID
-	App.State.MarkRead(ch.ID, ch.LastMsg, m.AuthorID != App.Me.ID)
-}
-
-func (ch *Channel) GetMessages() *Messages {
-	return ch.Messages
 }
 
 func (m *Messages) triggerInsert() {
@@ -148,6 +263,18 @@ func (m *Messages) triggerInsert() {
 	}
 
 	m.OnInsert(last)
+}
+
+func (m *Messages) LastFromMe() *Message {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	for n := len(m.messages) - 1; n >= 0; n-- {
+		if msg := m.messages[n]; msg.AuthorID == m.c.Me.ID {
+			return msg
+		}
+	}
+	return nil
 }
 
 func (m *Messages) Last() *Message {
@@ -166,7 +293,7 @@ func (m *Messages) LastID() discord.Snowflake {
 	return 0
 }
 
-func (m *Messages) reset() error {
+func (m *Messages) Reset() error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
@@ -174,7 +301,7 @@ func (m *Messages) reset() error {
 	m.Resetting.Store(true)
 
 	// Order: latest is first.
-	messages, err := App.State.Messages(m.ChannelID)
+	messages, err := m.c.State.Messages(m.ChannelID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
@@ -184,7 +311,7 @@ func (m *Messages) reset() error {
 		return messages[i].ID < messages[j].ID
 	})
 
-	must(func() {
+	semaphore.IdleMust(func() {
 		for _, w := range m.messages {
 			if w != nil {
 				m.Messages.Remove(w.ListBoxRow)
@@ -203,11 +330,10 @@ func (m *Messages) reset() error {
 	for i := 0; i < len(messages); i++ {
 		message := messages[i]
 
-		msg, err := newMessage(message)
+		msg, err := m.newMessage(message)
 		if err != nil {
 			return errors.Wrap(err, "Failed to render message")
 		}
-		msg.Messages = m
 
 		var condensed = false
 		if shouldCondense(newMessages, message) {
@@ -217,8 +343,8 @@ func (m *Messages) reset() error {
 
 		// Messages are added, earliest first.
 		newMessages = append(newMessages, msg)
-		must(msg.SetCondensed, condensed)
-		must(m.Messages.Insert, msg, -1)
+		semaphore.IdleMust(msg.SetCondensed, condensed)
+		semaphore.IdleMust(m.Messages.Insert, msg, -1)
 
 		loads = append(loads, func() {
 			msg.UpdateAuthor(message.Author)
@@ -236,7 +362,7 @@ func (m *Messages) reset() error {
 	}
 
 	// Show all messages.
-	must(m.Messages.ShowAll)
+	semaphore.IdleMust(m.Messages.ShowAll)
 
 	go func() {
 		m.triggerInsert()
@@ -329,7 +455,7 @@ func (m *Messages) Insert(message discord.Message) error {
 		return nil
 	}
 
-	w, err := newMessage(message)
+	w, err := m.newMessage(message)
 	if err != nil {
 		return errors.Wrap(err, "Failed to render message")
 	}
@@ -351,10 +477,10 @@ func (m *Messages) insert(w *Message, message discord.Message) error {
 	var condense = m.ShouldCondense(message)
 	if condense {
 		w.setOffset(lastMessageFrom(m.messages, message.Author.ID))
-		must(w.SetCondensed, true)
+		semaphore.IdleMust(w.SetCondensed, true)
 	}
 
-	must(func() {
+	semaphore.IdleMust(func() {
 		m.Messages.Insert(w, -1)
 		w.ShowAll()
 	})
@@ -423,7 +549,7 @@ IDLoop:
 			}
 
 			m.messages = append(m.messages[:i], m.messages[i+1:]...)
-			must(m.Messages.Remove, message)
+			semaphore.IdleMust(m.Messages.Remove, message)
 
 			deleted = true
 			continue IDLoop
@@ -443,7 +569,7 @@ func (m *Messages) deleteNonce(nonce string) bool {
 		}
 
 		m.messages = append(m.messages[:i], m.messages[i+1:]...)
-		must(m.Messages.Remove, message)
+		semaphore.IdleMust(m.Messages.Remove, message)
 		return true
 	}
 

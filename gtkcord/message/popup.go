@@ -1,13 +1,14 @@
-package gtkcord
+package message
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -16,8 +17,8 @@ import (
 )
 
 const (
-	HeaderAvatarSize = 48
-	HeaderStatusSize = HeaderAvatarSize + 6 // used for cover too
+	PopupAvatarSize = 48
+	PopupWidth      = 240
 
 	OfflineColor = 0x747F8D
 	BusyColor    = 0xF04747
@@ -63,13 +64,13 @@ func NewUserPopup(relative gtk.IWidget) *UserPopup {
 	p.Add(main)
 
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	b.SetSizeRequest(ChannelsWidth, -1)
+	b.SetSizeRequest(PopupWidth, -1)
 	b.SetMarginTop(10)
 	b.SetMarginBottom(10)
 	main.Add(b)
 
 	iAvatar, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	iAvatar.SetSizeRequest(HeaderAvatarSize, HeaderAvatarSize)
+	iAvatar.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
 	iAvatar.SetMarginStart(7)
 	iAvatar.SetMarginEnd(7)
 	b.Add(iAvatar)
@@ -98,7 +99,7 @@ func NewUserPopup(relative gtk.IWidget) *UserPopup {
 func (b *UserPopup) formatUser(u discord.User) string {
 	return fmt.Sprintf(
 		"<span weight=\"bold\">%s</span><span size=\"smaller\">#%s</span>",
-		escape(u.Username), u.Discriminator,
+		html.EscapeString(u.Username), u.Discriminator,
 	)
 }
 
@@ -142,7 +143,7 @@ func (b *UserPopup) UpdateMember(m discord.Member) {
 	if m.Nick != "" {
 		body = fmt.Sprintf(
 			`<span weight="bold">%s</span>`+"\n"+`<span size="smaller">%s</span>`,
-			escape(m.Nick), body,
+			html.EscapeString(m.Nick), body,
 		)
 	}
 
@@ -155,9 +156,9 @@ func (b *UserPopup) UpdateMember(m discord.Member) {
 
 func (b *UserPopup) updateAvatar(url string) {
 	err := cache.SetImageScaled(
-		url+"?size=64", b.Avatar, HeaderAvatarSize, HeaderAvatarSize, cache.Round)
+		url+"?size=64", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
 	if err != nil {
-		logWrap(err, "Failed to get the pixbuf avatar icon")
+		log.Errorln("Failed to get the pixbuf avatar icon:", err)
 		return
 	}
 }
@@ -165,7 +166,7 @@ func (b *UserPopup) updateAvatar(url string) {
 func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 	if a == nil {
 		if b.Activity != nil {
-			must(b.Main.Remove, b.Activity)
+			semaphore.IdleMust(b.Main.Remove, b.Activity)
 			b.Activity = nil
 			b.setClass("")
 		}
@@ -173,8 +174,8 @@ func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 	}
 
 	if b.Activity == nil {
-		b.Activity = must(NewUserPopupActivity).(*UserPopupActivity)
-		must(b.Main.Add, b.Activity)
+		b.Activity = semaphore.IdleMust(NewUserPopupActivity).(*UserPopupActivity)
+		semaphore.IdleMust(b.Main.Add, b.Activity)
 	}
 
 	b.Activity.Update(*a)
@@ -186,11 +187,11 @@ func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 		b.setClass("")
 	}
 
-	must(b.Main.ShowAll)
+	semaphore.IdleMust(b.Main.ShowAll)
 }
 
 func (b *UserPopup) UpdateStatus(status discord.Status) {
-	must(func() {
+	semaphore.IdleMust(func() {
 		switch status {
 		case discord.OnlineStatus:
 			b.setAvatarClass("online")
@@ -220,12 +221,16 @@ type UserPopupRole struct {
 }
 
 // thread-safe
-func NewUserPopupRoles(guild discord.Snowflake, ids []discord.Snowflake) (*UserPopupRoles, error) {
-	b := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	l := must(gtk.LabelNew, "Roles").(*gtk.Label)
-	must(margin4, l, SectionPadding, 0, SectionPadding, SectionPadding)
-	must(l.SetHAlign, gtk.ALIGN_START)
-	must(b.Add, l)
+func (c *Constructor) NewUserPopupRoles(
+	guild discord.Snowflake, ids []discord.Snowflake) (*UserPopupRoles, error) {
+
+	// TODO: optimize this
+
+	b := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	l := semaphore.IdleMust(gtk.LabelNew, "Roles").(*gtk.Label)
+	semaphore.IdleMust(gtkutils.Margin4, l, SectionPadding, 0, SectionPadding, SectionPadding)
+	semaphore.IdleMust(l.SetHAlign, gtk.ALIGN_START)
+	semaphore.IdleMust(b.Add, l)
 
 	popup := &UserPopupRoles{
 		Box:    b,
@@ -233,17 +238,17 @@ func NewUserPopupRoles(guild discord.Snowflake, ids []discord.Snowflake) (*UserP
 	}
 
 	if len(ids) == 0 {
-		must(l.SetLabel, "No Roles")
-		must(l.SetMarginBottom, SectionPadding)
+		semaphore.IdleMust(l.SetLabel, "No Roles")
+		semaphore.IdleMust(l.SetMarginBottom, SectionPadding)
 		return popup, nil
 	}
 
-	fb := must(gtk.FlowBoxNew).(*gtk.FlowBox)
-	must(margin, fb, SectionPadding)
-	must(fb.SetSelectionMode, gtk.SELECTION_NONE)
-	must(fb.SetHAlign, gtk.ALIGN_FILL)
-	must(fb.SetVAlign, gtk.ALIGN_START)
-	must(b.Add, fb)
+	fb := semaphore.IdleMust(gtk.FlowBoxNew).(*gtk.FlowBox)
+	semaphore.IdleMust(gtkutils.Margin, fb, SectionPadding)
+	semaphore.IdleMust(fb.SetSelectionMode, gtk.SELECTION_NONE)
+	semaphore.IdleMust(fb.SetHAlign, gtk.ALIGN_FILL)
+	semaphore.IdleMust(fb.SetVAlign, gtk.ALIGN_START)
+	semaphore.IdleMust(b.Add, fb)
 
 	popup.Main = fb
 
@@ -251,7 +256,7 @@ func NewUserPopupRoles(guild discord.Snowflake, ids []discord.Snowflake) (*UserP
 	popup.Roles = roles
 
 	for _, id := range ids {
-		r, err := App.State.Role(guild, id)
+		r, err := c.State.Role(guild, id)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to get role")
 		}
@@ -263,7 +268,7 @@ func NewUserPopupRoles(guild discord.Snowflake, ids []discord.Snowflake) (*UserP
 
 		var hex = fmt.Sprintf("#%06X", color)
 
-		must(func() {
+		semaphore.IdleMust(func() {
 			l, _ := gtk.LabelNew("")
 			l.SetTooltipText(r.Name)
 			l.SetLabel(" " + r.Name + " ")
@@ -292,17 +297,17 @@ func NewUserPopupRoles(guild discord.Snowflake, ids []discord.Snowflake) (*UserP
 	return popup, nil
 }
 
-func SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Popover {
+func (c *Constructor) SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Popover {
 	popup := NewUserPopup(nil)
 
 	go func() {
-		u, err := App.State.User(userID)
+		u, err := c.State.User(userID)
 		if err != nil {
 			log.Errorln("Failed to get user:", err)
 			return
 		}
 
-		p, err := App.State.Presence(guildID, u.ID)
+		p, err := c.State.Presence(guildID, u.ID)
 		if err == nil {
 			popup.UpdateStatus(p.Status)
 			popup.UpdateActivity(p.Game)
@@ -315,10 +320,10 @@ func SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Popover {
 
 		// fetch above presence if error not nil
 		if err != nil {
-			requestMember(guildID, userID)
+			c.requestMember(guildID, userID)
 		}
 
-		m, err := App.State.Member(guildID, u.ID)
+		m, err := c.State.Member(guildID, u.ID)
 		if err != nil {
 			popup.Update(*u)
 			return
@@ -326,27 +331,15 @@ func SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Popover {
 
 		popup.UpdateMember(*m)
 
-		r, err := NewUserPopupRoles(guildID, m.RoleIDs)
+		r, err := c.NewUserPopupRoles(guildID, m.RoleIDs)
 		if err != nil {
 			log.Errorln("Failed to get roles:", err)
 			return
 		}
 
-		must(popup.Main.Add, r)
-		must(popup.Main.ShowAll)
+		semaphore.IdleMust(popup.Main.Add, r)
+		semaphore.IdleMust(popup.Main.ShowAll)
 	}()
 
 	return popup.Popover
-}
-
-func requestMember(guild discord.Snowflake, user ...discord.Snowflake) {
-	data := gateway.RequestGuildMembersData{
-		GuildID:   []discord.Snowflake{guild},
-		UserIDs:   user,
-		Presences: true,
-	}
-
-	if err := App.State.Gateway.RequestGuildMembers(data); err != nil {
-		log.Errorln("Failed to request guild members:", err)
-	}
 }

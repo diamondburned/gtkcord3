@@ -1,6 +1,7 @@
-package gtkcord
+package message
 
 import (
+	"math/rand"
 	"path/filepath"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -16,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type MessageInput struct {
+type Input struct {
 	gtkutils.ExtendedWidget
 	Messages *Messages
 
@@ -37,48 +39,32 @@ type MessageInput struct {
 	// emojiButton
 }
 
-func (messages *Messages) loadMessageInput() {
-	if messages.Input == nil {
-		messages.Input = &MessageInput{
-			Messages: messages,
+func NewInput(m *Messages) (i *Input) {
+	semaphore.IdleMust(func() {
+		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		style, _ := main.GetStyleContext()
+		ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+
+		upload, _ := gtk.ButtonNewFromIconName(
+			"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+		emoji, _ := gtk.ButtonNewFromIconName(
+			"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+
+		input, _ := gtk.TextViewNew()
+		ibuf, _ := input.GetBuffer()
+
+		i = &Input{
+			Messages:       m,
+			ExtendedWidget: main,
+			Main:           main,
+			Style:          style,
+			InputBox:       ibox,
+			Upload:         upload,
+			Emoji:          emoji,
+			Input:          input,
+			InputBuf:       ibuf,
 		}
-	}
 
-	i := messages.Input
-
-	if i.Input != nil {
-		return
-	}
-
-	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	i.Main = main
-	i.ExtendedWidget = main
-
-	style, _ := must(main.GetStyleContext).(*gtk.StyleContext)
-	i.Style = style
-
-	ibox := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
-	i.InputBox = ibox
-
-	// TODO completer
-
-	// comp, err := gtk.
-
-	upload := must(gtk.ButtonNewFromIconName,
-		"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR).(*gtk.Button)
-	i.Upload = upload
-
-	emoji := must(gtk.ButtonNewFromIconName,
-		"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR).(*gtk.Button)
-	i.Emoji = emoji
-
-	input := must(gtk.TextViewNew).(*gtk.TextView)
-	i.Input = input
-
-	ibuf := must(input.GetBuffer).(*gtk.TextBuffer)
-	i.InputBuf = ibuf
-
-	must(func() {
 		style.AddClass("message-input")
 
 		// Initialize the completer:
@@ -87,7 +73,7 @@ func (messages *Messages) loadMessageInput() {
 		main.Add(i.Completer)
 
 		// Prepare the message input box:
-		margin2(ibox, 4, AvatarPadding*2)
+		gtkutils.Margin2(ibox, 4, 10*2)
 		ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
 		upload.SetVAlign(gtk.ALIGN_START)
@@ -96,7 +82,7 @@ func (messages *Messages) loadMessageInput() {
 		})
 		emoji.SetVAlign(gtk.ALIGN_START)
 
-		margin2(input, 4, AvatarPadding)
+		gtkutils.Margin2(input, 4, 10)
 		input.AddEvents(int(gdk.KEY_PRESS_MASK))
 		input.Connect("key-press-event", i.keyDown)
 		input.SetWrapMode(gtk.WRAP_WORD_CHAR)
@@ -111,14 +97,19 @@ func (messages *Messages) loadMessageInput() {
 
 		i.Main.ShowAll()
 	})
+
+	return
 }
 
-func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
+func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	evKey := gdk.EventKeyNewFromEvent(ev)
 
 	if evKey.Type() != gdk.EVENT_KEY_PRESS {
 		return false
 	}
+
+	// Send an OnTyping request:
+	i.Messages.Typing.Type(i.Messages.ChannelID)
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
 	const cntrlMask = uint(gdk.GDK_CONTROL_MASK)
@@ -183,20 +174,13 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	// If arrow up is pressed and the input box is empty:
 	if upArr && i.getContent() == "" {
 		// Try and look backwards for the latest message:
-		var latest discord.Snowflake
-
-		for n := len(i.Messages.messages) - 1; n >= 0; n-- {
-			if msg := i.Messages.messages[n]; msg.AuthorID == App.Me.ID {
-				latest = msg.ID
-				break
-			}
-		}
+		var latest = i.Messages.LastFromMe()
 
 		// If we can find the message:
-		if latest.Valid() {
+		if latest != nil {
 			// Trigger the edit message:
 			go func() {
-				if err := i.editMessage(latest); err != nil {
+				if err := i.editMessage(latest.ID); err != nil {
 					log.Errorln("Failed to edit messages:", err)
 				}
 			}()
@@ -241,20 +225,20 @@ func (i *MessageInput) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	return true
 }
 
-func (i *MessageInput) editMessage(id discord.Snowflake) error {
-	m, err := App.State.Store.Message(i.Messages.ChannelID, id)
+func (i *Input) editMessage(id discord.Snowflake) error {
+	m, err := i.Messages.c.State.Store.Message(i.Messages.ChannelID, id)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get message")
 	}
 
 	i.Editing = m
-	must(i.Style.AddClass, "editing")
+	semaphore.IdleMust(i.Style.AddClass, "editing")
 
-	must(i.InputBuf.SetText, i.Editing.Content)
+	semaphore.IdleMust(i.InputBuf.SetText, i.Editing.Content)
 	return nil
 }
 
-func (i *MessageInput) getContent() string {
+func (i *Input) getContent() string {
 	var iStart, iEnd = i.InputBuf.GetBounds()
 
 	text, err := i.InputBuf.GetText(iStart, iEnd, true)
@@ -267,7 +251,7 @@ func (i *MessageInput) getContent() string {
 }
 
 // popContent gets the current messages and deletes the buffer.
-func (i *MessageInput) popContent() string {
+func (i *Input) popContent() string {
 	var iStart, iEnd = i.InputBuf.GetBounds()
 
 	text, err := i.InputBuf.GetText(iStart, iEnd, true)
@@ -284,19 +268,19 @@ func (i *MessageInput) popContent() string {
 	return text
 }
 
-func (i *MessageInput) makeMessage(content string) discord.Message {
+func (i *Input) makeMessage(content string) discord.Message {
 	return discord.Message{
 		Type:      discord.DefaultMessage,
 		ChannelID: i.Messages.ChannelID,
 		GuildID:   i.Messages.GuildID,
-		Author:    *App.Me,
+		Author:    *i.Messages.c.Me,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),
 		Nonce:     randString(),
 	}
 }
 
-func (i *MessageInput) paste(content string, pic *gdk.Pixbuf) error {
+func (i *Input) paste(content string, pic *gdk.Pixbuf) error {
 	path := filepath.Join(cache.Path, "clipboard.png")
 
 	if err := pic.SavePNG(path, 9); err != nil {
@@ -306,11 +290,11 @@ func (i *MessageInput) paste(content string, pic *gdk.Pixbuf) error {
 	return i._upload(content, []string{path})
 }
 
-func (i *MessageInput) send(content string) error {
+func (i *Input) send(content string) error {
 	if i.Editing != nil {
 		edit := i.Editing
 		i.Editing = nil
-		must(i.Style.RemoveClass, "editing")
+		semaphore.IdleMust(i.Style.RemoveClass, "editing")
 
 		if edit.Content == content {
 			return nil
@@ -318,11 +302,11 @@ func (i *MessageInput) send(content string) error {
 
 		// If the content is empty, we delete the message instead:
 		if content == "" {
-			err := App.State.DeleteMessage(edit.ChannelID, edit.ID)
+			err := i.Messages.c.State.DeleteMessage(edit.ChannelID, edit.ID)
 			return errors.Wrap(err, "Failed to delete message")
 		}
 
-		_, err := App.State.EditMessage(edit.ChannelID, edit.ID, content, nil, false)
+		_, err := i.Messages.c.State.EditMessage(edit.ChannelID, edit.ID, content, nil, false)
 		if err != nil {
 			return errors.Wrap(err, "Failed to edit message")
 		}
@@ -342,7 +326,7 @@ func (i *MessageInput) send(content string) error {
 		log.Errorln("Failed to add message to be sent:", err)
 	}
 
-	_, err := App.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
+	_, err := i.Messages.c.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
 		Content: m.Content,
 		Nonce:   m.Nonce,
 	})
@@ -354,14 +338,14 @@ func (i *MessageInput) send(content string) error {
 	return nil
 }
 
-func (i *MessageInput) upload(paths []string) {
-	text := must(i.popContent).(string)
+func (i *Input) upload(paths []string) {
+	text := semaphore.IdleMust(i.popContent).(string)
 	if err := i._upload(text, paths); err != nil {
 		log.Fatalln("Failed to upload:", err)
 	}
 }
 
-func (i *MessageInput) _upload(content string, paths []string) error {
+func (i *Input) _upload(content string, paths []string) error {
 	u, err := NewMessageUploader(paths)
 	if err != nil {
 		return err
@@ -371,22 +355,35 @@ func (i *MessageInput) _upload(content string, paths []string) error {
 	m := i.makeMessage(content)
 	s := u.MakeSendData(m)
 
-	w, err := newMessageCustom(m)
+	w, err := i.Messages.newMessageCustom(m)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create a message container")
 	}
-	must(w.rightBottom.Add, u)
+	semaphore.IdleMust(w.rightBottom.Add, u)
 
 	if err := i.Messages.insert(w, m); err != nil {
 		log.Errorln("Failed to add messages to be uploaded:", err)
 	}
 
-	_, err = App.State.SendMessageComplex(m.ChannelID, s)
+	_, err = i.Messages.c.State.SendMessageComplex(m.ChannelID, s)
 	if err != nil {
 		i.Messages.deleteNonce(m.Nonce)
 		return errors.Wrap(err, "Failed to upload message")
 	}
-	must(w.rightBottom.Remove, u)
+	semaphore.IdleMust(w.rightBottom.Remove, u)
 
 	return nil
+
+}
+func randString() string {
+	const randLen = 20
+	const alphabet = "abcdefghijklmnopqrstuvwxyz" +
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, randLen)
+	for i := range b {
+		b[i] = alphabet[rand.Intn(len(alphabet))]
+	}
+
+	return string(b)
 }

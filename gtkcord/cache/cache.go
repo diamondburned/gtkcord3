@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -277,6 +278,28 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	}
 
 	return nil
+}
+
+func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
+	icon := icons.GetIcon("image-missing", 24)
+	semaphore.IdleMust(img.SetFromPixbuf, icon)
+
+	if len(pp) == 0 && w != 0 && h != 0 {
+		go func() {
+			if err := SetImageAsync(url, img, w, h); err != nil {
+				log.Errorln("Failed to get image", url+":", err)
+				return
+			}
+		}()
+
+	} else {
+		go func() {
+			if err := SetImageScaled(url, img, w, h, pp...); err != nil {
+				log.Errorln("Failed to get image", url+":", err)
+				return
+			}
+		}()
+	}
 }
 
 func maxSize(w, h, maxW, maxH int) (int, int) {

@@ -1,15 +1,16 @@
-package gtkcord
+package message
 
 import (
 	"fmt"
+	"html"
 	"path"
 	"strconv"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
-	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 )
@@ -29,19 +30,23 @@ const (
 )
 
 func newExtraImage(proxy, direct string, w, h int, pp ...cache.Processor) gtkutils.ExtendedWidget {
-	img := must(gtk.ImageNew).(*gtk.Image)
-	must(img.SetVAlign, gtk.ALIGN_START)
-	must(img.SetHAlign, gtk.ALIGN_START)
+	var img *gtk.Image
+	var evb *gtk.EventBox
 
-	evb := must(gtk.EventBoxNew).(*gtk.EventBox)
-	must(evb.Add, img)
-	must(evb.Connect, "button-release-event", func() {
-		SpawnPreviewDialog(proxy, direct)
+	semaphore.IdleMust(func() {
+		img = semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
+		semaphore.IdleMust(img.SetVAlign, gtk.ALIGN_START)
+		semaphore.IdleMust(img.SetHAlign, gtk.ALIGN_START)
+
+		evb = semaphore.IdleMust(gtk.EventBoxNew).(*gtk.EventBox)
+		semaphore.IdleMust(evb.Add, img)
+		semaphore.IdleMust(evb.Connect, "button-release-event", func() {
+			SpawnPreviewDialog(proxy, direct)
+		})
+		semaphore.IdleMust(embedSetMargin, evb)
 	})
-	must(embedSetMargin, evb)
 
-	asyncFetch(proxy, img, w, h, pp...)
-
+	cache.AsyncFetch(proxy, img, w, h, pp...)
 	return evb
 }
 
@@ -67,7 +72,7 @@ func sizeToURL(url string, w, h int) string {
 	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
 }
 
-func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
+func (c *Constructor) NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 	// Discord's supported formats
 	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
 	var widgets = make([]gtkutils.ExtendedWidget, 0, len(msg.Attachments))
@@ -86,7 +91,7 @@ func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 
 		img := newExtraImage(proxyURL, att.URL, 0, 0)
 		if img, ok := img.(gtkutils.Marginator); ok {
-			must(img.SetMarginStart, 0)
+			semaphore.IdleMust(img.SetMarginStart, 0)
 		}
 
 		widgets = append(widgets, img)
@@ -107,7 +112,7 @@ func validExt(url string, exts []string) bool {
 	return false
 }
 
-func NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
+func (c *Constructor) NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 	if len(msg.Embeds) == 0 {
 		return nil
 	}
@@ -115,7 +120,7 @@ func NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 	var embeds = make([]gtkutils.ExtendedWidget, 0, len(msg.Embeds))
 
 	for _, embed := range msg.Embeds {
-		w := newEmbed(msg, embed)
+		w := c.newEmbed(msg, embed)
 		if w == nil {
 			continue
 		}
@@ -126,10 +131,10 @@ func NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 	return embeds
 }
 
-func newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+func (c *Constructor) newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	switch embed.Type {
 	case discord.NormalEmbed, discord.LinkEmbed:
-		return newNormalEmbed(msg, embed)
+		return c.newNormalEmbed(msg, embed)
 	case discord.ImageEmbed:
 		return newImageEmbed(embed)
 	case discord.VideoEmbed:
@@ -146,53 +151,53 @@ func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
 
 	img := newExtraImage(embed.Thumbnail.Proxy, embed.Thumbnail.URL, w, h)
 	if img, ok := img.(gtkutils.Marginator); ok {
-		must(img.SetMarginStart, 0)
+		semaphore.IdleMust(img.SetMarginStart, 0)
 	}
 	return img
 }
 
-func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
-	main := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	must(main.SetHAlign, gtk.ALIGN_START)
+func (c *Constructor) newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+	main := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+	semaphore.IdleMust(main.SetHAlign, gtk.ALIGN_START)
 
 	if embed.Author != nil {
-		box := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
-		must(embedSetMargin, box)
+		box := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+		semaphore.IdleMust(embedSetMargin, box)
 
 		if embed.Author.ProxyIcon != "" {
-			img := must(gtk.ImageNew).(*gtk.Image)
-			must(img.SetMarginEnd, EmbedMargin)
+			img := semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
+			semaphore.IdleMust(img.SetMarginEnd, EmbedMargin)
 			asyncFetch(embed.Author.ProxyIcon, img, 24, 24, cache.Round)
 
-			must(box.Add, img)
+			semaphore.IdleMust(box.Add, img)
 		}
 
 		if embed.Author.Name != "" {
-			author := must(gtk.LabelNew, embed.Author.Name).(*gtk.Label)
-			must(author.SetLineWrap, true)
-			must(author.SetLineWrapMode, pango.WRAP_WORD_CHAR)
-			must(author.SetXAlign, float64(0.0))
+			author := semaphore.IdleMust(gtk.LabelNew, embed.Author.Name).(*gtk.Label)
+			semaphore.IdleMust(author.SetLineWrap, true)
+			semaphore.IdleMust(author.SetLineWrapMode, pango.WRAP_WORD_CHAR)
+			semaphore.IdleMust(author.SetXAlign, float64(0.0))
 
 			if embed.Author.URL != "" {
-				must(author.SetMarkup, fmt.Sprintf(
+				semaphore.IdleMust(author.SetMarkup, fmt.Sprintf(
 					`<a href="%s">%s</a>`,
-					embed.Author.URL, escape(embed.Author.Name),
+					embed.Author.URL, html.EscapeString(embed.Author.Name),
 				))
 			}
 
-			must(box.Add, author)
+			semaphore.IdleMust(box.Add, author)
 		}
 
-		must(main.Add, box)
+		semaphore.IdleMust(main.Add, box)
 	}
 
 	if embed.Title != "" {
-		var title = `<span weight="heavy">` + escape(embed.Title) + `</span>`
+		var title = `<span weight="heavy">` + html.EscapeString(embed.Title) + `</span>`
 		if embed.URL != "" {
 			title = fmt.Sprintf(`<a href="%s">%s</a>`, embed.URL, title)
 		}
 
-		must(func() {
+		semaphore.IdleMust(func() {
 			label, _ := gtk.LabelNew("")
 			label.SetMarkup(title)
 			label.SetLineWrap(true)
@@ -205,11 +210,11 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 	}
 
 	if embed.Description != "" {
-		txtv := must(gtk.TextViewNew).(*gtk.TextView)
-		txtb := must(txtv.GetBuffer).(*gtk.TextBuffer)
-		App.parser.ParseMessage(App.State.Store, &msg, []byte(embed.Description), txtb)
+		txtv := semaphore.IdleMust(gtk.TextViewNew).(*gtk.TextView)
+		txtb := semaphore.IdleMust(txtv.GetBuffer).(*gtk.TextBuffer)
+		c.Parser.ParseMessage(c.State.Store, &msg, []byte(embed.Description), txtb)
 
-		must(func() {
+		semaphore.IdleMust(func() {
 			txtv.SetCursorVisible(false)
 			txtv.SetEditable(false)
 			txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
@@ -221,112 +226,117 @@ func newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedW
 	}
 
 	if len(embed.Fields) > 0 {
-		fields := must(gtk.GridNew).(*gtk.Grid)
-		must(embedSetMargin, fields)
-		must(fields.SetRowSpacing, uint(7))
-		must(fields.SetColumnSpacing, uint(14))
-		must(main.Add, fields)
+		semaphore.IdleMust(func() {
+			var fields *gtk.Grid
 
-		col, row := 0, 0
+			fields, _ = gtk.GridNew()
+			embedSetMargin(fields)
+			fields.SetRowSpacing(uint(7))
+			fields.SetColumnSpacing(uint(14))
 
-		for _, field := range embed.Fields {
-			text := must(gtk.LabelNew, "").(*gtk.Label)
-			must(text.SetLineWrap, true)
-			must(text.SetLineWrapMode, pango.WRAP_WORD_CHAR)
-			must(text.SetXAlign, float64(0.0))
-			must(text.SetMarkup, fmt.Sprintf(
-				`<span weight="heavy">%s</span>`+"\n"+`<span weight="light">%s</span>`,
-				field.Name, field.Value,
-			))
+			main.Add(fields)
 
-			// I have no idea what this does. It')s just improvised.
-			if field.Inline && col < 3 {
-				fields.Attach(text, col, row, 1, 1)
-				col++
+			col, row := 0, 0
 
-			} else {
-				if col > 0 {
-					row++
-				}
+			for _, field := range embed.Fields {
+				text := semaphore.IdleMust(gtk.LabelNew, "").(*gtk.Label)
+				semaphore.IdleMust(text.SetLineWrap, true)
+				semaphore.IdleMust(text.SetLineWrapMode, pango.WRAP_WORD_CHAR)
+				semaphore.IdleMust(text.SetXAlign, float64(0.0))
+				semaphore.IdleMust(text.SetMarkup, fmt.Sprintf(
+					`<span weight="heavy">%s</span>`+"\n"+`<span weight="light">%s</span>`,
+					field.Name, field.Value,
+				))
 
-				col = 0
-				fields.Attach(text, col, row, 1, 1)
-
-				if !field.Inline {
-					row++
-				} else {
+				// I have no idea what this does. It')s just improvised.
+				if field.Inline && col < 3 {
+					fields.Attach(text, col, row, 1, 1)
 					col++
+
+				} else {
+					if col > 0 {
+						row++
+					}
+
+					col = 0
+					fields.Attach(text, col, row, 1, 1)
+
+					if !field.Inline {
+						row++
+					} else {
+						col++
+					}
 				}
 			}
-		}
+		})
 	}
 
 	if embed.Footer != nil || embed.Timestamp.Valid() {
-		footer := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
-		must(embedSetMargin, footer)
+		footer := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+		semaphore.IdleMust(embedSetMargin, footer)
 
 		if embed.Footer != nil {
 			if embed.Footer.ProxyIcon != "" {
-				img := must(gtk.ImageNew).(*gtk.Image)
-				must(img.SetMarginEnd, EmbedMargin)
+				img := semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
+				semaphore.IdleMust(img.SetMarginEnd, EmbedMargin)
 				asyncFetch(embed.Footer.ProxyIcon, img, 24, 24, cache.Round)
 
-				must(footer.Add, img)
+				semaphore.IdleMust(footer.Add, img)
 			}
 
 			if embed.Footer.Text != "" {
-				text := must(gtk.LabelNew, embed.Footer.Text).(*gtk.Label)
-				must(text.SetOpacity, 0.65)
-				must(text.SetLineWrap, true)
-				must(text.SetLineWrapMode, pango.WRAP_WORD_CHAR)
-				must(text.SetXAlign, float64(0.0))
+				text := semaphore.IdleMust(gtk.LabelNew, embed.Footer.Text).(*gtk.Label)
+				semaphore.IdleMust(text.SetOpacity, 0.65)
+				semaphore.IdleMust(text.SetLineWrap, true)
+				semaphore.IdleMust(text.SetLineWrapMode, pango.WRAP_WORD_CHAR)
+				semaphore.IdleMust(text.SetXAlign, float64(0.0))
 
-				must(footer.Add, text)
+				semaphore.IdleMust(footer.Add, text)
 			}
 		}
 
 		if embed.Timestamp.Valid() {
 			time := humanize.TimeAgo(embed.Timestamp.Time())
-			text := must(gtk.LabelNew, time).(*gtk.Label)
+			text := semaphore.IdleMust(gtk.LabelNew, time).(*gtk.Label)
 			if embed.Footer != nil {
-				must(text.SetText, " - "+time)
+				semaphore.IdleMust(text.SetText, " - "+time)
 			}
 
-			must(footer.Add, text)
+			semaphore.IdleMust(footer.Add, text)
 		}
 
-		must(main.Add, footer)
+		semaphore.IdleMust(main.Add, footer)
 	}
 
 	if embed.Thumbnail != nil {
-		wrapper := must(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
-		must(wrapper.Add, main)
+		wrapper := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_HORIZONTAL, 0).(*gtk.Box)
+		semaphore.IdleMust(wrapper.Add, main)
 
 		// Do a shitty hack:
 		main = wrapper
-		must(main.SetHAlign, gtk.ALIGN_START)
+		semaphore.IdleMust(main.SetHAlign, gtk.ALIGN_START)
 
 		w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
 		w, h = maxSize(w, h, 80, 80)
 
-		must(wrapper.Add, newExtraImage(
+		semaphore.IdleMust(wrapper.Add, newExtraImage(
 			sizeToURL(embed.Thumbnail.Proxy, w, h),
 			embed.Thumbnail.URL, 0, 0,
 		))
 	}
 
 	if embed.Image != nil {
-		wrapper := must(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-		must(wrapper.Add, main)
+		wrapper := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
+		semaphore.IdleMust(wrapper.Add, main)
 
 		// Do a shitty hack again:
 		main = wrapper
-		must(main.SetHAlign, gtk.ALIGN_START)
+		semaphore.IdleMust(main.SetHAlign, gtk.ALIGN_START)
 
 		w, h := int(embed.Image.Width), int(embed.Image.Height)
 		w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
 
-		must(wrapper.Add, newExtraImage(
+		semaphore.IdleMust(wrapper.Add, newExtraImage(
 			sizeToURL(embed.Image.Proxy, w, h),
 			embed.Image.URL, 0, 0,
 		))
@@ -345,23 +355,5 @@ func embedSetMargin(w gtkutils.Marginator) {
 }
 
 func asyncFetch(url string, img *gtk.Image, w, h int, pp ...cache.Processor) {
-	icon := App.parser.GetIcon("image-missing", EmbedAvatarSize)
-	must(img.SetFromPixbuf, icon)
-
-	if len(pp) == 0 && w != 0 && h != 0 {
-		go func() {
-			if err := cache.SetImageAsync(url, img, w, h); err != nil {
-				log.Errorln("Failed to get image", url+":", err)
-				return
-			}
-		}()
-
-	} else {
-		go func() {
-			if err := cache.SetImageScaled(url, img, w, h, pp...); err != nil {
-				log.Errorln("Failed to get image", url+":", err)
-				return
-			}
-		}()
-	}
+	cache.AsyncFetch(url, img, w, h, pp...)
 }
