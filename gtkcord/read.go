@@ -118,7 +118,7 @@ func (channel *Channel) updateReadState(rs *gateway.ReadState) {
 	}
 
 	unread := channel.LastMsg != rs.LastMessageID
-	pinged := rs.MentionCount > 0
+	pinged := unread && rs.MentionCount > 0
 
 	channel.setUnread(unread, pinged)
 
@@ -135,6 +135,10 @@ func (channel *Channel) setUnread(unread, pinged bool) {
 	}
 
 	channel.unread = unread
+
+	if !unread && pinged {
+		pinged = false
+	}
 
 	switch {
 	case pinged:

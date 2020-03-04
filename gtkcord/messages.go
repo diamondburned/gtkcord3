@@ -64,13 +64,23 @@ func newMessages(chID discord.Snowflake) (*Messages, error) {
 	m.loadMessageInput()
 
 	must(func() {
+		// Main actually contains the scrolling window.
+		gtkutils.InjectCSSUnsafe(main, "messagecontainer", `
+			.messagecontainer {
+				background-color: @theme_base_color;
+			}
+		`)
+		main.Show()
+		main.SetHExpand(true)
+		main.SetVExpand(true)
+
 		b.SetSelectionMode(gtk.SELECTION_NONE)
 		b.SetVExpand(true)
 		b.SetHExpand(true)
 		b.Show()
 
-		gtkutils.InjectCSSUnsafe(b, "messagelist", `
-			.messagelist {
+		gtkutils.InjectCSSUnsafe(b, "messages", `
+			.messages {
 				padding-bottom: 4px;
 			}
 		`)
@@ -84,12 +94,6 @@ func newMessages(chID discord.Snowflake) (*Messages, error) {
 
 		s.Add(v)
 		s.Show()
-
-		// Main actually contains the scrolling window.
-		main.Show()
-		main.SetHExpand(true)
-		main.SetVExpand(true)
-		gtkutils.InjectCSSUnsafe(main, "messages", "")
 
 		// Add the message window:
 		main.Add(s)
@@ -183,7 +187,7 @@ func (m *Messages) reset() error {
 	must(func() {
 		for _, w := range m.messages {
 			if w != nil {
-				m.Messages.Remove(w)
+				m.Messages.Remove(w.ListBoxRow)
 			}
 		}
 	})
@@ -278,14 +282,14 @@ func (m *Messages) Destroy() {
 	log.Infoln("Destroying messages from old channel.")
 	go m.Typing.Stop()
 
-	for i, msg := range m.messages {
-		if msg.isBusy() {
-			continue
-		}
-
-		msg.Destroy()
-		m.messages[i] = nil
+	for _, msg := range m.messages {
+		// DESTROY!!!!
+		// https://stackoverflow.com/questions/2862509/free-object-widget-in-gtk
+		m.Messages.Remove(msg)
 	}
+
+	// Destroy the slice in Go as well, but the GC will pick it up:
+	m.messages = nil
 }
 
 func (m *Messages) onSizeAlloc() {

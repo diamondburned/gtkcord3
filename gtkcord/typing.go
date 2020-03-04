@@ -51,8 +51,8 @@ func (m *Messages) loadTypingState() {
 		breathing, _ := animations.NewBreathing()
 
 		t.Label, _ = gtk.LabelNew("")
-		t.Label.SetSizeRequest(-1, 22) // 22px is a magic number
 		t.Label.SetMarginStart(4)
+		t.Label.SetSingleLineMode(true)
 
 		t.Box, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 		t.Box.SetHAlign(gtk.ALIGN_START)
@@ -106,8 +106,8 @@ func (t *TypingState) render() {
 		t.users = t.users[:0]
 
 		// join
-		for _, u := range t.Users {
-			t.users = append(t.users, u.Name)
+		for i := range t.Users {
+			t.users = append(t.users, t.Users[i].Name)
 		}
 		text = humanize.Strings(t.users)
 

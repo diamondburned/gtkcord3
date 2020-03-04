@@ -22,7 +22,9 @@ const (
 )
 
 type Message struct {
-	gtkutils.ExtendedWidget
+	*gtk.ListBoxRow
+	style *gtk.StyleContext
+
 	Messages *Messages
 
 	Nonce    string
@@ -32,10 +34,8 @@ type Message struct {
 	Timestamp time.Time
 	Edited    time.Time
 
-	// State *state.State
-
-	main      *gtk.Box
-	mainStyle *gtk.StyleContext
+	// main container
+	main *gtk.Box
 
 	// Left side, nil everything if compact mode
 	avatarEv *gtk.EventBox
@@ -121,6 +121,8 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 	// What the fuck?
 	must(func() {
 		var (
+			row, _ = gtk.ListBoxRowNew()
+
 			avatar, _   = gtk.ImageNewFromPixbuf(icon)
 			avatarEv, _ = gtk.EventBoxNew()
 
@@ -133,12 +135,20 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 			timestamp, _ = gtk.LabelNew("")
 		)
 
-		mstyle, _ := main.GetStyleContext()
-		gtkutils.AddCSSUnsafe(mstyle, `
+		style, _ := row.GetStyleContext()
+		style.AddClass("message")
+		gtkutils.AddCSSUnsafe(style, `
 			.message {
+				padding: 0;
+			}
+		`)
+
+		// Set the message's underlying box style:
+		gtkutils.InjectCSSUnsafe(main, "", `
+			.message > box {
 				border-left: 2px solid transparent;
 			}
-			.message.mentioned {
+			.message.mentioned > box {
 				border-left: 2px solid rgb(250, 166, 26);
 				background-color: rgba(250, 166, 26, 0.05);
 			}
@@ -151,11 +161,11 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 			Timestamp: m.Timestamp.Time().Local(),
 			Edited:    m.EditedTimestamp.Time().Local(),
 
-			ExtendedWidget: main,
-			Condensed:      false,
+			ListBoxRow: row,
+			style:      style,
+			Condensed:  false,
 
 			main:        main,
-			mainStyle:   mstyle,
 			avatarEv:    avatarEv,
 			avatar:      avatar,
 			right:       right,
@@ -166,11 +176,18 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		}
 		defer message.markBusy()()
 
+		message.ListBoxRow.Add(message.main)
+
 		gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
 
 		message.rightBottom.SetHExpand(true)
 		message.rightBottom.SetMarginBottom(5)
 		message.rightBottom.SetMarginEnd(AvatarPadding * 2)
+		message.rightBottom.Connect("size-allocate", func() {
+			// Hack to force Gtk to recalculate size on changes
+			message.rightBottom.SetVExpand(true)
+			message.rightBottom.SetVExpand(false)
+		})
 
 		message.avatarEv.SetMarginStart(AvatarPadding * 2)
 		message.avatarEv.SetMarginEnd(AvatarPadding)
@@ -190,14 +207,24 @@ func newMessageCustom(m discord.Message) (message *Message, err error) {
 		message.author.SetSingleLineMode(true)
 
 		message.rightTop.Add(message.author)
+		gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
 
-		timestampSize := AvatarSize + AvatarPadding*2 - 1
+		timestampSize := AvatarSize + AvatarPadding - 1
 		message.timestamp.SetSizeRequest(timestampSize, -1)
 		message.timestamp.SetOpacity(0.5)
 		message.timestamp.SetYAlign(0.0)
 		message.timestamp.SetSingleLineMode(true)
 		message.timestamp.SetMarginTop(2)
 		message.timestamp.SetMarginStart(AvatarPadding)
+		message.timestamp.SetMarginEnd(AvatarPadding)
+		gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", `
+			.message.condensed .timestamp {
+				opacity: 0;
+			}
+			.message.condensed:hover .timestamp {
+				opacity: 1;
+			}
+		`)
 
 		message.right.Add(message.rightTop)
 
@@ -252,8 +279,8 @@ func (m *Message) SetCondensed(condensed bool) {
 
 func (m *Message) setCondensed() {
 	if m.Condensed {
-		m.mainStyle.AddClass("condensed")
-		m.timestamp.SetXAlign(0.5)
+		m.style.AddClass("condensed")
+		m.timestamp.SetXAlign(1.0)
 		m.timestamp.SetMarkup(smaller("+" + m.CondenseOffset.String()))
 
 		m.main.Remove(m.avatarEv)
@@ -269,7 +296,7 @@ func (m *Message) setCondensed() {
 		return
 	}
 
-	m.mainStyle.RemoveClass("condensed")
+	m.style.RemoveClass("condensed")
 	m.timestamp.SetXAlign(0.0) // left align
 	m.timestamp.SetMarkup(smaller(humanize.TimeAgo(m.Timestamp)))
 
@@ -356,7 +383,7 @@ func (m *Message) UpdateContent(update discord.Message) {
 
 	for _, mention := range update.Mentions {
 		if mention.ID == App.Me.ID {
-			async(m.mainStyle.AddClass, "mentioned")
+			async(m.style.AddClass, "mentioned")
 			return
 		}
 	}
@@ -364,7 +391,7 @@ func (m *Message) UpdateContent(update discord.Message) {
 	// We only try this if we know the message is edited. If it's new, there
 	// wouldn't be a .mentioned class to remove.
 	if update.EditedTimestamp.Valid() {
-		async(m.mainStyle.RemoveClass, "mentioned")
+		async(m.style.RemoveClass, "mentioned")
 	}
 }
 
