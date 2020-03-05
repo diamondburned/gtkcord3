@@ -149,23 +149,23 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 }
 
 // returns *ReadState if updated, marks the message as unread.
-func (s *State) hookIncomingMessage(channel, message discord.Snowflake, ack bool) bool {
-	s.readMutex.Lock()
-	defer s.readMutex.Unlock()
+// func (s *State) hookIncomingMessage(channel, message discord.Snowflake, ack bool) bool {
+// 	s.readMutex.Lock()
+// 	defer s.readMutex.Unlock()
 
-	st, ok := s.LastRead[channel]
-	if !ok {
-		st = &gateway.ReadState{
-			ChannelID: channel,
-		}
-		s.LastRead[channel] = st
-	}
+// 	st, ok := s.LastRead[channel]
+// 	if !ok {
+// 		st = &gateway.ReadState{
+// 			ChannelID: channel,
+// 		}
+// 		s.LastRead[channel] = st
+// 	}
 
-	st.LastMessageID = message
+// 	st.LastMessageID = message
 
-	s.OnReadChange(st, ack)
-	return true
-}
+// 	s.OnReadChange(st, ack)
+// 	return true
+// }
 
 func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	if s.ChannelMuted(channelID) {
@@ -182,18 +182,52 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	return nil
 }
 
-func (s *State) MarkRead(channelID, messageID discord.Snowflake, trigger bool) {
-	// Update ReadState as well as the callback.
-	if !s.hookIncomingMessage(channelID, messageID, true) {
-		return
+func (s *State) MarkUnread(msg discord.Message) {
+	s.readMutex.Lock()
+
+	// Check for a ReadState
+	st, ok := s.LastRead[msg.ChannelID]
+	if !ok {
+		st = &gateway.ReadState{
+			ChannelID: msg.ChannelID,
+		}
+		s.LastRead[msg.ChannelID] = st
 	}
 
-	if !trigger {
+	// Announce that there's a read state change first
+	s.OnReadChange(st, false)
+
+	// We don't actually update the ReadState, as that's the job of the handler.
+	s.readMutex.Unlock()
+}
+
+func (s *State) MarkRead(msg discord.Message) {
+	s.readMutex.Lock()
+
+	// Check for a ReadState
+	st, ok := s.LastRead[msg.ChannelID]
+	if !ok {
+		st = &gateway.ReadState{
+			ChannelID: msg.ChannelID,
+		}
+		s.LastRead[msg.ChannelID] = st
+	}
+
+	// Announce that there's a read state change first
+	s.OnReadChange(st, true)
+
+	// Update ReadState
+	st.LastMessageID = msg.ID
+
+	s.readMutex.Unlock()
+
+	// If the message is ours:
+	if msg.Author.ID == s.Ready.User.ID {
 		return
 	}
 
 	// Send over Ack.
-	if err := s.Ack(channelID, messageID, &s.lastAck); err != nil {
+	if err := s.Ack(msg.ChannelID, msg.ID, &s.lastAck); err != nil {
 		log.Errorln("Failed to ack message:", err)
 	}
 }

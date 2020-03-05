@@ -109,10 +109,10 @@ const CSS = `
 		padding: 2px;
 	}
 
-	.channel {
+	.channel, .category {
 		opacity: 0.5;
 	}
-	.channel.muted {
+	.channel.muted, .category.muted {
 		opacity: 0.25;
 	}
 	.channel.unread {

@@ -8,9 +8,9 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/gtkcord/typing"
 	"github.com/diamondburned/gtkcord3/log"
@@ -18,13 +18,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+func init() {
+	md.UserPressed = userMentionPressed
+	md.ChannelPressed = channelMentionPressed
+}
+
 const DefaultFetch = 25
 
 type Constructor struct {
-	*state.State
+	*ningen.State
 
-	Parser *md.Parser
-	Me     *discord.User
+	Me *discord.User
 
 	// TODO: move this off to package guilds
 	gmu    sync.Mutex
@@ -38,16 +42,10 @@ type guildState struct {
 	lastRequested time.Time
 }
 
-func NewConstructor(s *state.State) *Constructor {
-	p := md.NewParser(s)
-	p.UserPressed = userMentionPressed
-	p.ChannelPressed = channelMentionPressed
-	m := &s.Ready.User
-
+func NewConstructor(s *ningen.State) *Constructor {
 	return &Constructor{
-		Parser: p,
-		State:  s,
-		Me:     m,
+		State: s,
+		Me:    &s.Ready.User,
 
 		guilds: map[discord.Snowflake]*guildState{},
 	}
@@ -177,15 +175,10 @@ type Messages struct {
 	// Additional components
 	Input  *Input
 	Typing *typing.State
-
-	OnInsert func(m *Message)
 }
 
-func (c *Constructor) NewMessages(channel, guild discord.Snowflake) (*Messages, error) {
+func (c *Constructor) NewMessages() (*Messages, error) {
 	m := &Messages{
-		ChannelID: channel,
-		GuildID:   guild,
-
 		c: c,
 	}
 
@@ -248,21 +241,7 @@ func (c *Constructor) NewMessages(channel, guild discord.Snowflake) (*Messages, 
 		m.Typing.ShowAll()
 	})
 
-	go c.subscribe(guild)
-
 	return m, nil
-}
-
-func (m *Messages) triggerInsert() {
-	if m.OnInsert == nil {
-		return
-	}
-	last := m.Last()
-	if last == nil {
-		return
-	}
-
-	m.OnInsert(last)
 }
 
 func (m *Messages) LastFromMe() *Message {
@@ -293,9 +272,14 @@ func (m *Messages) LastID() discord.Snowflake {
 	return 0
 }
 
-func (m *Messages) Reset() error {
+func (m *Messages) Load(channel, guild discord.Snowflake) error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
+
+	m.ChannelID = channel
+	m.GuildID = guild
+
+	go m.c.subscribe(guild)
 
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
@@ -364,9 +348,16 @@ func (m *Messages) Reset() error {
 	// Show all messages.
 	semaphore.IdleMust(m.Messages.ShowAll)
 
-	go func() {
-		m.triggerInsert()
+	// Find the latest message and ack it:
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Author.ID == m.c.Ready.User.ID {
+			continue
+		}
+		go m.c.MarkRead(messages[i])
+		break
+	}
 
+	go func() {
 		// Iterate backwards, from latest to earliest.
 		for i := len(loads) - 1; i >= 0; i-- {
 			loads[i]()
@@ -444,16 +435,17 @@ func (m *Messages) onSizeAlloc() {
 }
 
 func (m *Messages) Insert(message discord.Message) error {
-	defer func() {
-		if message.ID.Valid() {
-			m.triggerInsert()
-		}
-	}()
-
 	// Are we sure this is not our message?
 	if m.Update(message) {
 		return nil
 	}
+
+	// We ack the message after inserting:
+	defer func() {
+		if message.ID.Valid() && message.Author.ID != m.c.Ready.User.ID {
+			m.c.MarkRead(message)
+		}
+	}()
 
 	w, err := m.newMessage(message)
 	if err != nil {
@@ -574,4 +566,8 @@ func (m *Messages) deleteNonce(nonce string) bool {
 	}
 
 	return false
+}
+
+func (m *Messages) AckLatest() {
+
 }

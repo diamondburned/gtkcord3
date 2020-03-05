@@ -1,9 +1,11 @@
-package gtkcord
+package channel
 
 import (
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 )
 
 type _sortStructure struct {
@@ -47,7 +49,7 @@ func filterChannels(chs []discord.Channel) []discord.Channel {
 	return filtered
 }
 
-func transformChannels(chs []discord.Channel) []*Channel {
+func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 	var tree = map[discord.Snowflake]*_sortStructure{}
 
 	for _, ch := range chs {
@@ -107,15 +109,53 @@ func transformChannels(chs []discord.Channel) []*Channel {
 
 	var channels = make([]*Channel, 0, len(chs))
 
-	for _, sch := range list {
-		if sch.hasParent {
-			channels = append(channels, newChannel(sch.parent))
+	semaphore.IdleMust(func() {
+		for _, sch := range list {
+			if sch.hasParent {
+				channels = append(channels, createChannelRead(sch.parent, s))
+			}
+
+			for _, ch := range sch.children {
+				channels = append(channels, createChannelRead(ch, s))
+			}
+		}
+	})
+
+	return channels
+}
+
+func createChannelRead(ch discord.Channel, s *ningen.State) (w *Channel) {
+	w = newChannel(ch)
+
+	if ch.Type == discord.GuildCategory {
+		return
+	}
+
+	if s.ChannelMuted(ch.ID) {
+		w.stateClass = "muted"
+		w.Style.AddClass("muted")
+		return
+	}
+
+	if rs := s.FindLastRead(ch.ID); rs != nil {
+		w.unread = ch.LastMessageID != rs.LastMessageID
+		pinged := w.unread && rs.MentionCount > 0
+
+		if !w.unread && pinged {
+			pinged = false
 		}
 
-		for _, ch := range sch.children {
-			channels = append(channels, newChannel(ch))
+		switch {
+		case pinged:
+			w.stateClass = "pinged"
+		case w.unread:
+			w.stateClass = "unread"
+		}
+
+		if w.stateClass != "" {
+			w.Style.AddClass(w.stateClass)
 		}
 	}
 
-	return channels
+	return
 }
