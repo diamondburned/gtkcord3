@@ -9,9 +9,9 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -34,6 +34,8 @@ type Input struct {
 	Emoji    *gtk.Button
 
 	Editing *discord.Message
+
+	OnTyping func()
 
 	// uploadButton
 	// emojiButton
@@ -273,7 +275,7 @@ func (i *Input) makeMessage(content string) discord.Message {
 		Type:      discord.DefaultMessage,
 		ChannelID: i.Messages.ChannelID,
 		GuildID:   i.Messages.GuildID,
-		Author:    *i.Messages.c.Me,
+		Author:    i.Messages.c.Ready.User,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),
 		Nonce:     randString(),
@@ -321,10 +323,7 @@ func (i *Input) send(content string) error {
 
 	// An invalid ID keeps the message invalid until it is sent.
 	m := i.makeMessage(content)
-
-	if err := i.Messages.Insert(m); err != nil {
-		log.Errorln("Failed to add message to be sent:", err)
-	}
+	i.Messages.Insert(m)
 
 	_, err := i.Messages.c.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
 		Content: m.Content,
@@ -355,15 +354,10 @@ func (i *Input) _upload(content string, paths []string) error {
 	m := i.makeMessage(content)
 	s := u.MakeSendData(m)
 
-	w, err := i.Messages.newMessageCustom(m)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a message container")
-	}
+	w := newMessageCustom(m)
 	semaphore.IdleMust(w.rightBottom.Add, u)
 
-	if err := i.Messages.insert(w, m); err != nil {
-		log.Errorln("Failed to add messages to be uploaded:", err)
-	}
+	i.Messages.insert(w)
 
 	_, err = i.Messages.c.State.SendMessageComplex(m.ChannelID, s)
 	if err != nil {

@@ -1,10 +1,7 @@
 package gtkcord
 
 import (
-	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/message"
-	"github.com/diamondburned/gtkcord3/log"
 )
 
 func (a *application) hookEvents() {
@@ -39,6 +36,7 @@ func (a *application) hookEvents() {
 	})
 }
 
+/*
 func onTypingStart(t *gateway.TypingStartEvent) {
 	mw, ok := App.Messages.(*message.Messages)
 	if !ok {
@@ -228,3 +226,4 @@ Find:
 		target.UpdateImage()
 	}
 }
+*/

@@ -27,14 +27,15 @@ type Channels struct {
 	// Channel list
 	ChList   *gtk.ListBox
 	Channels []*Channel
+	Selected *Channel
 
-	busy sync.Mutex
+	busy  sync.Mutex
+	state *ningen.State
 
-	state    *ningen.State
 	OnSelect func(ch *Channel)
 }
 
-func NewChannels(s *ningen.State) (chs *Channels) {
+func NewChannels(state *ningen.State) (chs *Channels) {
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		main.SetSizeRequest(ChannelsWidth, -1)
@@ -58,28 +59,54 @@ func NewChannels(s *ningen.State) (chs *Channels) {
 		}
 
 		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			if chs.OnSelect == nil {
+			if chs.OnSelect == nil || len(chs.Channels) == 0 {
 				return
 			}
 
-			var row = chs.Channels[r.GetIndex()]
+			chs.Selected = chs.Channels[r.GetIndex()]
 			go func() {
-				row.setUnread(false, false)
-				chs.OnSelect(row)
+				chs.Selected.setUnread(false, false)
+				chs.OnSelect(chs.Selected)
 			}()
 		})
 	})
 
+	state.OnReadChange = append(state.OnReadChange, chs.TraverseReadState)
 	return nil
 }
 
-func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
-	channels, err := chs.state.Channels(guildID)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get guild channels")
+// messageCreate handler for unreads
+func (chs *Channels) messageCreate(c *gateway.MessageCreateEvent) {
+	// If the guild ID doesn't match:
+	if c.GuildID != chs.GuildID {
+		return
 	}
-	channels = filterChannels(channels)
+	// If the message is the user's:
+	if c.Author.ID == chs.state.Ready.User.ID {
+		return
+	}
 
+	chs.busy.Lock()
+	defer chs.busy.Unlock()
+
+	// If the current channel is selected:
+	if chs.Selected != nil && chs.Selected.ID == c.ChannelID {
+		if !chs.Selected.unread {
+
+		}
+		return
+	}
+
+	// Find the channel:
+	ch := chs.FindByID(c.ChannelID)
+	// If no channel is found:
+	if ch == nil {
+		return
+	}
+
+}
+
+func (chs *Channels) Cleanup() {
 	chs.busy.Lock()
 	defer chs.busy.Unlock()
 
@@ -89,11 +116,26 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 			chs.ChList.Remove(ch)
 		}
 	})
+	chs.Selected = nil
+	chs.Channels = nil
+}
+
+func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
+	chs.GuildID = guildID
+
+	channels, err := chs.state.Channels(chs.GuildID)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get guild channels")
+	}
+	channels = filterChannels(channels)
+
+	chs.busy.Lock()
+	defer chs.busy.Unlock()
 
 	go func() {
-		guild, err := chs.state.Guild(guildID)
+		guild, err := chs.state.Guild(chs.GuildID)
 		if err == nil && guild.Banner != "" {
-			go chs.UpdateBanner(guild.BannerURL())
+			chs.UpdateBanner(guild.BannerURL())
 		}
 	}()
 
@@ -127,24 +169,33 @@ func (chs *Channels) UpdateBanner(url string) {
 	}
 }
 
-func (chs *Channels) First() int {
-	for i, ch := range chs.Channels {
+func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
+	for _, ch := range chs.Channels {
+		if ch.ID == id {
+			return ch
+		}
+	}
+	return nil
+}
+
+func (chs *Channels) FirstID() discord.Snowflake {
+	for _, ch := range chs.Channels {
 		if ch.Category {
 			continue
 		}
-		return i
+		return ch.ID
 	}
-	return -1
+	return 0
 }
 
-func (chs *Channels) TraverseReadState(rs *gateway.ReadState, ack bool) {
+func (chs *Channels) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {
 	for _, ch := range chs.Channels {
 		if ch.ID != rs.ChannelID {
 			continue
 		}
 
 		// ack == read
-		ch.setUnread(!ack, rs.MentionCount > 0)
+		ch.setUnread(unread, rs.MentionCount > 0)
 		break
 	}
 }

@@ -7,159 +7,24 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/gtkcord/typing"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
-func init() {
-	md.UserPressed = userMentionPressed
-	md.ChannelPressed = channelMentionPressed
-}
-
 const DefaultFetch = 25
-
-type Constructor struct {
-	*ningen.State
-
-	Me *discord.User
-
-	// TODO: move this off to package guilds
-	gmu    sync.Mutex
-	guilds map[discord.Snowflake]*guildState
-}
-
-type guildState struct {
-	subscribed        bool
-	requestingMembers map[discord.Snowflake]struct{}
-
-	lastRequested time.Time
-}
-
-func NewConstructor(s *ningen.State) *Constructor {
-	return &Constructor{
-		State: s,
-		Me:    &s.Ready.User,
-
-		guilds: map[discord.Snowflake]*guildState{},
-	}
-}
-
-func (c *Constructor) getGuild(id discord.Snowflake) *guildState {
-	gd, ok := c.guilds[id]
-	if !ok {
-		gd = &guildState{
-			requestingMembers: map[discord.Snowflake]struct{}{},
-		}
-		c.guilds[id] = gd
-	}
-	return gd
-}
-
-func (c *Constructor) searchMember(guildID discord.Snowflake, prefix string) {
-	c.gmu.Lock()
-	defer c.gmu.Unlock()
-
-	gd := c.getGuild(guildID)
-
-	if time.Now().Before(gd.lastRequested) {
-		return
-	}
-
-	gd.lastRequested = time.Now().Add(time.Second)
-
-	go func() {
-		err := c.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.Snowflake{guildID},
-			Query:     prefix,
-			Presences: true,
-		})
-
-		if err != nil {
-			log.Errorln("Failed to request guild members for completion:", err)
-		}
-	}()
-}
-
-func (c *Constructor) subscribe(guildID discord.Snowflake) {
-	c.gmu.Lock()
-	defer c.gmu.Unlock()
-
-	gd := c.getGuild(guildID)
-	if gd.subscribed {
-		return
-	}
-
-	// temp unlock
-	c.gmu.Unlock()
-
-	// subscribe
-	err := c.State.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-		GuildID:    guildID,
-		Typing:     true,
-		Activities: true,
-	})
-
-	// relock
-	c.gmu.Lock()
-
-	if err != nil {
-		log.Errorln("Failed to subscribe:", err)
-		return
-	}
-
-	gd.subscribed = true
-}
-
-func (c *Constructor) requestMember(guildID, memID discord.Snowflake) {
-	c.gmu.Lock()
-	defer c.gmu.Unlock()
-
-	gd := c.getGuild(guildID)
-	if _, ok := gd.requestingMembers[memID]; ok {
-		return
-	}
-
-	// temp unlock
-	c.gmu.Unlock()
-
-	err := c.State.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-		GuildID:   []discord.Snowflake{guildID},
-		UserIDs:   []discord.Snowflake{memID},
-		Presences: true,
-	})
-
-	// relock
-	c.gmu.Lock()
-
-	if err != nil {
-		log.Errorln("Failed to request guild members:", err)
-	}
-
-	gd.requestingMembers[memID] = struct{}{}
-	return
-}
-
-func (c *Constructor) RequestedMember(guildID, memID discord.Snowflake) {
-	c.gmu.Lock()
-	defer c.gmu.Unlock()
-
-	gd := c.getGuild(guildID)
-	delete(gd.requestingMembers, memID)
-}
 
 type Messages struct {
 	gtkutils.ExtendedWidget
 	ChannelID discord.Snowflake
 	GuildID   discord.Snowflake
 
-	c *Constructor
+	c *ningen.State
 
 	Main *gtk.Box
 
@@ -177,12 +42,9 @@ type Messages struct {
 	Typing *typing.State
 }
 
-func (c *Constructor) NewMessages() (*Messages, error) {
-	m := &Messages{
-		c: c,
-	}
-
-	m.Typing = typing.NewState(c.State)
+func NewMessages(s *ningen.State) (*Messages, error) {
+	m := &Messages{}
+	m.Typing = typing.NewState(s.State)
 	m.Input = NewInput(m)
 
 	semaphore.IdleMust(func() {
@@ -241,6 +103,7 @@ func (c *Constructor) NewMessages() (*Messages, error) {
 		m.Typing.ShowAll()
 	})
 
+	m.injectHandlers()
 	return m, nil
 }
 
@@ -249,7 +112,7 @@ func (m *Messages) LastFromMe() *Message {
 	defer m.guard.Unlock()
 
 	for n := len(m.messages) - 1; n >= 0; n-- {
-		if msg := m.messages[n]; msg.AuthorID == m.c.Me.ID {
+		if msg := m.messages[n]; msg.AuthorID == m.c.Ready.User.ID {
 			return msg
 		}
 	}
@@ -272,14 +135,11 @@ func (m *Messages) LastID() discord.Snowflake {
 	return 0
 }
 
-func (m *Messages) Load(channel, guild discord.Snowflake) error {
+func (m *Messages) Load(channel discord.Snowflake) error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
 	m.ChannelID = channel
-	m.GuildID = guild
-
-	go m.c.subscribe(guild)
 
 	// Mark that we're loading messages.
 	m.Resetting.Store(true)
@@ -290,17 +150,20 @@ func (m *Messages) Load(channel, guild discord.Snowflake) error {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
+	// Set GuildID
+	if len(messages) > 0 {
+		m.GuildID = messages[0].GuildID
+		if !m.GuildID.Valid() {
+			// TODO: REMOVE ME
+			log.Errorln("Message does not have valid guildID")
+		} else {
+			go m.c.Subscribe(m.GuildID)
+		}
+	}
+
 	// Sort so that latest is last:
 	sort.Slice(messages, func(i, j int) bool {
 		return messages[i].ID < messages[j].ID
-	})
-
-	semaphore.IdleMust(func() {
-		for _, w := range m.messages {
-			if w != nil {
-				m.Messages.Remove(w.ListBoxRow)
-			}
-		}
 	})
 
 	// Allocate a new empty slice. This is a trade-off to re-using the old
@@ -314,25 +177,17 @@ func (m *Messages) Load(channel, guild discord.Snowflake) error {
 	for i := 0; i < len(messages); i++ {
 		message := messages[i]
 
-		msg, err := m.newMessage(message)
-		if err != nil {
-			return errors.Wrap(err, "Failed to render message")
-		}
-
-		var condensed = false
-		if shouldCondense(newMessages, message) {
-			msg.setOffset(lastMessageFrom(newMessages, message.Author.ID))
-			condensed = true
-		}
-
-		// Messages are added, earliest first.
-		newMessages = append(newMessages, msg)
-		semaphore.IdleMust(msg.SetCondensed, condensed)
-		semaphore.IdleMust(m.Messages.Insert, msg, -1)
+		w := newMessage(m.c, message)
+		m.insert(w)
 
 		loads = append(loads, func() {
-			msg.UpdateAuthor(message.Author)
-			msg.UpdateExtras(message)
+			if message.Member != nil {
+				w.updateMember(m.c, message.GuildID, *message.Member)
+			} else {
+				w.updateAuthor(m.c, message.GuildID, message.Author)
+			}
+
+			go w.UpdateExtras(m.c, message)
 		})
 	}
 
@@ -353,51 +208,47 @@ func (m *Messages) Load(channel, guild discord.Snowflake) error {
 		if messages[i].Author.ID == m.c.Ready.User.ID {
 			continue
 		}
-		go m.c.MarkRead(messages[i])
+		go m.c.MarkRead(m.ChannelID, messages[i].ID)
 		break
 	}
 
-	go func() {
+	semaphore.Async(func() {
 		// Iterate backwards, from latest to earliest.
 		for i := len(loads) - 1; i >= 0; i-- {
 			loads[i]()
 		}
 		m.Resetting.Store(false)
-	}()
+	})
 
 	return nil
 }
 
-func (m *Messages) ShouldCondense(msg discord.Message) bool {
-	return shouldCondense(m.messages, msg)
-}
-
-func shouldCondense(msgs []*Message, msg discord.Message) bool {
-	if len(msgs) == 0 {
+func (m *Messages) ShouldCondense(msg *Message) bool {
+	if len(m.messages) == 0 {
 		return false
 	}
 
-	var last = msgs[len(msgs)-1]
+	var last = m.messages[len(m.messages)-1]
 
-	return last.AuthorID == msg.Author.ID &&
-		msg.Timestamp.Time().Sub(last.Timestamp) < 5*time.Minute
+	return last.AuthorID == msg.AuthorID &&
+		msg.Timestamp.Sub(last.Timestamp) < 5*time.Minute
 }
 
-func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msg := msgs[i]; msg.AuthorID == author && !msg.Condensed {
+func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if msg := m.messages[i]; msg.AuthorID == author && !msg.Condensed {
 			return msg
 		}
 	}
 	return nil
 }
 
-func (m *Messages) Destroy() {
+func (m *Messages) Cleanup() {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
 	log.Infoln("Destroying messages from old channel.")
-	go m.Typing.Stop()
+	m.Typing.Stop()
 
 	for _, msg := range m.messages {
 		// DESTROY!!!!
@@ -434,51 +285,50 @@ func (m *Messages) onSizeAlloc() {
 	m.Resetting.Store(false)
 }
 
-func (m *Messages) Insert(message discord.Message) error {
+func (m *Messages) Insert(message discord.Message) {
 	// Are we sure this is not our message?
 	if m.Update(message) {
-		return nil
+		return
 	}
 
 	// We ack the message after inserting:
 	defer func() {
 		if message.ID.Valid() && message.Author.ID != m.c.Ready.User.ID {
-			m.c.MarkRead(message)
+			m.c.MarkRead(message.ChannelID, message.ID)
 		}
 	}()
-
-	w, err := m.newMessage(message)
-	if err != nil {
-		return errors.Wrap(err, "Failed to render message")
-	}
-
-	return m.insert(w, message)
-}
-
-func (m *Messages) insert(w *Message, message discord.Message) error {
-	w.Messages = m
-
-	semaphore.Go(func() {
-		w.UpdateAuthor(message.Author)
-		w.UpdateExtras(message)
-	})
 
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	var condense = m.ShouldCondense(message)
-	if condense {
-		w.setOffset(lastMessageFrom(m.messages, message.Author.ID))
-		semaphore.IdleMust(w.SetCondensed, true)
+	w := newMessage(m.c, message)
+
+	go func() {
+		if message.Member != nil {
+			w.UpdateMember(m.c, message.GuildID, *message.Member)
+		} else {
+			w.UpdateAuthor(m.c, message.GuildID, message.Author)
+		}
+
+		w.UpdateExtras(m.c, message)
+	}()
+
+	semaphore.Async(m.insert, w)
+}
+
+// not thread safe
+func (m *Messages) insert(w *Message) {
+	w.OnUserClick = m.onAvatarClick
+
+	if m.ShouldCondense(w) {
+		w.setOffset(m.lastMessageFrom(w.AuthorID))
+		w.SetCondensed(true)
 	}
 
-	semaphore.IdleMust(func() {
-		m.Messages.Insert(w, -1)
-		w.ShowAll()
-	})
-
+	m.Messages.Insert(w, -1)
 	m.messages = append(m.messages, w)
-	return nil
+
+	w.ShowAll()
 }
 
 func (m *Messages) Update(update discord.Message) bool {
@@ -509,10 +359,10 @@ func (m *Messages) Update(update discord.Message) bool {
 	target.Nonce = ""
 
 	if update.Content != "" {
-		target.UpdateContent(update)
+		target.UpdateContent(m.c, update)
 	}
 	semaphore.Go(func() {
-		target.UpdateExtras(update)
+		target.UpdateExtras(m.c, update)
 	})
 
 	return true
@@ -524,7 +374,7 @@ func (m *Messages) UpdateMessageAuthor(n discord.Member) {
 		if message.AuthorID != n.User.ID {
 			continue
 		}
-		message.updateAuthorName(n)
+		message.UpdateMember(m.c, m.GuildID, n)
 	}
 	m.guard.RUnlock()
 }
@@ -568,6 +418,8 @@ func (m *Messages) deleteNonce(nonce string) bool {
 	return false
 }
 
-func (m *Messages) AckLatest() {
-
+func (m *Messages) onAvatarClick(msg *Message) {
+	p := popup.SpawnUserPopup(m.c, m.GuildID, msg.AuthorID)
+	p.SetRelativeTo(msg.avatar)
+	p.Show()
 }

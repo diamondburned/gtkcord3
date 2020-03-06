@@ -5,9 +5,7 @@ import (
 	"html"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -17,9 +15,12 @@ import (
 	"github.com/gotk3/gotk3/pango"
 )
 
-type PrivateChannel struct {
-	Parent *PrivateChannels
+const (
+	DMAvatarSize = 38
+	IconPadding  = 8
+)
 
+type PrivateChannel struct {
 	*gtk.ListBoxRow
 	Main  *gtk.Box
 	Style *gtk.StyleContext
@@ -30,7 +31,6 @@ type PrivateChannel struct {
 	Label *gtk.Label
 
 	ID   discord.Snowflake
-	Recp discord.Snowflake // first recipient
 	Name string
 	Game string
 
@@ -52,11 +52,10 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 		name = humanize.Strings(names)
 	}
 
-	name = html.EscapeString(name)
 	icon := icons.GetIcon("network-workgroup-symbolic", DMAvatarSize)
 
 	semaphore.IdleMust(func() {
-		l, _ := gtk.LabelNew(name)
+		l, _ := gtk.LabelNew(html.EscapeString(name))
 		l.SetUseMarkup(true)
 		l.SetMarginStart(8)
 		l.SetEllipsize(pango.ELLIPSIZE_END)
@@ -73,7 +72,7 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 
 		r, _ := gtk.ListBoxRowNew()
 		r.Add(b)
-		// set the channel ID to name
+		// set the channel ID to searches
 		r.SetProperty("name", ch.ID.String())
 
 		rs, _ := r.GetStyleContext()
@@ -89,44 +88,16 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 
 			Label: l,
 
-			ID:    ch.ID,
-			Name:  name,
-			Group: true,
-			// Set the property. We'll need this for sorting.
-			LastMsg: ch.LastMessageID,
+			ID:   ch.ID,
+			Name: name,
+			// Group: ch.Type == discord.GroupDM,
 		}
 
-		if len(ch.DMRecipients) > 0 {
-			pc.Recp = ch.DMRecipients[0].ID
-		}
+		pc.setStatusClass("offline")
 	})
-
-	if rs := App.State.FindLastRead(pc.ID); rs != nil {
-		pc.updateReadState(rs)
-	}
 
 	if ch.Type != discord.DirectMessage {
 		return pc
-	}
-
-	pc.setStatusClass("offline")
-	pc.Group = false
-
-	if len(ch.DMRecipients) > 0 && ch.DMRecipients[0].Avatar != "" {
-		url := ch.DMRecipients[0].AvatarURL() + "?size=64"
-
-		go func() {
-			err := cache.SetImageScaled(url, pc.Avatar, DMAvatarSize, DMAvatarSize, cache.Round)
-			if err != nil {
-				log.Errorln("Failed to get DM avatar", url+":", err)
-			}
-		}()
-
-		p, err := App.State.Presence(0, ch.DMRecipients[0].ID)
-		if err == nil {
-			pc.UpdateStatus(p.Status)
-			pc.UpdateActivity(p.Game)
-		}
 	}
 
 	return pc
@@ -141,18 +112,14 @@ func _ChIDFromRow(row *gtk.ListBoxRow) string {
 	return v.(string)
 }
 
-func (pc *PrivateChannel) ackLatest(m *message.Message) {
-	App.State.MarkRead(pc.ID, m.ID, m.AuthorID != App.Me.ID)
-}
-
 func (pc *PrivateChannel) setStatusClass(class string) {
-	gtkutils.DiffClass(&pc.lastStatusClass, class, pc.AStyle)
+	gtkutils.DiffClassUnsafe(&pc.lastStatusClass, class, pc.AStyle)
 }
 func (pc *PrivateChannel) setClass(class string) {
-	gtkutils.DiffClass(&pc.stateClass, class, pc.Style)
+	gtkutils.DiffClassUnsafe(&pc.stateClass, class, pc.Style)
 }
 
-func (pc *PrivateChannel) UpdateActivity(ac *discord.Activity) {
+func (pc *PrivateChannel) updateActivity(ac *discord.Activity) {
 	// if a == nil, then we should reset the label to not show any game.
 	if ac == nil {
 		// only if there was a game before
@@ -160,10 +127,8 @@ func (pc *PrivateChannel) UpdateActivity(ac *discord.Activity) {
 			return
 		}
 
-		semaphore.Async(func() {
-			pc.Label.SetMarkup(pc.Name)
-			pc.Label.SetTooltipMarkup(pc.Name)
-		})
+		pc.Label.SetMarkup(pc.Name)
+		pc.Label.SetTooltipMarkup(pc.Name)
 
 		return
 	}
@@ -187,13 +152,11 @@ func (pc *PrivateChannel) UpdateActivity(ac *discord.Activity) {
 		pc.Name, pc.Game,
 	)
 
-	semaphore.Async(func() {
-		pc.Label.SetMarkup(label)
-		pc.Label.SetTooltipMarkup(label)
-	})
+	pc.Label.SetMarkup(label)
+	pc.Label.SetTooltipMarkup(label)
 }
 
-func (pc *PrivateChannel) UpdateStatus(status discord.Status) {
+func (pc *PrivateChannel) updateStatus(status discord.Status) {
 	switch status {
 	case discord.OnlineStatus:
 		pc.setStatusClass("online")
@@ -207,21 +170,10 @@ func (pc *PrivateChannel) UpdateStatus(status discord.Status) {
 	}
 }
 
-func (pc *PrivateChannel) updateReadState(rs *gateway.ReadState) {
-	if rs == nil {
-		pc.setUnread(false)
-		return
-	}
-
-	unread := pc.LastMsg != rs.LastMessageID
-	pc.setUnread(unread)
-
-	if pc.Parent != nil {
-		must(func() {
-			if pc.ListBoxRow.GetIndex() != 0 {
-				pc.Parent.List.InvalidateSort()
-			}
-		})
+func (pc *PrivateChannel) updateAvatar(url string) {
+	err := cache.SetImageScaled(url+"?size=64", pc.Avatar, DMAvatarSize, DMAvatarSize, cache.Round)
+	if err != nil {
+		log.Errorln("Failed to get DM avatar", url+":", err)
 	}
 }
 
@@ -230,16 +182,5 @@ func (pc *PrivateChannel) setUnread(unread bool) {
 		pc.setClass("pinged")
 	} else {
 		pc.setClass("")
-	}
-
-	if pc.Parent != nil {
-		pc.Parent.setUnread(unread)
-
-		must(func() {
-			if pc.ListBoxRow.GetIndex() == 0 {
-				return
-			}
-			pc.Parent.List.InvalidateSort()
-		})
 	}
 }

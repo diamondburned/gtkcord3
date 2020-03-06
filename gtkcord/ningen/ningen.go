@@ -29,8 +29,12 @@ type State struct {
 	lastAck   api.Ack
 	LastRead  map[discord.Snowflake]*gateway.ReadState
 
-	OnReadChange     func(rs *gateway.ReadState, ack bool)
-	OnGuildPosChange func(*gateway.UserSettings)
+	// rs is updated
+	OnReadChange []func(s *State, rs *gateway.ReadState, unread bool)
+	// OnGuildPosChange func(*gateway.UserSettings)
+
+	gmu    sync.Mutex
+	guilds map[discord.Snowflake]*guildState
 }
 
 type Mute struct {
@@ -57,20 +61,29 @@ func Connect(token string) (*State, error) {
 
 func Ningen(s *state.State) (*State, error) {
 	state := &State{
-		State:            s,
-		MutedGuilds:      map[discord.Snowflake]*Mute{},
-		MutedChannels:    map[discord.Snowflake]*Mute{},
-		LastRead:         map[discord.Snowflake]*gateway.ReadState{},
-		OnReadChange:     func(*gateway.ReadState, bool) {},
-		OnGuildPosChange: func(*gateway.UserSettings) {},
+		State:         s,
+		MutedGuilds:   map[discord.Snowflake]*Mute{},
+		MutedChannels: map[discord.Snowflake]*Mute{},
+		LastRead:      map[discord.Snowflake]*gateway.ReadState{},
+		guilds:        map[discord.Snowflake]*guildState{},
 	}
 
 	s.AddHandler(func(a *gateway.MessageAckEvent) {
-		state.hookIncomingMessage(a.ChannelID, a.MessageID, true)
+		state.MarkRead(a.ChannelID, a.MessageID)
 	})
 
 	s.AddHandler(func(c *gateway.MessageCreateEvent) {
-		state.hookIncomingMessage(c.ChannelID, c.ID, false)
+		if c.Author.ID == s.Ready.User.ID {
+			return
+		}
+		var mentions int
+		for _, u := range c.Mentions {
+			if u.ID == s.Ready.User.ID {
+				mentions++
+			}
+		}
+
+		state.MarkUnread(c.ChannelID, c.ID, mentions)
 	})
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
@@ -78,13 +91,24 @@ func Ningen(s *state.State) (*State, error) {
 	})
 
 	s.AddHandler(func(r *gateway.UserSettingsUpdateEvent) {
-		state.OnGuildPosChange((*gateway.UserSettings)(r))
+		// state.OnGuildPosChange((*gateway.UserSettings)(r))
 	})
 
 	s.AddHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
 		state.updateMuteState([]gateway.UserGuildSettings{
 			gateway.UserGuildSettings(*u),
 		})
+	})
+
+	s.AddHandler(func(c *gateway.GuildMembersChunkEvent) {
+		state.gmu.Lock()
+		defer state.gmu.Unlock()
+
+		gd := state.getGuild(c.GuildID)
+
+		for _, m := range c.Members {
+			delete(gd.requestingMembers, m.User.ID)
+		}
 	})
 
 	if s.Ready.SessionID == "" {
@@ -182,52 +206,53 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	return nil
 }
 
-func (s *State) MarkUnread(msg discord.Message) {
+func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	s.readMutex.Lock()
 
 	// Check for a ReadState
-	st, ok := s.LastRead[msg.ChannelID]
+	st, ok := s.LastRead[chID]
 	if !ok {
 		st = &gateway.ReadState{
-			ChannelID: msg.ChannelID,
+			ChannelID: chID,
 		}
-		s.LastRead[msg.ChannelID] = st
+		s.LastRead[chID] = st
 	}
+	// Update ReadState
+	st.ChannelID = msgID
+	st.MentionCount += mentions
 
-	// Announce that there's a read state change first
-	s.OnReadChange(st, false)
-
-	// We don't actually update the ReadState, as that's the job of the handler.
 	s.readMutex.Unlock()
+
+	// Announce that there's a read state change
+	for _, fn := range s.OnReadChange {
+		fn(st, true)
+	}
 }
 
-func (s *State) MarkRead(msg discord.Message) {
+func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	s.readMutex.Lock()
 
 	// Check for a ReadState
-	st, ok := s.LastRead[msg.ChannelID]
+	st, ok := s.LastRead[chID]
 	if !ok {
 		st = &gateway.ReadState{
-			ChannelID: msg.ChannelID,
+			ChannelID: chID,
 		}
-		s.LastRead[msg.ChannelID] = st
+		s.LastRead[chID] = st
 	}
-
-	// Announce that there's a read state change first
-	s.OnReadChange(st, true)
-
 	// Update ReadState
-	st.LastMessageID = msg.ID
+	st.LastMessageID = msgID
+	st.MentionCount = 0
 
 	s.readMutex.Unlock()
 
-	// If the message is ours:
-	if msg.Author.ID == s.Ready.User.ID {
-		return
+	// Announce that there's a read state change
+	for _, fn := range s.OnReadChange {
+		fn(st, false)
 	}
 
 	// Send over Ack.
-	if err := s.Ack(msg.ChannelID, msg.ID, &s.lastAck); err != nil {
+	if err := s.Ack(chID, msgID, &s.lastAck); err != nil {
 		log.Errorln("Failed to ack message:", err)
 	}
 }

@@ -119,3 +119,21 @@ func DiffClass(old *string, new string, style *gtk.StyleContext) {
 
 	semaphore.IdleMust(style.AddClass, new)
 }
+
+func DiffClassUnsafe(old *string, new string, style *gtk.StyleContext) {
+	if *old == new {
+		return
+	}
+
+	if *old != "" {
+		style.RemoveClass(*old)
+	}
+
+	*old = new
+
+	if new == "" {
+		return
+	}
+
+	style.AddClass(new)
+}

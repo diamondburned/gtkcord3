@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -35,6 +36,42 @@ type Channel struct {
 
 	unread     bool
 	stateClass string
+}
+
+func createChannelRead(ch discord.Channel, s *ningen.State) (w *Channel) {
+	w = newChannel(ch)
+
+	if ch.Type == discord.GuildCategory {
+		return
+	}
+
+	if s.ChannelMuted(ch.ID) {
+		w.stateClass = "muted"
+		w.Style.AddClass("muted")
+		return
+	}
+
+	if rs := s.FindLastRead(ch.ID); rs != nil {
+		w.unread = ch.LastMessageID != rs.LastMessageID
+		pinged := w.unread && rs.MentionCount > 0
+
+		if !w.unread && pinged {
+			pinged = false
+		}
+
+		switch {
+		case pinged:
+			w.stateClass = "pinged"
+		case w.unread:
+			w.stateClass = "unread"
+		}
+
+		if w.stateClass != "" {
+			w.Style.AddClass(w.stateClass)
+		}
+	}
+
+	return
 }
 
 func newChannel(ch discord.Channel) *Channel {

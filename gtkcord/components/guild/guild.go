@@ -2,6 +2,7 @@ package guild
 
 import (
 	"html"
+	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -21,14 +22,9 @@ const (
 )
 
 type Guild struct {
-	Guilds *Guilds
-	Parent *Guild
-
 	gtkutils.ExtendedWidget
 	Row   *gtk.ListBoxRow
 	Style *gtk.StyleContext
-
-	Folder *GuildFolder
 
 	Image *gtk.Image
 	IURL  string
@@ -39,6 +35,9 @@ type Guild struct {
 	Name string
 
 	stateClass string
+
+	unreadChs map[discord.Snowflake]bool
+	unreadMu  sync.Mutex
 }
 
 func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (*Guild, error) {
@@ -105,7 +104,7 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 			unread := true
 			pinged := rs.MentionCount > 0
 
-			guild.setUnread(s, unread, pinged)
+			guild.setUnread(unread, pinged)
 		}
 	}()
 
@@ -141,6 +140,12 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 		return nil
 	}
 
+	guild.unreadMu.Lock()
+	defer guild.unreadMu.Unlock()
+
+	guild.unreadChs = map[discord.Snowflake]bool{}
+	var found *gateway.ReadState
+
 	for _, ch := range channels {
 		// in a guild, only text channels matter:
 		if ch.Type != discord.GuildText {
@@ -151,26 +156,19 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 			if ch.LastMessageID == rs.LastMessageID {
 				continue
 			}
+			pinged := rs.MentionCount > 0
 
-			return rs
+			guild.unreadChs[ch.ID] = pinged
+			if found == nil || pinged {
+				found = rs
+			}
 		}
 	}
 
-	return nil
+	return found
 }
 
-func (guild *Guild) setUnread(s *ningen.State, unread, pinged bool) {
-	if s.GuildMuted(guild.ID, false) {
-		return
-	}
-
-	if !unread && guild.Folder == nil {
-		if rs := guild.containsUnreadChannel(s); rs != nil {
-			unread = true
-			pinged = rs.MentionCount > 0
-		}
-	}
-
+func (guild *Guild) setUnread(unread, pinged bool) {
 	switch {
 	case pinged:
 		guild.setClass("pinged")
@@ -179,21 +177,43 @@ func (guild *Guild) setUnread(s *ningen.State, unread, pinged bool) {
 	default:
 		guild.setClass("")
 	}
-
-	if guild.Parent != nil {
-		for _, guild := range guild.Parent.Folder.Guilds {
-			unread := guild.stateClass == "unread"
-			pinged := guild.stateClass == "pinged"
-
-			if unread || pinged {
-				guild.Parent.setUnread(s, true, pinged)
-				return
-			}
-		}
-
-		guild.Parent.setUnread(s, false, false)
-	}
 }
+
+// func (guild *Guild) setUnread(s *ningen.State, unread, pinged bool) {
+// 	if s.GuildMuted(guild.ID, false) {
+// 		return
+// 	}
+
+// 	if !unread && guild.Folder == nil {
+// 		if rs := guild.containsUnreadChannel(s); rs != nil {
+// 			unread = true
+// 			pinged = rs.MentionCount > 0
+// 		}
+// 	}
+
+// 	switch {
+// 	case pinged:
+// 		guild.setClass("pinged")
+// 	case unread:
+// 		guild.setClass("unread")
+// 	default:
+// 		guild.setClass("")
+// 	}
+
+// 	if guild.Parent != nil {
+// 		for _, guild := range guild.Parent.Folder.Guilds {
+// 			unread := guild.stateClass == "unread"
+// 			pinged := guild.stateClass == "pinged"
+
+// 			if unread || pinged {
+// 				guild.Parent.setUnread(s, true, pinged)
+// 				return
+// 			}
+// 		}
+
+// 		guild.Parent.setUnread(s, false, false)
+// 	}
+// }
 
 func escape(str string) string {
 	return html.EscapeString(str)

@@ -123,39 +123,3 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 
 	return channels
 }
-
-func createChannelRead(ch discord.Channel, s *ningen.State) (w *Channel) {
-	w = newChannel(ch)
-
-	if ch.Type == discord.GuildCategory {
-		return
-	}
-
-	if s.ChannelMuted(ch.ID) {
-		w.stateClass = "muted"
-		w.Style.AddClass("muted")
-		return
-	}
-
-	if rs := s.FindLastRead(ch.ID); rs != nil {
-		w.unread = ch.LastMessageID != rs.LastMessageID
-		pinged := w.unread && rs.MentionCount > 0
-
-		if !w.unread && pinged {
-			pinged = false
-		}
-
-		switch {
-		case pinged:
-			w.stateClass = "pinged"
-		case w.unread:
-			w.stateClass = "unread"
-		}
-
-		if w.stateClass != "" {
-			w.Style.AddClass(w.stateClass)
-		}
-	}
-
-	return
-}

@@ -84,6 +84,8 @@ type State struct {
 	*gtk.Box
 	Label *gtk.Label
 
+	ChannelID discord.Snowflake
+
 	mu sync.Mutex
 
 	Users []typingUser

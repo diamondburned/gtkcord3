@@ -10,6 +10,8 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
@@ -27,8 +29,6 @@ const (
 type Message struct {
 	*gtk.ListBoxRow
 	style *gtk.StyleContext
-
-	Messages *Messages
 
 	Nonce    string
 	ID       discord.Snowflake
@@ -62,17 +62,15 @@ type Message struct {
 	Condensed      bool
 	CondenseOffset time.Duration
 
+	OnUserClick func(m *Message)
+
 	busy int32
 }
 
-func (msgs *Messages) newMessage(m discord.Message) (*Message, error) {
+func newMessage(s *ningen.State, m discord.Message) *Message {
 	defer log.Benchmark("newMessage")()
 
-	message, err := msgs.newMessageCustom(m)
-	if err != nil {
-		return nil, err
-	}
-
+	message := newMessageCustom(m)
 	defer message.markBusy()()
 
 	// Message without a valid ID is probably a sending message. Either way,
@@ -109,16 +107,16 @@ func (msgs *Messages) newMessage(m discord.Message) (*Message, error) {
 	}
 
 	if messageText == "" {
-		go message.UpdateContent(m)
+		go message.UpdateContent(s, m)
 	} else {
 		message.updateContent(`<i>` + messageText + `</i>`)
 		message.setAvailable(false)
 	}
 
-	return message, nil
+	return message
 }
 
-func (msgs *Messages) newMessageCustom(m discord.Message) (message *Message, err error) {
+func newMessageCustom(m discord.Message) (message *Message) {
 	icon := icons.GetIcon("user-info", AvatarSize)
 
 	// What the fuck?
@@ -158,7 +156,6 @@ func (msgs *Messages) newMessageCustom(m discord.Message) (message *Message, err
 		`)
 
 		message = &Message{
-			Messages:  msgs,
 			Nonce:     m.Nonce,
 			ID:        m.ID,
 			AuthorID:  m.Author.ID,
@@ -198,9 +195,12 @@ func (msgs *Messages) newMessageCustom(m discord.Message) (message *Message, err
 		message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 		message.avatarEv.Add(message.avatar)
 		message.avatarEv.Connect("button_press_event", func() {
-			p := msgs.c.SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
-			p.SetRelativeTo(message.avatar)
-			p.Show()
+			if message.OnUserClick != nil {
+				message.OnUserClick(message)
+			}
+			// p := msgs.c.SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
+			// p.SetRelativeTo(message.avatar)
+			// p.Show()
 		})
 
 		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
@@ -238,7 +238,7 @@ func (msgs *Messages) newMessageCustom(m discord.Message) (message *Message, err
 		message.setCondensed()
 	})
 
-	return message, nil
+	return
 }
 
 func (m *Message) markBusy() func() {
@@ -314,44 +314,48 @@ func (m *Message) setCondensed() {
 	m.main.Add(m.right)
 }
 
-func (m *Message) updateAuthorName(n discord.Member) {
-	defer m.markBusy()()
+func (m *Message) UpdateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
+	semaphore.Async(m.updateAuthor, s, gID, u)
+}
 
-	var name = `<span weight="bold">` + html.EscapeString(n.User.Username) + `</span>`
-
-	if n.Nick != "" {
-		name = `<span weight="bold">` + html.EscapeString(n.Nick) + `</span>`
+func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
+	if gID.Valid() {
+		n, err := s.Store.Member(gID, u.ID)
+		if err != nil {
+			go s.RequestMember(gID, u.ID)
+		} else {
+			m.updateMember(s, gID, *n)
+			return
+		}
 	}
 
-	if gID := m.Messages.GuildID; gID.Valid() {
-		if g, err := m.Messages.c.State.Guild(gID); err == nil {
+	m.author.SetMarkup(`<span weight="bold">` + html.EscapeString(u.Username) + `</span>`)
+}
+
+func (m *Message) UpdateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
+	semaphore.Async(m.updateMember, s, gID, n)
+}
+
+func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
+	var name = html.EscapeString(n.User.Username)
+	if n.Nick != "" {
+		name = html.EscapeString(n.Nick)
+	}
+
+	if gID.Valid() {
+		if g, err := s.Store.Guild(gID); err == nil {
 			if color := discord.MemberColor(*g, n); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
 		}
 	}
 
-	semaphore.Async(m.author.SetMarkup, name)
+	m.author.SetMarkup(`<span weight="bold">` + name + `</span>`)
 }
 
-func (m *Message) UpdateAuthor(user discord.User) {
+func (m *Message) UpdateAvatar(url string) {
 	defer m.markBusy()()
 
-	if guildID := m.Messages.GuildID; guildID.Valid() {
-		n, err := m.Messages.c.State.Store.Member(guildID, user.ID)
-		if err != nil {
-			go m.Messages.c.requestMember(guildID, user.ID)
-		} else {
-			// Update the author name:
-			m.updateAuthorName(*n)
-			m.markBusy()
-		}
-	} else {
-		semaphore.Async(m.author.SetMarkup,
-			`<span weight="bold">`+html.EscapeString(user.Username)+`</span>`)
-	}
-
-	var url = user.AvatarURL()
 	if url == "" {
 		url = AvatarFallbackURL
 	}
@@ -378,17 +382,16 @@ func (m *Message) updateContent(s string) {
 	})
 }
 
-func (m *Message) UpdateContent(update discord.Message) {
+func (m *Message) UpdateContent(s *ningen.State, update discord.Message) {
 	defer m.markBusy()()
-	c := m.Messages.c
 
 	if update.Content != "" {
 		m.assertContent()
-		c.Parser.ParseMessage(c.State.Store, &update, []byte(update.Content), m.content)
+		md.ParseMessage(s, &update, []byte(update.Content), m.content)
 	}
 
 	for _, mention := range update.Mentions {
-		if mention.ID == c.Me.ID {
+		if mention.ID == s.Ready.User.ID {
 			semaphore.Async(m.style.AddClass, "mentioned")
 			return
 		}
@@ -420,7 +423,7 @@ func (m *Message) assertContent() {
 	}
 }
 
-func (m *Message) UpdateExtras(update discord.Message) {
+func (m *Message) UpdateExtras(s *ningen.State, update discord.Message) {
 	defer m.markBusy()()
 
 	semaphore.IdleMust(func() {
@@ -429,12 +432,10 @@ func (m *Message) UpdateExtras(update discord.Message) {
 		}
 	})
 
-	c := m.Messages.c
-
 	// set to nil so the old slice can be GC'd
 	m.extras = nil
-	m.extras = append(m.extras, c.NewEmbed(update)...)
-	m.extras = append(m.extras, c.NewAttachment(update)...)
+	m.extras = append(m.extras, NewEmbed(s, update)...)
+	m.extras = append(m.extras, NewAttachment(update)...)
 
 	semaphore.Async(func() {
 		for _, extra := range m.extras {

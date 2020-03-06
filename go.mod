@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/Xuanwo/go-locale v0.1.0
 	github.com/alecthomas/chroma v0.7.1
-	github.com/diamondburned/arikawa v0.1.5
+	github.com/diamondburned/arikawa v0.1.6-0.20200305234944-6cd4b361ce56
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
 	github.com/gotk3/gotk3 v0.4.0

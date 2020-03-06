@@ -9,6 +9,8 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/gotk3/gotk3/gtk"
@@ -72,7 +74,7 @@ func sizeToURL(url string, w, h int) string {
 	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
 }
 
-func (c *Constructor) NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
+func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
 	// Discord's supported formats
 	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
 	var widgets = make([]gtkutils.ExtendedWidget, 0, len(msg.Attachments))
@@ -112,7 +114,7 @@ func validExt(url string, exts []string) bool {
 	return false
 }
 
-func (c *Constructor) NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
+func NewEmbed(s *ningen.State, msg discord.Message) []gtkutils.ExtendedWidget {
 	if len(msg.Embeds) == 0 {
 		return nil
 	}
@@ -120,7 +122,7 @@ func (c *Constructor) NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 	var embeds = make([]gtkutils.ExtendedWidget, 0, len(msg.Embeds))
 
 	for _, embed := range msg.Embeds {
-		w := c.newEmbed(msg, embed)
+		w := newEmbed(s, msg, embed)
 		if w == nil {
 			continue
 		}
@@ -131,10 +133,10 @@ func (c *Constructor) NewEmbed(msg discord.Message) []gtkutils.ExtendedWidget {
 	return embeds
 }
 
-func (c *Constructor) newEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+func newEmbed(s *ningen.State, msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	switch embed.Type {
 	case discord.NormalEmbed, discord.LinkEmbed:
-		return c.newNormalEmbed(msg, embed)
+		return newNormalEmbed(s, msg, embed)
 	case discord.ImageEmbed:
 		return newImageEmbed(embed)
 	case discord.VideoEmbed:
@@ -156,7 +158,9 @@ func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
 	return img
 }
 
-func (c *Constructor) newNormalEmbed(msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+func newNormalEmbed(
+	s *ningen.State, msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+
 	main := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	semaphore.IdleMust(main.SetHAlign, gtk.ALIGN_START)
 
@@ -212,7 +216,7 @@ func (c *Constructor) newNormalEmbed(msg discord.Message, embed discord.Embed) g
 	if embed.Description != "" {
 		txtv := semaphore.IdleMust(gtk.TextViewNew).(*gtk.TextView)
 		txtb := semaphore.IdleMust(txtv.GetBuffer).(*gtk.TextBuffer)
-		c.Parser.ParseMessage(c.State.Store, &msg, []byte(embed.Description), txtb)
+		md.ParseMessage(s, &msg, []byte(embed.Description), txtb)
 
 		semaphore.IdleMust(func() {
 			txtv.SetCursorVisible(false)

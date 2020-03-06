@@ -1,4 +1,4 @@
-package message
+package popup
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -26,6 +28,19 @@ const (
 	OnlineColor  = 0x43B581
 )
 
+func init() {
+	md.ChannelPressed = ChannelMentionPressed
+	md.UserPressed = UserMentionPressed
+}
+
+func UserMentionPressed(ev *gdk.EventButton, user discord.GuildUser) {
+	log.Println("User mention pressed:", user.Username)
+}
+
+func ChannelMentionPressed(ev *gdk.EventButton, ch discord.Channel) {
+	log.Println("Channel mention pressed:", ch.Name)
+}
+
 type UserPopup struct {
 	*gtk.Popover
 	Main *gtk.Box
@@ -41,14 +56,6 @@ type UserPopup struct {
 	Username *gtk.Label
 
 	Activity *UserPopupActivity
-}
-
-func userMentionPressed(ev *gdk.EventButton, user discord.GuildUser) {
-	log.Println("User mention pressed:", user.Username)
-}
-
-func channelMentionPressed(ev *gdk.EventButton, ch discord.Channel) {
-	log.Println("Channel mention pressed:", ch.Name)
 }
 
 // not thread safe
@@ -221,7 +228,7 @@ type UserPopupRole struct {
 }
 
 // thread-safe
-func (c *Constructor) NewUserPopupRoles(
+func NewUserPopupRoles(s *ningen.State,
 	guild discord.Snowflake, ids []discord.Snowflake) (*UserPopupRoles, error) {
 
 	// TODO: optimize this
@@ -256,7 +263,7 @@ func (c *Constructor) NewUserPopupRoles(
 	popup.Roles = roles
 
 	for _, id := range ids {
-		r, err := c.State.Role(guild, id)
+		r, err := s.Role(guild, id)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to get role")
 		}
@@ -297,17 +304,17 @@ func (c *Constructor) NewUserPopupRoles(
 	return popup, nil
 }
 
-func (c *Constructor) SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Popover {
+func SpawnUserPopup(s *ningen.State, guildID, userID discord.Snowflake) *gtk.Popover {
 	popup := NewUserPopup(nil)
 
 	go func() {
-		u, err := c.State.User(userID)
+		u, err := s.User(userID)
 		if err != nil {
 			log.Errorln("Failed to get user:", err)
 			return
 		}
 
-		p, err := c.State.Presence(guildID, u.ID)
+		p, err := s.Presence(guildID, u.ID)
 		if err == nil {
 			popup.UpdateStatus(p.Status)
 			popup.UpdateActivity(p.Game)
@@ -320,10 +327,10 @@ func (c *Constructor) SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Pop
 
 		// fetch above presence if error not nil
 		if err != nil {
-			c.requestMember(guildID, userID)
+			s.RequestMember(guildID, userID)
 		}
 
-		m, err := c.State.Member(guildID, u.ID)
+		m, err := s.Member(guildID, u.ID)
 		if err != nil {
 			popup.Update(*u)
 			return
@@ -331,7 +338,7 @@ func (c *Constructor) SpawnUserPopup(guildID, userID discord.Snowflake) *gtk.Pop
 
 		popup.UpdateMember(*m)
 
-		r, err := c.NewUserPopupRoles(guildID, m.RoleIDs)
+		r, err := NewUserPopupRoles(s, guildID, m.RoleIDs)
 		if err != nil {
 			log.Errorln("Failed to get roles:", err)
 			return
