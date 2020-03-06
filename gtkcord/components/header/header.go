@@ -1,4 +1,4 @@
-package gtkcord
+package header
 
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
@@ -12,7 +12,7 @@ type Header struct {
 	Main *gtk.Box
 
 	// Grid 1, on top of guilds
-	Hamburger *HeaderMenu
+	Hamburger *Hamburger
 
 	// Grid 2, on top of channels
 	GuildName *gtk.Label

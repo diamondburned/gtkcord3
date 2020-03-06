@@ -9,11 +9,11 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/diamondburned/gtkcord3/ningen"
@@ -92,8 +92,6 @@ func init() {
 const SpinnerSize = 56
 
 type Application struct {
-	*ningen.State
-
 	// Main Grid
 	Grid *gtk.Grid
 	// <item> <separator> <item> <separator> <item>
@@ -108,140 +106,74 @@ type Application struct {
 	busy sync.Mutex
 }
 
+// New is not thread-safe.
 func New() (*Application, error) {
+	var a = &Application{}
 
+	// Pre-make the grid but don't use it:
+	g, err := gtk.GridNew()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create grid")
+	}
+	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
+	g.SetRowHomogeneous(true)
+	a.Grid = g
+
+	// Instead, use the spinner:
+	s, err := animations.NewSpinner(75)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create spinner")
+	}
+
+	window.Display(s)
+	window.Resize(1200, 850)
+	window.ShowAll()
+
+	return a, nil
 }
 
 func (a *Application) setCol(w gtk.IWidget, n int) {
 	a.Grid.Attach(w, n, 0, 1, 1)
 }
 
-func New() error {
-	if App.done != nil {
-		return nil
-	}
-
-	App.done = make(chan struct{})
-	a := App
-
-	g, err := gtk.GridNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create grid")
-	}
-	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
-	g.SetRowHomogeneous(true)
-	a.Grid = g
-
-	// Instead of adding the above grid, we should add the spinning circle.
-	sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create spinner box")
-	}
-	sbox.SetVAlign(gtk.ALIGN_CENTER)
-	sbox.SetHAlign(gtk.ALIGN_CENTER)
-	sbox.SetSizeRequest(50, 50)
-
-	// Add the spinner into the window instead of the spinner:
-	window.Display(sbox)
-	a.sbox = sbox
-
-	s, err := gtk.SpinnerNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create spinner")
-	}
-	s.SetVAlign(gtk.ALIGN_CENTER)
-	s.SetHAlign(gtk.ALIGN_CENTER)
-	s.SetSizeRequest(50, 50)
-	s.Start()
-
-	sbox.Add(s)
-	a.spinner = s
-
-	window.Resize(1200, 850)
-	window.ShowAll()
-
-	return nil
-}
-
-func Ready(s *ningen.State) error {
+func (a *Application) Ready(s *ningen.State) error {
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln("Discord error:", err)
 	}
 
-	must(window.Resize, 1200, 850)
+	semaphore.IdleMust(window.Resize, 1200, 850)
 
-	// Create a new header placeholder:
-	h, err := newHeader()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create header")
-	}
-	App.Header = h
-	must(window.HeaderDisplay, h)
+	// // Create a new header placeholder:
+	// h, err := newHeader()
+	// if err != nil {
+	// 	return errors.Wrap(err, "Failed to create header")
+	// }
+	// App.Header = h
+	// must(window.HeaderDisplay, h)
 
 	// Set variables, etc.
-	App.State = s
-	App.MessageNew = message.NewConstructor(s.State)
-	App.MessageNew.Parser = md.NewParser(s.State)
-
-	u, err := s.Me()
+	g, err := guild.NewGuilds(s)
 	if err != nil {
-		return errors.Wrap(err, "Failed to get current user")
+		return errors.Wrap(err, "Failed to make guilds")
 	}
-	App.Me = u
-	App.Header.Hamburger.User.Update(*u)
-	App.Header.Hamburger.User.UpdateStatus(s.Ready.Settings.Status)
-
-	{
-		gw, err := gtk.ScrolledWindowNew(nil, nil)
-		if err != nil {
-			return errors.Wrap(err, "Failed to make guilds scrollbar")
-		}
-		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-
-		// spawned by passing nil to loadGuild
-		ps := newPrivateChannels(App.State.Ready.PrivateChannels)
-		App.Privates = ps
-
-		gs, err := newGuilds(ps.GuildRow)
-		if err != nil {
-			return errors.Wrap(err, "Failed to make guilds view")
-		}
-		App.Guilds = gs
-		gtkutils.InjectCSS(gs, "guilds", "")
-
-		must(gw.Add, gs)
-		must(App.Grid.Add, gw)
-
-		s1, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		s1.Show()
-		must(App.Grid.Attach, s1, 1, 0, 1, 1)
-
-		s2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		s2.Show()
-		must(App.Grid.Attach, s2, 3, 0, 1, 1)
+	m, err := message.NewMessages(s)
+	if err != nil {
+		return errors.Wrap(err, "Failed to make messages")
 	}
 
-	// Finalize the window:
-	must(window.Display, App.Grid)
-	must(window.ShowAll)
+	a.Guilds = g
+	a.Channels = channel.NewChannels(s)
+	a.Messages = m
 
-	// Finalize the spinner so it can be reused:
-	must(App.spinner.Stop)
-	must(App.sbox.SetHExpand, true)
-	must(App.sbox.SetHAlign, gtk.ALIGN_CENTER)
-	must(App.sbox.SetVAlign, gtk.ALIGN_CENTER)
+	// App.Header.Hamburger.User.Update(*u)
+	// App.Header.Hamburger.User.UpdateStatus(s.Ready.Settings.Status)
 
-	// Start the completion queue:
-	App.completionQueue = make(chan func(), 1)
-	go func() {
-		for fn := range App.completionQueue {
-			fn()
-		}
-	}()
-
-	App.hookEvents()
-	App.hookReads()
+	semaphore.IdleMust(func() {
+		a.setCol(a.Guilds, 0)
+		window.Display(a.Grid)
+		window.ShowAll()
+	})
 
 	// Start the garbage collector:
 	// (Too unstable right now)

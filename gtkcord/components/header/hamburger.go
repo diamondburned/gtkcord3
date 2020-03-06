@@ -1,25 +1,26 @@
-package gtkcord
+package header
 
 import (
+	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/message"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
-type HeaderMenu struct {
+type Hamburger struct {
 	gtkutils.ExtendedWidget
-	User *message.UserPopup
+	User *popup.UserPopup
 
 	// About
 }
 
-func newHeaderMenu() (*HeaderMenu, error) {
+func newHeaderMenu() (*Hamburger, error) {
 	b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to make hamburger box")
 	}
-	b.SetSizeRequest(IconSize+IconPadding*2, -1)
+	b.SetSizeRequest(channel.ChannelsWidth, -1)
 
 	mb, err := gtk.MenuButtonNew()
 	if err != nil {
@@ -35,13 +36,13 @@ func newHeaderMenu() (*HeaderMenu, error) {
 	mb.Add(i)
 
 	// Header box
-	u := message.NewUserPopup(mb)
+	u := popup.NewUserPopup(mb)
 	u.Main.ShowAll()
 
 	mb.SetPopover(u.Popover)
 	mb.SetUsePopover(true)
 
-	hm := &HeaderMenu{
+	hm := &Hamburger{
 		ExtendedWidget: b,
 		User:           u,
 	}

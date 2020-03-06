@@ -104,10 +104,14 @@ func initGuilds(g *Guilds) {
 	dm := NewPMButton()
 
 	semaphore.IdleMust(func() {
+		gw, _ := gtk.ScrolledWindowNew(nil, nil)
+		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+
 		l, _ := gtk.ListBoxNew()
 		l.SetActivateOnSingleClick(true)
 		gtkutils.InjectCSSUnsafe(l, "guilds", "")
 
+		gw.Add(l)
 		g.ListBox = l
 
 		// Add the button to the first of the list:
