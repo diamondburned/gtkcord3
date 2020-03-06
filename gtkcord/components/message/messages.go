@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
