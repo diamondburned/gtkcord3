@@ -33,7 +33,8 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 	}
 
 	if v, ok := iconMap[key]; ok {
-		return v
+		p, _ := gdk.PixbufCopy(v)
+		return p
 	}
 
 	pb := semaphore.IdleMust(icons.LoadIcon, icon, size,

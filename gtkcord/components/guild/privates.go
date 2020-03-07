@@ -47,9 +47,9 @@ func NewPMButton() (dm *DMButton) {
 }
 
 func (dm *DMButton) setUnread(unread bool) {
-	var class string
-	if unread {
-		class = "pinged"
-	}
-	gtkutils.DiffClassUnsafe(&dm.class, class, dm.Style)
+	// var class string
+	// if unread {
+	// 	class = "pinged"
+	// }
+	// gtkutils.DiffClass(&dm.class, class, dm.Style)
 }

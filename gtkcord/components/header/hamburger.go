@@ -1,26 +1,29 @@
 package header
 
 import (
-	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 type Hamburger struct {
 	gtkutils.ExtendedWidget
-	User *popup.UserPopup
+	Popover *popup.Popover
 
 	// About
 }
 
-func newHeaderMenu() (*Hamburger, error) {
+const HeaderWidth = 240
+
+func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to make hamburger box")
 	}
-	b.SetSizeRequest(channel.ChannelsWidth, -1)
+	b.SetSizeRequest(guild.IconSize+guild.IconPadding*2, -1)
 
 	mb, err := gtk.MenuButtonNew()
 	if err != nil {
@@ -36,15 +39,16 @@ func newHeaderMenu() (*Hamburger, error) {
 	mb.Add(i)
 
 	// Header box
-	u := popup.NewUserPopup(mb)
-	u.Main.ShowAll()
+	p := popup.NewDynamicPopover(mb, func() gtkutils.WidgetDestroyer {
+		return popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
+	})
 
-	mb.SetPopover(u.Popover)
+	mb.SetPopover(p.Popover)
 	mb.SetUsePopover(true)
 
 	hm := &Hamburger{
 		ExtendedWidget: b,
-		User:           u,
+		Popover:        p,
 	}
 	hm.ShowAll()
 

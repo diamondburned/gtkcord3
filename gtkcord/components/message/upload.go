@@ -8,8 +8,8 @@ import (
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"

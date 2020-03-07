@@ -41,7 +41,7 @@ var (
 	fmtter   = Formatter{}
 	css      = map[chroma.TokenType]string{}
 	lexerMap = sync.Map{}
-	pool     = newPool(p)
+	pool     = newPool()
 )
 
 var ChannelPressed func(ev *gdk.EventButton, ch discord.Channel)

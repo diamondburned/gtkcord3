@@ -33,7 +33,7 @@ func init() {
 		for call := range idleAdds {
 			call := call
 
-			glib.IdleAdd(func() {
+			glib.IdleAdd(func(call *idleCall) {
 				// now := time.Now()
 
 				log.Debugln(call.trace, "main thread")
@@ -54,7 +54,7 @@ func init() {
 				// if delta := time.Now().Sub(now); delta > time.Millisecond {
 				// 	log.Infoln(call.trace, "took", time.Now().Sub(now))
 				// }
-			})
+			}, call)
 		}
 	}()
 }

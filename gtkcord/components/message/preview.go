@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"

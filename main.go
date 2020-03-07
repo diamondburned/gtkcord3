@@ -5,12 +5,12 @@ import (
 	"os"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
-	"github.com/diamondburned/gtkcord3/gtkcord/login"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/keyring"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/pkg/errors"
 )
 
@@ -67,12 +67,14 @@ func Login(finish func(s *ningen.State)) error {
 	return nil
 }
 
-func Finish(s *ningen.State) {
-	// Store the token:
-	keyring.Set(s.Token)
+func Finish(a *gtkcord.Application) func(s *ningen.State) {
+	return func(s *ningen.State) {
+		// Store the token:
+		keyring.Set(s.Token)
 
-	if err := gtkcord.Ready(s); err != nil {
-		log.Fatalln("Failed to get gtkcord ready:", err)
+		if err := a.Ready(s); err != nil {
+			log.Fatalln("Failed to get gtkcord ready:", err)
+		}
 	}
 }
 
@@ -84,13 +86,14 @@ func main() {
 		log.Fatalln("Failed to initialize Gtk3 window:", err)
 	}
 
-	// Spawn the spinning circle:
-	if err := semaphore.IdleMust(gtkcord.Init); err != nil {
-		log.Fatalln("Can't create a Gtk3 window:", err.(error))
+	v, err := semaphore.Idle(gtkcord.New)
+	if err != nil {
+		log.Fatalln("Can't create a Gtk3 window:", err)
 	}
+	a := v.(*gtkcord.Application)
 
 	// Try and log in:
-	if err := Login(Finish); err != nil {
+	if err := Login(Finish(a)); err != nil {
 		log.Fatalln("Failed to login:", err)
 	}
 

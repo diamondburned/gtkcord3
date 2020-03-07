@@ -24,7 +24,9 @@ type GuildFolder struct {
 	Revealed bool
 }
 
-func (g *Guilds) newGuildFolder(s *ningen.State, folder gateway.GuildFolder) (*GuildFolder, error) {
+func newGuildFolder(
+	s *ningen.State, folder gateway.GuildFolder, onSelect func(g *Guild)) (*GuildFolder, error) {
+
 	if folder.Color == 0 {
 		folder.Color = 0x7289DA
 	}
@@ -80,7 +82,7 @@ func (g *Guilds) newGuildFolder(s *ningen.State, folder gateway.GuildFolder) (*G
 
 		guildList.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 			row := Folder.Guilds[r.GetIndex()]
-			g.onSelect(row)
+			onSelect(row)
 		})
 	})
 

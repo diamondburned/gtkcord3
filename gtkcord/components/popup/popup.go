@@ -41,12 +41,61 @@ func ChannelMentionPressed(ev *gdk.EventButton, ch discord.Channel) {
 	log.Println("Channel mention pressed:", ch.Name)
 }
 
-type UserPopup struct {
+type Popover struct {
 	*gtk.Popover
-	Main *gtk.Box
-
 	Style    *gtk.StyleContext
 	oldClass string
+
+	Children gtkutils.WidgetDestroyer
+}
+
+func NewPopover(relative gtk.IWidget) *Popover {
+	p, _ := gtk.PopoverNew(relative)
+	style, _ := p.GetStyleContext()
+
+	gtkutils.InjectCSSUnsafe(p, "user-info", `
+		popover.user-info { padding: 0; }
+	`)
+
+	return &Popover{
+		Popover: p,
+		Style:   style,
+	}
+}
+
+func (p *Popover) SetChildren(children gtkutils.WidgetDestroyer) {
+	if p.Children != nil {
+		p.Popover.Remove(p.Children)
+	}
+	p.Children = children
+	p.Popover.Add(children)
+}
+
+func NewDynamicPopover(
+	relative gtkutils.WidgetConnector, create func() gtkutils.WidgetDestroyer) *Popover {
+
+	p := NewPopover(relative)
+	p.Connect("closed", func() {
+		p.Children.Destroy()
+		p.Children = nil
+	})
+	relative.Connect("clicked", func() {
+		if w := create(); w != nil {
+			p.SetChildren(create())
+			p.ShowAll()
+		}
+	})
+
+	return p
+}
+
+type UserPopup struct {
+	*Popover
+	*UserPopupBody
+}
+
+type UserPopupBody struct {
+	*gtk.Box
 
 	Avatar      *gtk.Image
 	AvatarStyle *gtk.StyleContext // .avatar
@@ -60,15 +109,50 @@ type UserPopup struct {
 
 // not thread safe
 func NewUserPopup(relative gtk.IWidget) *UserPopup {
-	p, _ := gtk.PopoverNew(relative)
-	style, _ := p.GetStyleContext()
+	return NewUserPopupCustom(relative, NewUserPopupBody())
+}
 
-	gtkutils.InjectCSSUnsafe(p, "user-info", `
-		popover.user-info { padding: 0; }
-	`)
+// not thread safe
+func NewUserPopupCustom(relative gtk.IWidget, body *UserPopupBody) *UserPopup {
+	p := NewPopover(relative)
+	p.SetChildren(body)
 
+	return &UserPopup{
+		Popover:       p,
+		UserPopupBody: body,
+	}
+}
+
+func (b *UserPopup) setClass(class string) {
+	if b.oldClass != "" {
+		b.Style.RemoveClass(b.oldClass)
+	}
+
+	if class == "" {
+		return
+	}
+
+	b.oldClass = class
+	b.Style.AddClass(class)
+}
+
+func (b *UserPopup) UpdateActivity(a *discord.Activity) {
+	b.UserPopupBody.UpdateActivity(a)
+
+	if a == nil {
+		b.setClass("")
+		return
+	}
+
+	if strings.HasPrefix(a.Assets.LargeImage, "spotify:") {
+		b.setClass("spotify")
+	} else {
+		b.setClass("")
+	}
+}
+
+func NewUserPopupBody() *UserPopupBody {
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	p.Add(main)
 
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	b.SetSizeRequest(PopupWidth, -1)
@@ -93,37 +177,22 @@ func NewUserPopup(relative gtk.IWidget) *UserPopup {
 	l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 	b.Add(l)
 
-	return &UserPopup{
-		Popover:     p,
-		Main:        main,
-		Style:       style,
+	return &UserPopupBody{
+		Box:         main,
 		Avatar:      iAvatar,
 		AvatarStyle: sAvatar,
 		Username:    l,
 	}
 }
 
-func (b *UserPopup) formatUser(u discord.User) string {
+func formatUser(u discord.User) string {
 	return fmt.Sprintf(
 		"<span weight=\"bold\">%s</span><span size=\"smaller\">#%s</span>",
 		html.EscapeString(u.Username), u.Discriminator,
 	)
 }
 
-func (b *UserPopup) setClass(class string) {
-	if b.oldClass != "" {
-		b.Style.RemoveClass(b.oldClass)
-	}
-
-	if class == "" {
-		return
-	}
-
-	b.oldClass = class
-	b.Style.AddClass(class)
-}
-
-func (b *UserPopup) setAvatarClass(class string) {
+func (b *UserPopupBody) setAvatarClass(class string) {
 	if b.lastAvatarClass != "" {
 		b.AvatarStyle.RemoveClass(b.lastAvatarClass)
 		b.lastAvatarClass = ""
@@ -137,31 +206,35 @@ func (b *UserPopup) setAvatarClass(class string) {
 	b.AvatarStyle.AddClass(class)
 }
 
-func (b *UserPopup) Update(u discord.User) {
-	b.Username.SetMarkup(b.formatUser(u))
+func (b *UserPopupBody) Update(u discord.User) {
+	b.Username.SetMarkup(formatUser(u))
 
 	if u.Avatar != "" {
 		go b.updateAvatar(u.AvatarURL())
 	}
 }
 
-func (b *UserPopup) UpdateMember(m discord.Member) {
-	var body = b.formatUser(m.User)
-	if m.Nick != "" {
+func (b *UserPopupBody) UpdateMember(m discord.Member) {
+	b.UpdateMemberPart(m.Nick, m.User)
+}
+
+func (b *UserPopupBody) UpdateMemberPart(nick string, u discord.User) {
+	var body = formatUser(u)
+	if nick != "" {
 		body = fmt.Sprintf(
 			`<span weight="bold">%s</span>`+"\n"+`<span size="smaller">%s</span>`,
-			html.EscapeString(m.Nick), body,
+			html.EscapeString(nick), body,
 		)
 	}
 
 	b.Username.SetMarkup(body)
 
-	if m.User.Avatar != "" {
-		go b.updateAvatar(m.User.AvatarURL())
+	if u.Avatar != "" {
+		go b.updateAvatar(u.AvatarURL())
 	}
 }
 
-func (b *UserPopup) updateAvatar(url string) {
+func (b *UserPopupBody) updateAvatar(url string) {
 	err := cache.SetImageScaled(
 		url+"?size=64", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
 	if err != nil {
@@ -170,34 +243,34 @@ func (b *UserPopup) updateAvatar(url string) {
 	}
 }
 
-func (b *UserPopup) UpdateActivity(a *discord.Activity) {
+func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	if a == nil {
 		if b.Activity != nil {
-			semaphore.IdleMust(b.Main.Remove, b.Activity)
+			semaphore.IdleMust(b.Box.Remove, b.Activity)
 			b.Activity = nil
-			b.setClass("")
+			// b.setClass("")
 		}
 		return
 	}
 
 	if b.Activity == nil {
 		b.Activity = semaphore.IdleMust(NewUserPopupActivity).(*UserPopupActivity)
-		semaphore.IdleMust(b.Main.Add, b.Activity)
+		semaphore.IdleMust(b.Box.Add, b.Activity)
 	}
 
 	b.Activity.Update(*a)
 
 	if strings.HasPrefix(a.Assets.LargeImage, "spotify:") {
-		b.setClass("spotify")
+		// b.setClass("spotify")
 		b.UpdateStatus(discord.UnknownStatus)
 	} else {
-		b.setClass("")
+		// b.setClass("")
 	}
 
-	semaphore.IdleMust(b.Main.ShowAll)
+	semaphore.IdleMust(b.Box.ShowAll)
 }
 
-func (b *UserPopup) UpdateStatus(status discord.Status) {
+func (b *UserPopupBody) UpdateStatus(status discord.Status) {
 	semaphore.IdleMust(func() {
 		switch status {
 		case discord.OnlineStatus:
@@ -344,9 +417,9 @@ func SpawnUserPopup(s *ningen.State, guildID, userID discord.Snowflake) *gtk.Pop
 			return
 		}
 
-		semaphore.IdleMust(popup.Main.Add, r)
-		semaphore.IdleMust(popup.Main.ShowAll)
+		semaphore.IdleMust(popup.Box.Add, r)
+		semaphore.IdleMust(popup.Box.ShowAll)
 	}()
 
-	return popup.Popover
+	return popup.Popover.Popover
 }

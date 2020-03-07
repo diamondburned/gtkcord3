@@ -14,6 +14,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	ChannelsWidth = 240
+	BannerHeight  = 135
+	LabelHeight   = 48
+
+	ChannelHash = "# "
+)
+
 type Channels struct {
 	gtkutils.ExtendedWidget
 	GuildID discord.Snowflake
@@ -72,7 +80,7 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 	})
 
 	state.OnReadChange = append(state.OnReadChange, chs.TraverseReadState)
-	return nil
+	return
 }
 
 // messageCreate handler for unreads
@@ -127,7 +135,7 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get guild channels")
 	}
-	channels = filterChannels(channels)
+	channels = filterChannels(chs.state.State, channels)
 
 	chs.busy.Lock()
 	defer chs.busy.Unlock()

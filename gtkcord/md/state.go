@@ -19,11 +19,10 @@ type match struct {
 	str      []byte
 }
 
-func newPool(p *Parser) sync.Pool {
+func newPool() sync.Pool {
 	return sync.Pool{
 		New: func() interface{} {
 			return &mdState{
-				p:      p,
 				fmtter: &Formatter{},
 				buffer: &bytes.Buffer{},
 			}
@@ -32,8 +31,6 @@ func newPool(p *Parser) sync.Pool {
 }
 
 type mdState struct {
-	p *Parser
-
 	m *discord.Message
 	d Discord
 

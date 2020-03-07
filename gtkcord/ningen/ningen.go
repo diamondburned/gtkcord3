@@ -225,7 +225,7 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 
 	// Announce that there's a read state change
 	for _, fn := range s.OnReadChange {
-		fn(st, true)
+		fn(s, st, true)
 	}
 }
 
@@ -248,7 +248,7 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 
 	// Announce that there's a read state change
 	for _, fn := range s.OnReadChange {
-		fn(st, false)
+		fn(s, st, false)
 	}
 
 	// Send over Ack.

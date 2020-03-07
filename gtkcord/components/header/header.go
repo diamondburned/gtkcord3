@@ -1,7 +1,11 @@
 package header
 
 import (
+	"html"
+
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
@@ -24,7 +28,15 @@ type Header struct {
 	ChannelTopic *gtk.Label
 }
 
-func newHeader() (*Header, error) {
+func NewHeader(s *ningen.State) (*Header, error) {
+	v, err := semaphore.Idle(newHeader, s)
+	if err != nil {
+		return nil, err
+	}
+	return v.(*Header), nil
+}
+
+func newHeader(s *ningen.State) (*Header, error) {
 	g, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create grid")
@@ -34,7 +46,7 @@ func newHeader() (*Header, error) {
 	 * Grid 1
 	 */
 
-	hamburger, err := newHeaderMenu()
+	hamburger, err := NewHeaderMenu(s)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create hamburger")
 	}
@@ -55,7 +67,7 @@ func newHeader() (*Header, error) {
 	}
 	label.SetXAlign(0.0)
 	label.SetMarginStart(15)
-	label.SetSizeRequest(ChannelsWidth-15, -1)
+	label.SetSizeRequest(HeaderWidth-15, -1)
 	label.SetLines(1)
 	label.SetLineWrap(true)
 	label.SetEllipsize(pango.ELLIPSIZE_END)
@@ -104,15 +116,16 @@ func newHeader() (*Header, error) {
 }
 
 func (h *Header) UpdateGuild(name string) {
-	async(h.GuildName.SetMarkup, bold(name))
+	semaphore.Async(h.GuildName.SetMarkup,
+		`<span weight="bold">`+html.EscapeString(name)+`</span>`)
 }
 
 func (h *Header) UpdateChannel(name, topic string) {
 	if name != "" {
-		name = bold(ChannelHash + name)
+		name = `<span weight="bold">` + "#" + html.EscapeString(name) + `</span>`
 	}
 
-	async(func() {
+	semaphore.Async(func() {
 		h.ChannelName.SetMarkup(name)
 		h.ChannelTopic.SetText(topic)
 	})

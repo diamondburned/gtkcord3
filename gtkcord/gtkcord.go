@@ -12,11 +12,12 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
-	"github.com/diamondburned/gtkcord3/gtkcord/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/gtkcord/window"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -43,61 +44,20 @@ func discordSettings() {
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	discordSettings()
-
-	// 	App = new(application)
 }
-
-// type application struct {
-// 	gtkutils.ExtendedWidget
-
-// 	Grid *gtk.Grid
-
-// 	State *ningen.State
-
-// 	// self stufff
-// 	Me *discord.User
-
-// 	MessageNew *message.Constructor
-
-// 	Header *Header
-
-// 	// Dynamic sidebars and main pages
-// 	Sidebar  gtkutils.ExtendedWidget
-// 	Messages gtkutils.ExtendedWidget
-
-// 	// Stuff
-// 	Privates *PrivateChannels
-// 	Guilds   *Guilds
-
-// 	// current stuff
-// 	Guild   *Guild
-// 	Channel *Channel
-
-// 	// nil after finalize()
-// 	sbox      *gtk.Box
-// 	spinner   *gtk.Spinner
-// 	iconTheme *gtk.IconTheme
-
-// 	css       *gtk.CssProvider
-// 	parser    *md.Parser
-// 	clipboard *gtk.Clipboard
-
-// 	// used for events
-// 	busy sync.RWMutex
-// 	done chan struct{}
-
-// 	completionQueue chan func()
-// }
 
 const SpinnerSize = 56
 
 type Application struct {
+	State *ningen.State
+
 	// Main Grid
 	Grid *gtk.Grid
 	// <item> <separator> <item> <separator> <item>
 	//  0      1           2      3           4
 
 	// Application states
+	Header   *header.Header
 	Guilds   *guild.Guilds
 	Privates *channel.PrivateChannels
 	Channels *channel.Channels
@@ -137,6 +97,10 @@ func (a *Application) setCol(w gtk.IWidget, n int) {
 }
 
 func (a *Application) Ready(s *ningen.State) error {
+	log.Println("Logged in.")
+
+	a.State = s
+
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln("Discord error:", err)
@@ -144,42 +108,154 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	semaphore.IdleMust(window.Resize, 1200, 850)
 
-	// // Create a new header placeholder:
-	// h, err := newHeader()
-	// if err != nil {
-	// 	return errors.Wrap(err, "Failed to create header")
-	// }
-	// App.Header = h
-	// must(window.HeaderDisplay, h)
+	log.Println("Making headers")
 
-	// Set variables, etc.
+	// Create a new Header:
+	h, err := header.NewHeader(s)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create header")
+	}
+
+	log.Println("Making guilds")
+
 	g, err := guild.NewGuilds(s)
 	if err != nil {
 		return errors.Wrap(err, "Failed to make guilds")
 	}
+	g.OnSelect = a.SwitchGuild
+	g.DMButton.OnClick = a.SwitchDM
+
+	log.Println("Making channels")
+
+	c := channel.NewChannels(s)
+	c.OnSelect = a.SwitchChannel
+
+	p := channel.NewPrivateChannels()
+	p.OnSelect = a.SwitchDMChannel
+
+	log.Println("Making messages")
+
 	m, err := message.NewMessages(s)
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}
 
+	a.Header = h
 	a.Guilds = g
-	a.Channels = channel.NewChannels(s)
+	a.Channels = c
+	a.Privates = p
 	a.Messages = m
 
-	// App.Header.Hamburger.User.Update(*u)
-	// App.Header.Hamburger.User.UpdateStatus(s.Ready.Settings.Status)
-
 	semaphore.IdleMust(func() {
+		log.Println("Set the guilds column")
 		a.setCol(a.Guilds, 0)
+
+		log.Println("Set the separators")
+		a.setCol(newSeparator(), 1)
+		a.setCol(newSeparator(), 3)
+
+		log.Println("Display everything")
 		window.Display(a.Grid)
+		window.HeaderDisplay(h)
+
+		log.Println("Show all")
 		window.ShowAll()
 	})
 
-	// Start the garbage collector:
-	// (Too unstable right now)
-	// go App.cleanUp()
-
 	return nil
+}
+
+func (a *Application) SwitchGuild(g *guild.Guild) {
+	a.changeCol(a.Channels, 2, func() func() bool {
+		a.Channels.Cleanup()
+		a.Privates.Cleanup()
+
+		return func() bool {
+			err := a.Channels.LoadGuild(g.ID)
+			if err != nil {
+				log.Errorln("Failed to load guild:", err)
+			}
+			log.Println("Loaded channels in guild")
+			return err == nil
+		}
+	})
+}
+
+func (a *Application) SwitchDM() {
+	a.changeCol(a.Privates, 2, func() func() bool {
+		a.Channels.Cleanup()
+		a.Privates.Cleanup()
+
+		return func() bool {
+			a.Privates.LoadChannels(a.State, a.State.Ready.PrivateChannels)
+			return true
+		}
+	})
+}
+
+func (a *Application) SwitchChannel(ch *channel.Channel) {
+	a.changeCol(a.Messages, 4, func() func() bool {
+		a.Messages.Cleanup()
+
+		return func() bool {
+			err := a.Messages.Load(ch.ID)
+			if err != nil {
+				log.Errorln("Failed to load messages:", err)
+			}
+			return err == nil
+		}
+	})
+}
+
+func (a *Application) SwitchDMChannel(pc *channel.PrivateChannel) {
+	a.changeCol(a.Messages, 4, func() func() bool {
+		a.Messages.Cleanup()
+
+		return func() bool {
+			err := a.Messages.Load(pc.ID)
+			if err != nil {
+				log.Errorln("Failed to load messages:", err)
+			}
+			return err == nil
+		}
+	})
+}
+
+func (a *Application) changeCol(w gtk.IWidget, n int, cleanup func() func() bool) {
+	// Lock
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
+	// Clean up channels
+	fn := cleanup()
+
+	// Blur the grid
+	semaphore.Async(a.Grid.SetSensitive, false)
+	defer semaphore.Async(a.Grid.SetSensitive, true)
+
+	// Add a spinner here
+	var spinner gtk.IWidget
+	semaphore.IdleMust(func() {
+		a.Grid.Remove(w)
+		spinner, _ = animations.NewSpinner(SpinnerSize)
+		a.setCol(spinner, n)
+	})
+
+	if !fn() {
+		a.Grid.Remove(spinner)
+		return
+	}
+
+	// Replace the spinner with the actual channel:
+	semaphore.IdleMust(func() {
+		a.Grid.Remove(spinner)
+		a.setCol(w, n)
+	})
+}
+
+func newSeparator() *gtk.Separator {
+	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	return s
 }
 
 // func (a *application) GuildID() discord.Snowflake {

@@ -12,14 +12,6 @@ import (
 	"github.com/gotk3/gotk3/pango"
 )
 
-const (
-	ChannelsWidth = 240
-	BannerHeight  = 135
-	LabelHeight   = 48
-
-	ChannelHash = "# "
-)
-
 type Channel struct {
 	gtkutils.ExtendedWidget
 

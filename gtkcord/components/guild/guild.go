@@ -99,14 +99,14 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 	}
 
 	// Prefetch unread state:
-	go func() {
-		if rs := guild.containsUnreadChannel(s); rs != nil {
-			unread := true
-			pinged := rs.MentionCount > 0
+	// GO FUNC() {
+	// 	IF RS := GUILD.CONTAINSuNREADcHANNEL(S); RS != NIL {
+	// 		UNREAD := TRUE
+	// 		PINGED := RS.mENTIONcOUNT > 0
 
-			guild.setUnread(unread, pinged)
-		}
-	}()
+	// 		GUILD.SETuNREAD(UNREAD, PINGED)
+	// 	}
+	// }()
 
 	return guild, nil
 }

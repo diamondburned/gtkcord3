@@ -327,7 +327,7 @@ func (c *Completer) completeMentions(word string) {
 
 	if len(c.members) == 0 {
 		// Request the member in a background goroutine
-		c.Input.Messages.c.searchMember(c.Input.Messages.GuildID, word)
+		c.Input.Messages.c.SearchMember(c.Input.Messages.GuildID, word)
 		return
 	}
 

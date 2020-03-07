@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 )
@@ -14,14 +15,9 @@ type _sortStructure struct {
 	children  []discord.Channel
 }
 
-func filterChannels(chs []discord.Channel) []discord.Channel {
+func filterChannels(s *state.State, chs []discord.Channel) []discord.Channel {
 	filtered := chs[:0]
-	s := App.State
-
-	u, err := s.Me()
-	if err != nil {
-		return chs
-	}
+	u := s.Ready.User
 
 	for _, ch := range chs {
 		p, err := s.Permissions(ch.ID, u.ID)

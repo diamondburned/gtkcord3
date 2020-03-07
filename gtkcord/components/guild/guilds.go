@@ -14,7 +14,9 @@ import (
 )
 
 type Guilds struct {
-	*gtk.ListBox
+	gtkutils.ExtendedWidget
+
+	ListBox  *gtk.ListBox
 	DMButton *DMButton
 	Guilds   []gtkutils.ExtendedWidget
 
@@ -46,7 +48,7 @@ func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 			rows = append(rows, r)
 
 		} else {
-			e, err := g.newGuildFolder(s, f)
+			e, err := newGuildFolder(s, f, g.onSelect)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
 			}
@@ -102,10 +104,12 @@ func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 
 func initGuilds(g *Guilds) {
 	dm := NewPMButton()
+	g.DMButton = dm
 
 	semaphore.IdleMust(func() {
 		gw, _ := gtk.ScrolledWindowNew(nil, nil)
 		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		g.ExtendedWidget = gw
 
 		l, _ := gtk.ListBoxNew()
 		l.SetActivateOnSingleClick(true)
@@ -151,7 +155,7 @@ func initGuilds(g *Guilds) {
 		})
 	})
 
-	g.find(func(g *Guild) bool {
+	go g.find(func(g *Guild) bool {
 		g.UpdateImage()
 		return false
 	})

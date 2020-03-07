@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
@@ -152,5 +153,5 @@ func (a *UserPopupActivity) image(id discord.Snowflake, asset, text string) {
 	}
 
 	a.Image.SetTooltipText(text)
-	go asyncFetch(asset, a.Image, PopupAvatarSize, PopupAvatarSize)
+	go cache.AsyncFetch(asset, a.Image, PopupAvatarSize, PopupAvatarSize)
 }

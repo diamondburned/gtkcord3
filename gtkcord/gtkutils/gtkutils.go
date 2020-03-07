@@ -23,8 +23,20 @@ type ExtendedWidget interface {
 	Destroy()
 }
 
+type WidgetDestroyer interface {
+	gtk.IWidget
+	Destroy()
+}
+
+type WidgetConnector interface {
+	gtk.IWidget
+	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
+}
+
 // Safe-guard
 var _ ExtendedWidget = (*gtk.Box)(nil)
+var _ WidgetDestroyer = (*gtk.Box)(nil)
+var _ WidgetConnector = (*gtk.Box)(nil)
 
 type Marginator interface {
 	SetMarginStart(int)

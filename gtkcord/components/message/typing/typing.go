@@ -9,7 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/gtkcord3/gtkcord/animations"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
@@ -20,13 +20,12 @@ import (
 const TypingTimeout = 8 * time.Second
 
 var typingHandler chan *State
-var once sync.Once
 
 func initHandler() {
-	once.Do(func() {
+	if typingHandler == nil {
 		typingHandler = make(chan *State)
 		go handler()
-	})
+	}
 }
 
 func handler() {

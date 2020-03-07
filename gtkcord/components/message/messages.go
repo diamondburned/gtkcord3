@@ -43,7 +43,7 @@ type Messages struct {
 }
 
 func NewMessages(s *ningen.State) (*Messages, error) {
-	m := &Messages{}
+	m := &Messages{c: s}
 	m.Typing = typing.NewState(s.State)
 	m.Input = NewInput(m)
 

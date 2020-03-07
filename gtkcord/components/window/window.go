@@ -5,8 +5,7 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/diamondburned/gtkcord3/gtkcord/animations"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -15,7 +14,7 @@ import (
 var Window struct {
 	*gtk.Window
 	Root   *gdk.Window
-	Widget gtkutils.ExtendedWidget
+	Widget gtk.IWidget
 
 	Header *Header
 
@@ -74,8 +73,6 @@ func Init() error {
 	w.Connect("destroy", func() {
 		gtk.MainQuit()
 		Window.Closer()
-
-		close(Window.done)
 	})
 
 	// w.SetVAlign(gtk.ALIGN_CENTER)
@@ -110,6 +107,8 @@ func Init() error {
 	go func() {
 		runtime.LockOSThread()
 		gtk.Main()
+
+		close(Window.done)
 	}()
 
 	return nil
@@ -133,7 +132,7 @@ func Resize(w, h int) {
 	Window.Window.Resize(w, h)
 }
 
-func Display(w gtkutils.ExtendedWidget) {
+func Display(w gtk.IWidget) {
 	if Window.Widget != nil {
 		Window.Window.Remove(Window.Widget)
 	}
