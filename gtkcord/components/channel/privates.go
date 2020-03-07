@@ -79,7 +79,7 @@ func NewPrivateChannels() (pcs *PrivateChannels) {
 		})
 	})
 
-	return pcs
+	return
 }
 
 func (pcs *PrivateChannels) Cleanup() {
@@ -100,7 +100,7 @@ func (pcs *PrivateChannels) LoadChannels(s ningen.Presencer, channels []discord.
 	// TODO: mutex
 	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
 
-	semaphore.Async(func() {
+	semaphore.IdleMust(func() {
 		for _, channel := range channels {
 			w := newPrivateChannel(channel)
 

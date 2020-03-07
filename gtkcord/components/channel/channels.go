@@ -64,6 +64,7 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 			Scroll:         cs,
 			Main:           main,
 			ChList:         cl,
+			state:          state,
 		}
 
 		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {

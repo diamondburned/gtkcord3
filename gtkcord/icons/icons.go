@@ -17,7 +17,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var icons *gtk.IconTheme
+var IconTheme *gtk.IconTheme
 var iconMap map[string]*gdk.Pixbuf
 var iconMu sync.Mutex
 
@@ -27,8 +27,8 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 	iconMu.Lock()
 	defer iconMu.Unlock()
 
-	if icons == nil {
-		icons = semaphore.IdleMust(gtk.IconThemeGetDefault).(*gtk.IconTheme)
+	if IconTheme == nil {
+		IconTheme = semaphore.IdleMust(gtk.IconThemeGetDefault).(*gtk.IconTheme)
 		iconMap = map[string]*gdk.Pixbuf{}
 	}
 
@@ -37,7 +37,7 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 		return p
 	}
 
-	pb := semaphore.IdleMust(icons.LoadIcon, icon, size,
+	pb := semaphore.IdleMust(IconTheme.LoadIcon, icon, size,
 		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
 
 	iconMap[key] = pb

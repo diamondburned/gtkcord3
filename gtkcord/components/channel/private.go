@@ -8,7 +8,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -52,53 +51,51 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 		name = humanize.Strings(names)
 	}
 
-	icon := icons.GetIcon("network-workgroup-symbolic", DMAvatarSize)
+	icon, _ := icons.IconTheme.LoadIcon("network-workgroup-symbolic", DMAvatarSize, 0)
 
-	semaphore.IdleMust(func() {
-		l, _ := gtk.LabelNew(html.EscapeString(name))
-		l.SetUseMarkup(true)
-		l.SetMarginStart(8)
-		l.SetEllipsize(pango.ELLIPSIZE_END)
+	l, _ := gtk.LabelNew(html.EscapeString(name))
+	l.SetUseMarkup(true)
+	l.SetMarginStart(8)
+	l.SetEllipsize(pango.ELLIPSIZE_END)
 
-		a, _ := gtk.ImageNewFromPixbuf(icon)
-		gtkutils.Margin4(a, 4, 4, 8, 0)
+	a, _ := gtk.ImageNewFromPixbuf(icon)
+	gtkutils.Margin4(a, 4, 4, 8, 0)
 
-		s, _ := a.GetStyleContext()
-		s.AddClass("status")
+	s, _ := a.GetStyleContext()
+	s.AddClass("status")
 
-		b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		b.Add(a)
-		b.Add(l)
+	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b.Add(a)
+	b.Add(l)
 
-		r, _ := gtk.ListBoxRowNew()
-		r.Add(b)
-		// set the channel ID to searches
-		r.SetProperty("name", ch.ID.String())
+	r, _ := gtk.ListBoxRowNew()
+	r.Add(b)
+	// set the channel ID to searches
+	r.SetProperty("name", ch.ID.String())
 
-		rs, _ := r.GetStyleContext()
-		rs.AddClass("dmchannel")
+	rs, _ := r.GetStyleContext()
+	rs.AddClass("dmchannel")
 
-		pc = &PrivateChannel{
-			ListBoxRow: r,
-			Main:       b,
-			Style:      rs,
+	pc = &PrivateChannel{
+		ListBoxRow: r,
+		Main:       b,
+		Style:      rs,
 
-			Avatar: a,
-			AStyle: s,
+		Avatar: a,
+		AStyle: s,
 
-			Label: l,
+		Label: l,
 
-			ID:   ch.ID,
-			Name: name,
-			// Group: ch.Type == discord.GroupDM,
-		}
-
-		pc.setStatusClass("offline")
-	})
-
-	if ch.Type != discord.DirectMessage {
-		return pc
+		ID:   ch.ID,
+		Name: name,
+		// Group: ch.Type == discord.GroupDM,
 	}
+
+	pc.setStatusClass("offline")
+
+	// if ch.Type != discord.DirectMessage {
+	// 	return pc
+	// }
 
 	return pc
 }

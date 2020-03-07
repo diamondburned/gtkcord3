@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
@@ -221,7 +222,7 @@ func (a *Application) SwitchDMChannel(pc *channel.PrivateChannel) {
 	})
 }
 
-func (a *Application) changeCol(w gtk.IWidget, n int, cleanup func() func() bool) {
+func (a *Application) changeCol(w gtkutils.ExtendedWidget, n int, cleanup func() func() bool) {
 	// Lock
 	a.busy.Lock()
 	defer a.busy.Unlock()
@@ -250,6 +251,7 @@ func (a *Application) changeCol(w gtk.IWidget, n int, cleanup func() func() bool
 	semaphore.IdleMust(func() {
 		a.Grid.Remove(spinner)
 		a.setCol(w, n)
+		w.ShowAll()
 	})
 }
 
