@@ -20,7 +20,6 @@ var Window struct {
 
 	CSS       *gtk.CssProvider
 	Clipboard *gtk.Clipboard
-	IconTheme *gtk.IconTheme
 
 	Closer func()
 
@@ -84,12 +83,6 @@ func Init() error {
 		return errors.Wrap(err, "Failed to get clipboard")
 	}
 	Window.Clipboard = c
-
-	i, err := gtk.IconThemeGetDefault()
-	if err != nil {
-		return errors.Wrap(err, "Can't get Gtk icon theme")
-	}
-	Window.IconTheme = i
 
 	if err := initHeader(); err != nil {
 		return errors.Wrap(err, "Failed to make a headerbar")

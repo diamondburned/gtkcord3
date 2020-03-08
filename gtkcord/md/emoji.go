@@ -5,6 +5,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -33,9 +34,14 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 
 	i := icons.GetIcon("image-missing", sz)
 	if i == nil {
-		semaphore.IdleMust(s.buf.Insert, iter, "[?]")
-		log.Errorln("Markdown: Failed to get image-missing icon")
-		return
+		e, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, sz, sz)
+		if err != nil {
+			log.Errorln("Markdown: Failed to make placeholder pixbuf:", err)
+			semaphore.IdleMust(s.buf.Insert, iter, "[?]")
+			return
+		}
+		// set the empty pixbuf
+		i = e
 	}
 
 	// Preserve position:

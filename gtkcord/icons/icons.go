@@ -28,7 +28,13 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 	defer iconMu.Unlock()
 
 	if IconTheme == nil {
-		IconTheme = semaphore.IdleMust(gtk.IconThemeGetDefault).(*gtk.IconTheme)
+		v, err := semaphore.Idle(gtk.IconThemeGetDefault)
+		if err != nil {
+			log.Errorln("Failed to get icon theme:", err)
+			return nil
+		}
+
+		IconTheme = v.(*gtk.IconTheme)
 		iconMap = map[string]*gdk.Pixbuf{}
 	}
 
@@ -37,9 +43,14 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 		return p
 	}
 
-	pb := semaphore.IdleMust(IconTheme.LoadIcon, icon, size,
-		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
+	v, err := semaphore.Idle(IconTheme.LoadIcon, icon, size,
+		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
+	if err != nil {
+		log.Errorln("Failed to get icon", icon)
+		return nil
+	}
 
+	pb := v.(*gdk.Pixbuf)
 	iconMap[key] = pb
 	return pb
 }
