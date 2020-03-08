@@ -4,7 +4,6 @@ import (
 	"html"
 
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -14,7 +13,7 @@ import (
 )
 
 type GuildFolder struct {
-	gtkutils.ExtendedWidget
+	*gtk.ListBoxRow
 
 	Revealer *gtk.Revealer
 	List     *gtk.ListBox
@@ -67,11 +66,11 @@ func newGuildFolder(
 		mainBox.Add(folderRev)
 
 		Folder = &GuildFolder{
-			ExtendedWidget: mainBox,
-			Revealer:       folderRev,
-			List:           guildList,
-			Style:          style,
-			Guilds:         make([]*Guild, 0, len(folder.GuildIDs)),
+			ListBoxRow: r,
+			Revealer:   folderRev,
+			List:       guildList,
+			Style:      style,
+			Guilds:     make([]*Guild, 0, len(folder.GuildIDs)),
 		}
 
 		// On click, toggle revealer

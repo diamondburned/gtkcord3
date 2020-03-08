@@ -2,7 +2,6 @@ package guild
 
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -18,8 +17,6 @@ type DMButton struct {
 
 // thread-safe
 func NewPMButton() (dm *DMButton) {
-	icon := icons.GetIcon("system-users-symbolic", IconSize/3*2)
-
 	semaphore.IdleMust(func() {
 		r, _ := gtk.ListBoxRowNew()
 		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
@@ -32,7 +29,8 @@ func NewPMButton() (dm *DMButton) {
 		s.AddClass("dmbutton")
 		s.AddClass("guild")
 
-		i, _ := gtk.ImageNewFromPixbuf(icon)
+		i, _ := gtk.ImageNew()
+		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
 		i.SetHAlign(gtk.ALIGN_CENTER)
 		i.SetVAlign(gtk.ALIGN_CENTER)
 		r.Add(i)

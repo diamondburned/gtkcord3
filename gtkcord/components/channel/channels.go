@@ -46,10 +46,10 @@ type Channels struct {
 func NewChannels(state *ningen.State) (chs *Channels) {
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		main.SetSizeRequest(ChannelsWidth, -1)
+		// main.SetSizeRequest(ChannelsWidth, -1)
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
-		cs.SetSizeRequest(ChannelsWidth, -1)
+		// cs.SetSizeRequest(ChannelsWidth, -1)
 		cs.Add(main)
 
 		cl, _ := gtk.ListBoxNew()
@@ -84,40 +84,44 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 	return
 }
 
-// messageCreate handler for unreads
-func (chs *Channels) messageCreate(c *gateway.MessageCreateEvent) {
-	// If the guild ID doesn't match:
-	if c.GuildID != chs.GuildID {
-		return
-	}
-	// If the message is the user's:
-	if c.Author.ID == chs.state.Ready.User.ID {
-		return
-	}
+// // messageCreate handler for unreads
+// func (chs *Channels) messageCreate(c *gateway.MessageCreateEvent) {
+// 	// If the guild ID doesn't match:
+// 	if c.GuildID != chs.GuildID {
+// 		return
+// 	}
+// 	// If the message is the user's:
+// 	if c.Author.ID == chs.state.Ready.User.ID {
+// 		return
+// 	}
 
-	chs.busy.Lock()
-	defer chs.busy.Unlock()
+// 	chs.busy.Lock()
+// 	defer chs.busy.Unlock()
 
-	// If the current channel is selected:
-	if chs.Selected != nil && chs.Selected.ID == c.ChannelID {
-		if !chs.Selected.unread {
+// 	// If the current channel is selected:
+// 	if chs.Selected != nil && chs.Selected.ID == c.ChannelID {
+// 		if !chs.Selected.unread {
 
-		}
-		return
-	}
+// 		}
+// 		return
+// 	}
 
-	// Find the channel:
-	ch := chs.FindByID(c.ChannelID)
-	// If no channel is found:
-	if ch == nil {
-		return
-	}
+// 	// Find the channel:
+// 	ch := chs.FindByID(c.ChannelID)
+// 	// If no channel is found:
+// 	if ch == nil {
+// 		return
+// 	}
 
-}
+// }
 
 func (chs *Channels) Cleanup() {
 	chs.busy.Lock()
 	defer chs.busy.Unlock()
+
+	if chs.Channels == nil {
+		return
+	}
 
 	// Remove old channels
 	semaphore.IdleMust(func() {
@@ -148,10 +152,14 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 		}
 	}()
 
-	chws := transformChannels(chs.state, channels)
+	log.Println("Transforming channels")
+
+	chs.Channels = transformChannels(chs.state, channels)
+
+	log.Println("Channel transformed")
 
 	semaphore.IdleMust(func() {
-		for _, ch := range chws {
+		for _, ch := range chs.Channels {
 			chs.ChList.Insert(ch, -1)
 		}
 	})
@@ -204,6 +212,7 @@ func (chs *Channels) TraverseReadState(s *ningen.State, rs *gateway.ReadState, u
 		}
 
 		// ack == read
+		log.Println(log.Trace(0), "marking channel as unread:", unread)
 		ch.setUnread(unread, rs.MentionCount > 0)
 		break
 	}

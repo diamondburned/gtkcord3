@@ -38,7 +38,7 @@ func (f *Formatter) Format(w io.Writer, iterator chroma.Iterator) error {
 		}
 
 		for _, token := range tokens {
-			html := html.EscapeString(token.String())
+			html := strings.Replace(html.EscapeString(token.String()), "\t", "    ", -1)
 			attr := f.styleAttr(token.Type)
 			if attr != "" {
 				html = "<span " + attr + ">" + html + "</span>"
@@ -71,14 +71,6 @@ func (f *Formatter) shouldHighlight(highlightIndex, line int) (bool, bool) {
 }
 
 func (f *Formatter) styleAttr(tt chroma.TokenType, extraCSS ...string) string {
-	// Ignore foreground tokens.
-	switch tt {
-	case chroma.Punctuation,
-		chroma.Text, chroma.TextPunctuation, chroma.TextSymbol:
-
-		return ""
-	}
-
 	if _, ok := css[tt]; !ok {
 		tt = tt.SubCategory()
 	}

@@ -9,7 +9,6 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -67,16 +66,20 @@ type Message struct {
 	busy int32
 }
 
-func newMessage(s *ningen.State, m discord.Message) *Message {
+func newMessage(s *ningen.State, m *discord.Message) *Message {
+	return semaphore.IdleMust(newMessageUnsafe, s, m).(*Message)
+}
+
+func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 	defer log.Benchmark("newMessage")()
 
-	message := newMessageCustom(m)
+	message := newMessageCustomUnsafe(m)
 	defer message.markBusy()()
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
 	if !m.ID.Valid() {
-		message.setAvailable(false)
+		message.setAvailableUnsafe(false)
 	}
 
 	var messageText string
@@ -109,134 +112,137 @@ func newMessage(s *ningen.State, m discord.Message) *Message {
 	if messageText == "" {
 		go message.UpdateContent(s, m)
 	} else {
-		message.updateContent(`<i>` + messageText + `</i>`)
-		message.setAvailable(false)
+		message.updateContentUnsafe(`<i>` + messageText + `</i>`)
+		message.setAvailableUnsafe(false)
 	}
 
 	return message
 }
 
-func newMessageCustom(m discord.Message) (message *Message) {
-	icon := icons.GetIcon("user-info", AvatarSize)
+func newMessageCustom(m *discord.Message) (message *Message) {
+	return semaphore.IdleMust(newMessageCustomUnsafe, m).(*Message)
+}
 
-	// What the fuck?
-	semaphore.IdleMust(func() {
-		var (
-			row, _ = gtk.ListBoxRowNew()
+func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
+	// icon := icons.GetIconUnsafe("user-info", AvatarSize)
 
-			avatar, _   = gtk.ImageNewFromPixbuf(icon)
-			avatarEv, _ = gtk.EventBoxNew()
+	var (
+		row, _ = gtk.ListBoxRowNew()
 
-			main, _        = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-			right, _       = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-			rightTop, _    = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-			rightBottom, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		avatar, _   = gtk.ImageNew()
+		avatarEv, _ = gtk.EventBoxNew()
 
-			author, _    = gtk.LabelNew("???")
-			timestamp, _ = gtk.LabelNew("")
-		)
+		main, _        = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		right, _       = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		rightTop, _    = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		rightBottom, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
-		style, _ := row.GetStyleContext()
-		style.AddClass("message")
-		gtkutils.AddCSSUnsafe(style, `
-			.message {
-				padding: 0;
-			}
-		`)
+		author, _    = gtk.LabelNew("???")
+		timestamp, _ = gtk.LabelNew("")
+	)
 
-		// Set the message's underlying box style:
-		gtkutils.InjectCSSUnsafe(main, "", `
-			.message > box {
-				border-left: 2px solid transparent;
-			}
-			.message.mentioned > box {
-				border-left: 2px solid rgb(250, 166, 26);
-				background-color: rgba(250, 166, 26, 0.05);
-			}
-		`)
+	gtkutils.ImageSetIcon(avatar, "user-info", AvatarSize)
 
-		message = &Message{
-			Nonce:     m.Nonce,
-			ID:        m.ID,
-			AuthorID:  m.Author.ID,
-			Timestamp: m.Timestamp.Time().Local(),
-			Edited:    m.EditedTimestamp.Time().Local(),
-
-			ListBoxRow: row,
-			style:      style,
-			Condensed:  false,
-
-			main:        main,
-			avatarEv:    avatarEv,
-			avatar:      avatar,
-			right:       right,
-			rightTop:    rightTop,
-			author:      author,
-			timestamp:   timestamp,
-			rightBottom: rightBottom,
+	style, _ := row.GetStyleContext()
+	style.AddClass("message")
+	gtkutils.AddCSSUnsafe(style, `
+		.message {
+			padding: 0;
 		}
-		defer message.markBusy()()
+	`)
 
-		message.ListBoxRow.Add(message.main)
+	// Set the message's underlying box style:
+	gtkutils.InjectCSSUnsafe(main, "", `
+		.message > box {
+			border-left: 2px solid transparent;
+		}
+		.message.mentioned > box {
+			border-left: 2px solid rgb(250, 166, 26);
+			background-color: rgba(250, 166, 26, 0.05);
+		}
+	`)
 
-		gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
+	message = &Message{
+		Nonce:     m.Nonce,
+		ID:        m.ID,
+		AuthorID:  m.Author.ID,
+		Timestamp: m.Timestamp.Time().Local(),
+		Edited:    m.EditedTimestamp.Time().Local(),
 
-		message.rightBottom.SetHExpand(true)
-		message.rightBottom.SetMarginBottom(5)
-		message.rightBottom.SetMarginEnd(AvatarPadding * 2)
-		message.rightBottom.Connect("size-allocate", func() {
-			// Hack to force Gtk to recalculate size on changes
-			message.rightBottom.SetVExpand(true)
-			message.rightBottom.SetVExpand(false)
-		})
+		ListBoxRow: row,
+		style:      style,
+		Condensed:  false,
 
-		message.avatarEv.SetMarginStart(AvatarPadding * 2)
-		message.avatarEv.SetMarginEnd(AvatarPadding)
-		message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
-		message.avatarEv.Add(message.avatar)
-		message.avatarEv.Connect("button_press_event", func() {
-			if message.OnUserClick != nil {
-				message.OnUserClick(message)
-			}
-			// p := msgs.c.SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
-			// p.SetRelativeTo(message.avatar)
-			// p.Show()
-		})
+		main:        main,
+		avatarEv:    avatarEv,
+		avatar:      avatar,
+		right:       right,
+		rightTop:    rightTop,
+		author:      author,
+		timestamp:   timestamp,
+		rightBottom: rightBottom,
+	}
+	defer message.markBusy()()
 
-		message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
-		message.avatar.SetVAlign(gtk.ALIGN_START)
+	message.ListBoxRow.Add(message.main)
 
-		message.author.SetMarkup(
-			`<span weight="bold">` + html.EscapeString(m.Author.Username) + `</span>`)
-		message.author.SetSingleLineMode(true)
+	gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
 
-		message.rightTop.Add(message.author)
-		gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
-
-		timestampSize := AvatarSize + AvatarPadding - 1
-		message.timestamp.SetSizeRequest(timestampSize, -1)
-		message.timestamp.SetOpacity(0.5)
-		message.timestamp.SetYAlign(0.0)
-		message.timestamp.SetSingleLineMode(true)
-		message.timestamp.SetMarginTop(2)
-		message.timestamp.SetMarginStart(AvatarPadding)
-		message.timestamp.SetMarginEnd(AvatarPadding)
-		gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", `
-			.message.condensed .timestamp {
-				opacity: 0;
-			}
-			.message.condensed:hover .timestamp {
-				opacity: 1;
-			}
-		`)
-
-		message.right.Add(message.rightTop)
-
-		message.avatarEv.SetMarginTop(6)
-		message.right.SetMarginTop(6)
-
-		message.setCondensed()
+	message.rightBottom.SetHExpand(true)
+	message.rightBottom.SetMarginBottom(5)
+	message.rightBottom.SetMarginEnd(AvatarPadding * 2)
+	message.rightBottom.Connect("size-allocate", func() {
+		// Hack to force Gtk to recalculate size on changes
+		message.rightBottom.SetVExpand(true)
+		message.rightBottom.SetVExpand(false)
 	})
+
+	message.avatarEv.SetMarginStart(AvatarPadding * 2)
+	message.avatarEv.SetMarginEnd(AvatarPadding)
+	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
+	message.avatarEv.Add(message.avatar)
+	message.avatarEv.Connect("button_press_event", func() {
+		if message.OnUserClick != nil {
+			message.OnUserClick(message)
+		}
+		// p := msgs.c.SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
+		// p.SetRelativeTo(message.avatar)
+		// p.Show()
+	})
+
+	message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
+	message.avatar.SetVAlign(gtk.ALIGN_START)
+
+	message.author.SetMarkup(
+		`<span weight="bold">` + html.EscapeString(m.Author.Username) + `</span>`)
+	message.author.SetSingleLineMode(true)
+
+	message.rightTop.Add(message.author)
+	gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
+
+	timestampSize := AvatarSize + AvatarPadding - 1
+	message.timestamp.SetSizeRequest(timestampSize, -1)
+	message.timestamp.SetOpacity(0.5)
+	message.timestamp.SetYAlign(0.0)
+	message.timestamp.SetSingleLineMode(true)
+	message.timestamp.SetMarginTop(2)
+	message.timestamp.SetMarginStart(AvatarPadding)
+	message.timestamp.SetMarginEnd(AvatarPadding)
+	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", `
+		.message.condensed .timestamp {
+			opacity: 0;
+		}
+		.message.condensed:hover .timestamp {
+			opacity: 1;
+		}
+	`)
+
+	message.right.Add(message.rightTop)
+
+	message.avatarEv.SetMarginTop(6)
+	message.right.SetMarginTop(6)
+
+	message.setCondensed()
 
 	return
 }
@@ -250,15 +256,27 @@ func (m *Message) isBusy() bool {
 	return atomic.LoadInt32(&m.busy) == 0
 }
 
-func (m *Message) getAvailable() bool {
-	return semaphore.IdleMust(m.rightBottom.GetOpacity).(float64) > 0.9
+// func (m *Message) getAvailable() bool {
+// 	return semaphore.IdleMust(m.rightBottom.GetOpacity).(float64) > 0.9
+// }
+
+func (m *Message) getAvailableUnsafe() bool {
+	return m.rightBottom.GetOpacity() > 0.9
 }
 
-func (m *Message) setAvailable(available bool) {
+// func (m *Message) setAvailable(available bool) {
+// 	if available {
+// 		semaphore.IdleMust(m.rightBottom.SetOpacity, 1.0)
+// 	} else {
+// 		semaphore.IdleMust(m.rightBottom.SetOpacity, 0.5)
+// 	}
+// }
+
+func (m *Message) setAvailableUnsafe(available bool) {
 	if available {
-		semaphore.IdleMust(m.rightBottom.SetOpacity, 1.0)
+		m.rightBottom.SetOpacity(1.0)
 	} else {
-		semaphore.IdleMust(m.rightBottom.SetOpacity, 0.5)
+		m.rightBottom.SetOpacity(0.5)
 	}
 }
 
@@ -271,7 +289,7 @@ func (m *Message) setOffset(last *Message) {
 	m.CondenseOffset = offs
 }
 
-func (m *Message) SetCondensed(condensed bool) {
+func (m *Message) SetCondensedUnsafe(condensed bool) {
 	defer m.markBusy()()
 
 	if m.Condensed == condensed {
@@ -315,7 +333,7 @@ func (m *Message) setCondensed() {
 }
 
 func (m *Message) UpdateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
-	semaphore.Async(m.updateAuthor, s, gID, u)
+	semaphore.IdleMust(m.updateAuthor, s, gID, u)
 }
 
 func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
@@ -329,11 +347,12 @@ func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord
 		}
 	}
 
+	m.UpdateAvatar(u.AvatarURL())
 	m.author.SetMarkup(`<span weight="bold">` + html.EscapeString(u.Username) + `</span>`)
 }
 
 func (m *Message) UpdateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
-	semaphore.Async(m.updateMember, s, gID, n)
+	semaphore.IdleMust(m.updateMember, s, gID, n)
 }
 
 func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
@@ -350,6 +369,7 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 		}
 	}
 
+	m.UpdateAvatar(n.User.AvatarURL())
 	m.author.SetMarkup(`<span weight="bold">` + name + `</span>`)
 }
 
@@ -372,22 +392,18 @@ func (m *Message) UpdateAvatar(url string) {
 	}
 }
 
-func (m *Message) updateContent(s string) {
-	defer m.markBusy()()
-
-	m.assertContent()
-	semaphore.IdleMust(func() {
-		m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
-		m.content.InsertMarkup(m.content.GetEndIter(), s)
-	})
+func (m *Message) updateContentUnsafe(s string) {
+	m.assertContentUnsafe()
+	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
+	m.content.InsertMarkup(m.content.GetEndIter(), s)
 }
 
-func (m *Message) UpdateContent(s *ningen.State, update discord.Message) {
+func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 	defer m.markBusy()()
 
 	if update.Content != "" {
-		m.assertContent()
-		md.ParseMessage(s, &update, []byte(update.Content), m.content)
+		semaphore.IdleMust(m.assertContentUnsafe)
+		md.ParseMessage(s, update, []byte(update.Content), m.content)
 	}
 
 	for _, mention := range update.Mentions {
@@ -404,26 +420,24 @@ func (m *Message) UpdateContent(s *ningen.State, update discord.Message) {
 	}
 }
 
-func (m *Message) assertContent() {
+func (m *Message) assertContentUnsafe() {
 	if m.textView == nil {
-		semaphore.IdleMust(func() {
-			msgTv, _ := gtk.TextViewNew()
-			m.textView = msgTv
-			msgTb, _ := msgTv.GetBuffer()
-			m.content = msgTb
+		msgTv, _ := gtk.TextViewNew()
+		m.textView = msgTv
+		msgTb, _ := msgTv.GetBuffer()
+		m.content = msgTb
 
-			msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-			msgTv.SetCursorVisible(false)
-			msgTv.SetEditable(false)
-			msgTv.SetCanFocus(false)
+		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
+		msgTv.SetCursorVisible(false)
+		msgTv.SetEditable(false)
+		msgTv.SetCanFocus(false)
 
-			m.rightBottom.Add(msgTv)
-			m.rightBottom.ShowAll()
-		})
+		m.rightBottom.Add(msgTv)
+		m.rightBottom.ShowAll()
 	}
 }
 
-func (m *Message) UpdateExtras(s *ningen.State, update discord.Message) {
+func (m *Message) UpdateExtras(s *ningen.State, update *discord.Message) {
 	defer m.markBusy()()
 
 	semaphore.IdleMust(func() {

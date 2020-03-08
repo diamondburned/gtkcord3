@@ -58,6 +58,8 @@ type CompleterEntry struct {
 
 func (i *Input) initCompleter() {
 	if i.Completer == nil {
+		initCQueue()
+
 		l, _ := gtk.ListBoxNew()
 		gtkutils.InjectCSSUnsafe(l, "completer", "")
 

@@ -39,8 +39,10 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	mb.Add(i)
 
 	// Header box
-	p := popup.NewDynamicPopover(mb, func() gtkutils.WidgetDestroyer {
-		return popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
+	p := popup.NewDynamicPopover(mb, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
+		body := popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
+		body.ParentStyle, _ = p.GetStyleContext()
+		return body
 	})
 
 	mb.SetPopover(p.Popover)

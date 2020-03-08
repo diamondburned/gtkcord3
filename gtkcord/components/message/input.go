@@ -201,8 +201,11 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return false // propagate
 	}
 
+	// Get text
+	text := i.getContent()
+
 	// Check if the numbers of ``` are odd.
-	if strings.Count(i.getContent(), "```")%2 > 0 {
+	if !shift && strings.Count(i.getContent(), "```")%2 > 0 {
 		// If yes, assume shift is held. We want the Enter key to insert new
 		// lines.
 		shift = true
@@ -210,12 +213,25 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 
 	// If Shift is being held:
 	if shift {
+		// Check if the start of line is a blockquote.
+		var blockquote = false
+		var lines = strings.Split(text, "\n")
+		if len(lines) > 0 && strings.HasPrefix(lines[len(lines)-1], ">") {
+			blockquote = true
+		}
+
 		// Insert a new line
 		i.InputBuf.InsertAtCursor("\n")
+
+		// If we're writing a blockquote:
+		if blockquote {
+			i.InputBuf.InsertAtCursor(">")
+		}
+
 		return true
 	}
 
-	text := i.popContent()
+	i.deleteContent()
 
 	// Shift is not being held, send the message:
 	go func() {
@@ -252,6 +268,10 @@ func (i *Input) getContent() string {
 	return text
 }
 
+func (i *Input) deleteContent() {
+	i.InputBuf.Delete(i.InputBuf.GetBounds())
+}
+
 // popContent gets the current messages and deletes the buffer.
 func (i *Input) popContent() string {
 	var iStart, iEnd = i.InputBuf.GetBounds()
@@ -270,8 +290,8 @@ func (i *Input) popContent() string {
 	return text
 }
 
-func (i *Input) makeMessage(content string) discord.Message {
-	return discord.Message{
+func (i *Input) makeMessage(content string) *discord.Message {
+	return &discord.Message{
 		Type:      discord.DefaultMessage,
 		ChannelID: i.Messages.ChannelID,
 		GuildID:   i.Messages.GuildID,
@@ -309,11 +329,7 @@ func (i *Input) send(content string) error {
 		}
 
 		_, err := i.Messages.c.State.EditMessage(edit.ChannelID, edit.ID, content, nil, false)
-		if err != nil {
-			return errors.Wrap(err, "Failed to edit message")
-		}
-
-		return nil
+		return errors.Wrap(err, "Failed to edit message")
 	}
 
 	// If the content is empty but we're not editing, don't send.
@@ -358,6 +374,7 @@ func (i *Input) _upload(content string, paths []string) error {
 	semaphore.IdleMust(w.rightBottom.Add, u)
 
 	i.Messages.insert(w)
+	go w.updateAuthor(i.Messages.c, m.GuildID, m.Author)
 
 	_, err = i.Messages.c.State.SendMessageComplex(m.ChannelID, s)
 	if err != nil {
@@ -367,8 +384,8 @@ func (i *Input) _upload(content string, paths []string) error {
 	semaphore.IdleMust(w.rightBottom.Remove, u)
 
 	return nil
-
 }
+
 func randString() string {
 	const randLen = 20
 	const alphabet = "abcdefghijklmnopqrstuvwxyz" +

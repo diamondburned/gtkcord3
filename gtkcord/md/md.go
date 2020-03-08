@@ -33,7 +33,7 @@ var regexes = []string{
 	`(<(a?):\w+:(\d+)>)`,
 }
 
-var HighlightStyle = "monokailight"
+var HighlightStyle = "monokai"
 
 var (
 	style    = (*chroma.Style)(nil)
@@ -49,7 +49,15 @@ var UserPressed func(ev *gdk.EventButton, user discord.GuildUser)
 
 func init() {
 	log.Debugln("REGEX:", strings.Join(regexes, "|"))
+	refreshStyle()
+}
 
+func ChangeStyle(styleName string) {
+	HighlightStyle = styleName
+	refreshStyle()
+}
+
+func refreshStyle() {
 	style = styles.Get(HighlightStyle)
 	if style == nil {
 		panic("Unknown highlighting style: " + HighlightStyle)

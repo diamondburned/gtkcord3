@@ -17,14 +17,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-const DefaultFetch = 25
-
 type Messages struct {
 	gtkutils.ExtendedWidget
 	ChannelID discord.Snowflake
 	GuildID   discord.Snowflake
 
-	c *ningen.State
+	c     *ningen.State
+	fetch int
 
 	Main *gtk.Box
 
@@ -43,7 +42,7 @@ type Messages struct {
 }
 
 func NewMessages(s *ningen.State) (*Messages, error) {
-	m := &Messages{c: s}
+	m := &Messages{c: s, fetch: s.Store.MaxMessages()}
 	m.Typing = typing.NewState(s.State)
 	m.Input = NewInput(m)
 
@@ -145,7 +144,7 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	m.Resetting.Store(true)
 
 	// Order: latest is first.
-	messages, err := m.c.State.Messages(m.ChannelID)
+	messages, err := m.c.Messages(m.ChannelID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
@@ -168,57 +167,51 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 
 	// Allocate a new empty slice. This is a trade-off to re-using the old
 	// slice to re-use messages.
-	var newMessages = make([]*Message, 0, DefaultFetch)
+	m.messages = make([]*Message, 0, m.fetch)
 
 	// WaitGroup for the background goroutines that were spawned:
-	var loads = make([]func(), 0, DefaultFetch)
+	// var loads = make([])
 
-	// Iterate from earliest to latest.
-	for i := 0; i < len(messages); i++ {
-		message := messages[i]
+	// Iterate from earliest to latest, in a thread-safe function.
+	semaphore.IdleMust(func() {
+		for i := 0; i < len(messages); i++ {
+			message := &messages[i]
 
-		w := newMessage(m.c, message)
-		m.insert(w)
-
-		loads = append(loads, func() {
-			if message.Member != nil {
-				w.updateMember(m.c, message.GuildID, *message.Member)
-			} else {
-				w.updateAuthor(m.c, message.GuildID, message.Author)
-			}
-
-			go w.UpdateExtras(m.c, message)
-		})
-	}
-
-	// Set the new slice.
-	m.messages = newMessages
+			w := newMessageUnsafe(m.c, message)
+			m.insert(w)
+		}
+	})
 
 	// If there are no messages, don't bother.
-	if len(newMessages) == 0 {
+	if len(m.messages) == 0 {
 		m.Resetting.Store(false)
 		return nil
 	}
 
-	// Show all messages.
-	semaphore.IdleMust(m.Messages.ShowAll)
+	// Subscribe to guild:
+	if m.GuildID.Valid() {
+		go m.c.Subscribe(m.GuildID)
+	}
 
 	// Find the latest message and ack it:
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Author.ID == m.c.Ready.User.ID {
-			continue
-		}
 		go m.c.MarkRead(m.ChannelID, messages[i].ID)
 		break
 	}
 
-	semaphore.Async(func() {
-		// Iterate backwards, from latest to earliest.
-		for i := len(loads) - 1; i >= 0; i-- {
-			loads[i]()
-		}
+	// Iterate backwards, from latest to earliest.
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		semaphore.Async(func(i int) {
+			w := m.messages[i]
+			message := &messages[i]
+
+			w.updateAuthor(m.c, message.GuildID, message.Author)
+			go w.UpdateExtras(m.c, message)
+			// m.onSizeAlloc()
+		}, i)
+
 		m.Resetting.Store(false)
-	})
+	}
 
 	return nil
 }
@@ -250,11 +243,13 @@ func (m *Messages) Cleanup() {
 	log.Infoln("Destroying messages from old channel.")
 	m.Typing.Stop()
 
-	for _, msg := range m.messages {
-		// DESTROY!!!!
-		// https://stackoverflow.com/questions/2862509/free-object-widget-in-gtk
-		m.Messages.Remove(msg)
-	}
+	semaphore.IdleMust(func() {
+		for _, msg := range m.messages {
+			// DESTROY!!!!
+			// https://stackoverflow.com/questions/2862509/free-object-widget-in-gtk
+			m.Messages.Remove(msg)
+		}
+	})
 
 	// Destroy the slice in Go as well, but the GC will pick it up:
 	m.messages = nil
@@ -276,16 +271,15 @@ func (m *Messages) onSizeAlloc() {
 	// If the scroll is not close to the bottom and we're not loading messages:
 	if max-cur > 500 && !loading {
 		// Then we don't scroll.
+		log.Println("Not scrolling. Loading:", loading)
 		return
 	}
 
 	adj.SetValue(max)
 	m.Viewport.SetVAdjustment(adj)
-
-	m.Resetting.Store(false)
 }
 
-func (m *Messages) Insert(message discord.Message) {
+func (m *Messages) Insert(message *discord.Message) {
 	// Are we sure this is not our message?
 	if m.Update(message) {
 		return
@@ -293,7 +287,7 @@ func (m *Messages) Insert(message discord.Message) {
 
 	// We ack the message after inserting:
 	defer func() {
-		if message.ID.Valid() && message.Author.ID != m.c.Ready.User.ID {
+		if message.ID.Valid() {
 			m.c.MarkRead(message.ChannelID, message.ID)
 		}
 	}()
@@ -301,19 +295,14 @@ func (m *Messages) Insert(message discord.Message) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	w := newMessage(m.c, message)
+	var w *Message
+	semaphore.IdleMust(func() {
+		w = newMessageUnsafe(m.c, message)
+		m.insert(w)
+		w.updateAuthor(m.c, message.GuildID, message.Author)
+	})
 
-	go func() {
-		if message.Member != nil {
-			w.UpdateMember(m.c, message.GuildID, *message.Member)
-		} else {
-			w.UpdateAuthor(m.c, message.GuildID, message.Author)
-		}
-
-		w.UpdateExtras(m.c, message)
-	}()
-
-	semaphore.Async(m.insert, w)
+	w.UpdateExtras(m.c, message)
 }
 
 // not thread safe
@@ -322,7 +311,7 @@ func (m *Messages) insert(w *Message) {
 
 	if m.ShouldCondense(w) {
 		w.setOffset(m.lastMessageFrom(w.AuthorID))
-		w.SetCondensed(true)
+		w.SetCondensedUnsafe(true)
 	}
 
 	m.Messages.Insert(w, -1)
@@ -331,7 +320,7 @@ func (m *Messages) insert(w *Message) {
 	w.ShowAll()
 }
 
-func (m *Messages) Update(update discord.Message) bool {
+func (m *Messages) Update(update *discord.Message) bool {
 	var target *Message
 
 	m.guard.RLock()
@@ -351,9 +340,11 @@ func (m *Messages) Update(update discord.Message) bool {
 	}
 
 	// Clear the nonce, if any:
-	if !target.getAvailable() {
-		target.setAvailable(true)
-	}
+	semaphore.IdleMust(func() {
+		if !target.getAvailableUnsafe() {
+			target.setAvailableUnsafe(true)
+		}
+	})
 
 	target.ID = update.ID
 	target.Nonce = ""
@@ -361,30 +352,32 @@ func (m *Messages) Update(update discord.Message) bool {
 	if update.Content != "" {
 		target.UpdateContent(m.c, update)
 	}
-	semaphore.Go(func() {
+	go func() {
 		target.UpdateExtras(m.c, update)
-	})
+	}()
 
 	return true
 }
 
-func (m *Messages) UpdateMessageAuthor(n discord.Member) {
+func (m *Messages) UpdateMessageAuthor(ns ...discord.Member) {
 	m.guard.RLock()
-	for _, message := range m.messages {
-		if message.AuthorID != n.User.ID {
-			continue
+	for _, n := range ns {
+		for _, message := range m.messages {
+			if message.AuthorID != n.User.ID {
+				continue
+			}
+			message.UpdateMember(m.c, m.GuildID, n)
 		}
-		message.UpdateMember(m.c, m.GuildID, n)
 	}
 	m.guard.RUnlock()
 }
 
-func (m *Messages) Delete(ids ...discord.Snowflake) (deleted bool) {
+func (m *Messages) Delete(ids ...discord.Snowflake) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-IDLoop:
 	for _, id := range ids {
+	FindLoop:
 		for i, message := range m.messages {
 			if message.ID != id {
 				continue
@@ -393,12 +386,28 @@ IDLoop:
 			m.messages = append(m.messages[:i], m.messages[i+1:]...)
 			semaphore.IdleMust(m.Messages.Remove, message)
 
-			deleted = true
-			continue IDLoop
+			// Exit if len is 0
+			if len(m.messages) == 0 {
+				return
+			}
+
+			// Check if the last message (relative to i) is the author's:
+			if i > 0 && m.messages[i-1].AuthorID == message.AuthorID {
+				// Then we continue, since we don't need to uncollapse.
+				break FindLoop
+			}
+
+			// Check if next message is author's:
+			if i < len(m.messages) && m.messages[i].AuthorID == message.AuthorID {
+				// Then uncollapse next message:
+				semaphore.IdleMust(m.messages[i].SetCondensedUnsafe, false)
+			}
+
+			break FindLoop
 		}
 	}
 
-	return false
+	return
 }
 
 func (m *Messages) deleteNonce(nonce string) bool {
@@ -419,7 +428,11 @@ func (m *Messages) deleteNonce(nonce string) bool {
 }
 
 func (m *Messages) onAvatarClick(msg *Message) {
-	p := popup.SpawnUserPopup(m.c, m.GuildID, msg.AuthorID)
-	p.SetRelativeTo(msg.avatar)
+	p := popup.NewPopover(msg.avatar)
+
+	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GuildID)
+	body.ParentStyle, _ = p.GetStyleContext()
+
+	p.SetChildren(body)
 	p.Show()
 }

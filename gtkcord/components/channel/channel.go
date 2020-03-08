@@ -30,7 +30,7 @@ type Channel struct {
 	stateClass string
 }
 
-func createChannelRead(ch discord.Channel, s *ningen.State) (w *Channel) {
+func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 	w = newChannel(ch)
 
 	if ch.Type == discord.GuildCategory {
@@ -66,7 +66,7 @@ func createChannelRead(ch discord.Channel, s *ningen.State) (w *Channel) {
 	return
 }
 
-func newChannel(ch discord.Channel) *Channel {
+func newChannel(ch *discord.Channel) *Channel {
 	switch ch.Type {
 	case discord.GuildText:
 		return newChannelRow(ch)
@@ -78,7 +78,7 @@ func newChannel(ch discord.Channel) *Channel {
 	return nil
 }
 
-func newCategory(ch discord.Channel) (chw *Channel) {
+func newCategory(ch *discord.Channel) (chw *Channel) {
 	name := `<span font_size="smaller">` + html.EscapeString(strings.ToUpper(ch.Name)) + "</span>"
 
 	l, _ := gtk.LabelNew(name)
@@ -114,7 +114,7 @@ func newCategory(ch discord.Channel) (chw *Channel) {
 	return chw
 }
 
-func newChannelRow(ch discord.Channel) (chw *Channel) {
+func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	name := `<span weight="bold">` + html.EscapeString(ch.Name) + `</span>`
 
 	l, _ := gtk.LabelNew(ChannelHash + name)

@@ -16,6 +16,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
@@ -47,13 +48,17 @@ func init() {
 	discordSettings()
 }
 
-const SpinnerSize = 56
+const (
+	SpinnerSize  = 56
+	ChannelWidth = 240
+)
 
 type Application struct {
 	State *ningen.State
 
 	// Main Grid
 	Grid *gtk.Grid
+	cols map[int]gtk.IWidget
 	// <item> <separator> <item> <separator> <item>
 	//  0      1           2      3           4
 
@@ -64,12 +69,18 @@ type Application struct {
 	Channels *channel.Channels
 	Messages *message.Messages
 
+	// GuildID -> ChannelID; if GuildID == 0 then DM
+	LastAccess map[discord.Snowflake]discord.Snowflake
+
 	busy sync.Mutex
 }
 
 // New is not thread-safe.
 func New() (*Application, error) {
-	var a = &Application{}
+	var a = &Application{
+		cols:       map[int]gtk.IWidget{},
+		LastAccess: map[discord.Snowflake]discord.Snowflake{},
+	}
 
 	// Pre-make the grid but don't use it:
 	g, err := gtk.GridNew()
@@ -94,30 +105,36 @@ func New() (*Application, error) {
 }
 
 func (a *Application) setCol(w gtk.IWidget, n int) {
+	if w, ok := a.cols[n]; ok {
+		a.Grid.Remove(w)
+	}
+	a.cols[n] = w
 	a.Grid.Attach(w, n, 0, 1, 1)
 }
 
 func (a *Application) Ready(s *ningen.State) error {
-	log.Println("Logged in.")
-
 	a.State = s
 
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
-		log.Errorln("Discord error:", err)
+		log.Debugln("Discord error:", err)
 	}
 
 	semaphore.IdleMust(window.Resize, 1200, 850)
 
-	log.Println("Making headers")
+	// Set Markdown's highlighting theme
+	switch s.Ready.Settings.Theme {
+	case "dark":
+		md.ChangeStyle("monokai")
+	case "light":
+		md.ChangeStyle("monokailight")
+	}
 
 	// Create a new Header:
 	h, err := header.NewHeader(s)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create header")
 	}
-
-	log.Println("Making guilds")
 
 	g, err := guild.NewGuilds(s)
 	if err != nil {
@@ -126,15 +143,11 @@ func (a *Application) Ready(s *ningen.State) error {
 	g.OnSelect = a.SwitchGuild
 	g.DMButton.OnClick = a.SwitchDM
 
-	log.Println("Making channels")
-
 	c := channel.NewChannels(s)
 	c.OnSelect = a.SwitchChannel
 
 	p := channel.NewPrivateChannels()
 	p.OnSelect = a.SwitchDMChannel
-
-	log.Println("Making messages")
 
 	m, err := message.NewMessages(s)
 	if err != nil {
@@ -148,18 +161,21 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.Messages = m
 
 	semaphore.IdleMust(func() {
-		log.Println("Set the guilds column")
+		// Set the Guilds view to the grid
 		a.setCol(a.Guilds, 0)
 
-		log.Println("Set the separators")
+		// Set sizes
+		a.Channels.SetSizeRequest(ChannelWidth, -1)
+
+		// Add in separators
 		a.setCol(newSeparator(), 1)
 		a.setCol(newSeparator(), 3)
 
-		log.Println("Display everything")
+		// Display the grid and header
 		window.Display(a.Grid)
 		window.HeaderDisplay(h)
 
-		log.Println("Show all")
+		// Show everything
 		window.ShowAll()
 	})
 
@@ -167,89 +183,141 @@ func (a *Application) Ready(s *ningen.State) error {
 }
 
 func (a *Application) SwitchGuild(g *guild.Guild) {
-	a.changeCol(a.Channels, 2, func() func() bool {
+	a.changeCol(a.Channels, 2, channel.ChannelsWidth, func() func() bool {
 		a.Channels.Cleanup()
 		a.Privates.Cleanup()
+		a.Messages.Cleanup()
 
 		return func() bool {
 			err := a.Channels.LoadGuild(g.ID)
 			if err != nil {
 				log.Errorln("Failed to load guild:", err)
+				return false
 			}
-			log.Println("Loaded channels in guild")
-			return err == nil
-		}
-	})
-}
 
-func (a *Application) SwitchDM() {
-	a.changeCol(a.Privates, 2, func() func() bool {
-		a.Channels.Cleanup()
-		a.Privates.Cleanup()
-
-		return func() bool {
-			a.Privates.LoadChannels(a.State, a.State.Ready.PrivateChannels)
+			a.Header.UpdateGuild(g.Name)
 			return true
 		}
 	})
+
+	chID, ok := a.LastAccess[g.ID]
+	if !ok {
+		return
+	}
+
+	for _, ch := range a.Channels.Channels {
+		if ch.ID == chID {
+			a.SwitchChannel(ch)
+			return
+		}
+	}
+}
+
+func (a *Application) SwitchDM() {
+	a.changeCol(a.Privates, 2, channel.ChannelsWidth, func() func() bool {
+		a.Channels.Cleanup()
+		a.Privates.Cleanup()
+		a.Messages.Cleanup()
+
+		return func() bool {
+			a.Privates.LoadChannels(a.State, a.State.Ready.PrivateChannels)
+			a.Header.UpdateGuild("Private Messages")
+			return true
+		}
+	})
+
+	chID, ok := a.LastAccess[0]
+	if !ok {
+		return
+	}
+
+	ch, ok := a.Privates.Channels[chID.String()]
+	if !ok {
+		return
+	}
+
+	a.SwitchDMChannel(ch)
 }
 
 func (a *Application) SwitchChannel(ch *channel.Channel) {
-	a.changeCol(a.Messages, 4, func() func() bool {
+	log.Println("Switching to channel", ch.Name)
+
+	a.changeCol(a.Messages, 4, -1, func() func() bool {
 		a.Messages.Cleanup()
 
 		return func() bool {
 			err := a.Messages.Load(ch.ID)
 			if err != nil {
 				log.Errorln("Failed to load messages:", err)
+				return false
 			}
-			return err == nil
+
+			a.LastAccess[ch.Guild] = ch.ID
+			a.Header.UpdateChannel(ch.Name, ch.Topic)
+			return true
 		}
 	})
 }
 
 func (a *Application) SwitchDMChannel(pc *channel.PrivateChannel) {
-	a.changeCol(a.Messages, 4, func() func() bool {
+	a.changeCol(a.Messages, 4, -1, func() func() bool {
 		a.Messages.Cleanup()
 
 		return func() bool {
 			err := a.Messages.Load(pc.ID)
 			if err != nil {
 				log.Errorln("Failed to load messages:", err)
+				return false
 			}
-			return err == nil
+
+			a.LastAccess[0] = pc.ID
+			a.Header.UpdateChannel(pc.Name, "")
+			return true
 		}
 	})
 }
 
-func (a *Application) changeCol(w gtkutils.ExtendedWidget, n int, cleanup func() func() bool) {
+func (a *Application) changeCol(
+	w gtkutils.ExtendedWidget, n int,
+	spinnerWidth int,
+	cleanup func() func() bool) {
+
+	log.Println("Acquiring lock...")
+
 	// Lock
 	a.busy.Lock()
 	defer a.busy.Unlock()
+
+	log.Println("Lock acquired.")
 
 	// Clean up channels
 	fn := cleanup()
 
 	// Blur the grid
-	semaphore.Async(a.Grid.SetSensitive, false)
-	defer semaphore.Async(a.Grid.SetSensitive, true)
+	semaphore.IdleMust(a.Grid.SetSensitive, false)
+	defer semaphore.IdleMust(a.Grid.SetSensitive, true)
 
 	// Add a spinner here
-	var spinner gtk.IWidget
 	semaphore.IdleMust(func() {
-		a.Grid.Remove(w)
-		spinner, _ = animations.NewSpinner(SpinnerSize)
+		spinner, _ := animations.NewSizedSpinner(SpinnerSize)
+		spinner.SetSizeRequest(spinnerWidth, -1)
 		a.setCol(spinner, n)
 	})
 
+	log.Println("Loading fn")
+
 	if !fn() {
-		a.Grid.Remove(spinner)
+		semaphore.IdleMust(func() {
+			sadface, _ := animations.NewSizedSadFace()
+			sadface.SetSizeRequest(spinnerWidth, -1)
+			a.setCol(sadface, n)
+		})
+
 		return
 	}
 
 	// Replace the spinner with the actual channel:
 	semaphore.IdleMust(func() {
-		a.Grid.Remove(spinner)
 		a.setCol(w, n)
 		w.ShowAll()
 	})

@@ -39,7 +39,7 @@ func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 	for i := 0; i < len(folders); i++ {
 		f := folders[i]
 
-		if len(f.GuildIDs) == 1 && f.Name == "" {
+		if len(f.GuildIDs) == 1 {
 			r, err := newGuildRow(s, f.GuildIDs[0], nil)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to load guild "+f.GuildIDs[0].String())
@@ -129,7 +129,7 @@ func initGuilds(g *Guilds) {
 
 		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 			index := r.GetIndex()
-			if index < 1 && dm.OnClick != nil {
+			if index == 0 {
 				go dm.OnClick()
 				return
 			}
@@ -201,9 +201,6 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 		return
 	}
 	if !ch.GuildID.Valid() {
-		return
-	}
-	if guilds.Current != nil && guilds.Current.ID == ch.GuildID {
 		return
 	}
 

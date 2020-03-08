@@ -3,6 +3,7 @@ package message
 import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/log"
 )
 
 func (m *Messages) injectHandlers() {
@@ -18,6 +19,7 @@ func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
 	if m.ChannelID != t.ChannelID {
 		return
 	}
+	log.Println("Got", t)
 	m.Typing.Add(t)
 }
 
@@ -26,7 +28,7 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 		return
 	}
 
-	m.Insert(discord.Message(*c))
+	m.Insert((*discord.Message)(c))
 
 	// Check typing
 	m.Typing.Remove(c.Author.ID)
@@ -37,7 +39,7 @@ func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
 		return
 	}
 
-	m.Update(discord.Message(*u))
+	m.Update((*discord.Message)(u))
 }
 
 func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
@@ -57,10 +59,9 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 	if m.GuildID != c.GuildID {
+		log.Println("GuildMembersChunk not from our guild", m.GuildID)
 		return
 	}
 
-	for _, mem := range c.Members {
-		m.UpdateMessageAuthor(mem)
-	}
+	m.UpdateMessageAuthor(c.Members...)
 }

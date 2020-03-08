@@ -71,17 +71,17 @@ func (p *Popover) SetChildren(children gtkutils.WidgetDestroyer) {
 	p.Popover.Add(children)
 }
 
-func NewDynamicPopover(
-	relative gtkutils.WidgetConnector, create func() gtkutils.WidgetDestroyer) *Popover {
+type PopoverCreator = func(p *gtk.Popover) gtkutils.WidgetDestroyer
 
+func NewDynamicPopover(relative gtkutils.WidgetConnector, create PopoverCreator) *Popover {
 	p := NewPopover(relative)
 	p.Connect("closed", func() {
 		p.Children.Destroy()
 		p.Children = nil
 	})
 	relative.Connect("clicked", func() {
-		if w := create(); w != nil {
-			p.SetChildren(create())
+		if w := create(p.Popover); w != nil {
+			p.SetChildren(w)
 			p.ShowAll()
 		}
 	})
@@ -261,10 +261,7 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	b.Activity.Update(*a)
 
 	if strings.HasPrefix(a.Assets.LargeImage, "spotify:") {
-		// b.setClass("spotify")
 		b.UpdateStatus(discord.UnknownStatus)
-	} else {
-		// b.setClass("")
 	}
 
 	semaphore.IdleMust(b.Box.ShowAll)

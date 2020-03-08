@@ -8,7 +8,6 @@ import (
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
@@ -57,8 +56,6 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 	var name = bold(g.Name)
 	var guild *Guild
 
-	icon := icons.GetIcon("system-users-symbolic", IconSize/3*2)
-
 	semaphore.IdleMust(func() {
 		r, _ := gtk.ListBoxRowNew()
 		// Set paddings:
@@ -71,7 +68,8 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 		style, _ := r.GetStyleContext()
 		style.AddClass("guild")
 
-		i, _ := gtk.ImageNewFromPixbuf(icon)
+		i, _ := gtk.ImageNew()
+		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
 		i.SetHAlign(gtk.ALIGN_CENTER)
 		i.SetVAlign(gtk.ALIGN_CENTER)
 		r.Add(i)
@@ -99,14 +97,14 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 	}
 
 	// Prefetch unread state:
-	// GO FUNC() {
-	// 	IF RS := GUILD.CONTAINSuNREADcHANNEL(S); RS != NIL {
-	// 		UNREAD := TRUE
-	// 		PINGED := RS.mENTIONcOUNT > 0
+	go func() {
+		if rs := guild.containsUnreadChannel(s); rs != nil {
+			unread := true
+			pinged := rs.MentionCount > 0
 
-	// 		GUILD.SETuNREAD(UNREAD, PINGED)
-	// 	}
-	// }()
+			guild.setUnread(unread, pinged)
+		}
+	}()
 
 	return guild, nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"runtime/debug"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
@@ -13,6 +14,11 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/pkg/errors"
 )
+
+func init() {
+	// AGGRESSIVE GC
+	debug.SetGCPercent(50)
+}
 
 var ErrTokenNotProvided = errors.New("Token not in -t, $TOKEN, or keyring")
 
@@ -57,12 +63,14 @@ func Login(finish func(s *ningen.State)) error {
 	}
 
 	// No, so we need to display the login window:
-	var l = semaphore.IdleMust(login.NewLogin, finish).(*login.Login)
-	if err != ErrTokenNotProvided {
-		l.LastError = err
-	}
-
-	semaphore.IdleMust(l.Display)
+	log.Println("Summoning the Login window")
+	semaphore.IdleMust(func() {
+		var l = login.NewLogin(finish)
+		if err != ErrTokenNotProvided {
+			l.LastError = err
+		}
+		l.Display()
+	})
 
 	return nil
 }

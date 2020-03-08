@@ -36,16 +36,16 @@ func newExtraImage(proxy, direct string, w, h int, pp ...cache.Processor) gtkuti
 	var evb *gtk.EventBox
 
 	semaphore.IdleMust(func() {
-		img = semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
-		semaphore.IdleMust(img.SetVAlign, gtk.ALIGN_START)
-		semaphore.IdleMust(img.SetHAlign, gtk.ALIGN_START)
+		img, _ = gtk.ImageNew()
+		img.SetVAlign(gtk.ALIGN_START)
+		img.SetHAlign(gtk.ALIGN_START)
 
-		evb = semaphore.IdleMust(gtk.EventBoxNew).(*gtk.EventBox)
-		semaphore.IdleMust(evb.Add, img)
-		semaphore.IdleMust(evb.Connect, "button-release-event", func() {
+		evb, _ = gtk.EventBoxNew()
+		evb.Add(img)
+		evb.Connect("button-release-event", func() {
 			SpawnPreviewDialog(proxy, direct)
 		})
-		semaphore.IdleMust(embedSetMargin, evb)
+		embedSetMargin(evb)
 	})
 
 	cache.AsyncFetch(proxy, img, w, h, pp...)
@@ -74,7 +74,7 @@ func sizeToURL(url string, w, h int) string {
 	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
 }
 
-func NewAttachment(msg discord.Message) []gtkutils.ExtendedWidget {
+func NewAttachment(msg *discord.Message) []gtkutils.ExtendedWidget {
 	// Discord's supported formats
 	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
 	var widgets = make([]gtkutils.ExtendedWidget, 0, len(msg.Attachments))
@@ -114,7 +114,7 @@ func validExt(url string, exts []string) bool {
 	return false
 }
 
-func NewEmbed(s *ningen.State, msg discord.Message) []gtkutils.ExtendedWidget {
+func NewEmbed(s *ningen.State, msg *discord.Message) []gtkutils.ExtendedWidget {
 	if len(msg.Embeds) == 0 {
 		return nil
 	}
@@ -133,7 +133,7 @@ func NewEmbed(s *ningen.State, msg discord.Message) []gtkutils.ExtendedWidget {
 	return embeds
 }
 
-func newEmbed(s *ningen.State, msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+func newEmbed(s *ningen.State, msg *discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	switch embed.Type {
 	case discord.NormalEmbed, discord.LinkEmbed:
 		return newNormalEmbed(s, msg, embed)
@@ -159,7 +159,7 @@ func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
 }
 
 func newNormalEmbed(
-	s *ningen.State, msg discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
+	s *ningen.State, msg *discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 
 	main := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
 	semaphore.IdleMust(main.SetHAlign, gtk.ALIGN_START)
@@ -216,7 +216,7 @@ func newNormalEmbed(
 	if embed.Description != "" {
 		txtv := semaphore.IdleMust(gtk.TextViewNew).(*gtk.TextView)
 		txtb := semaphore.IdleMust(txtv.GetBuffer).(*gtk.TextBuffer)
-		md.ParseMessage(s, &msg, []byte(embed.Description), txtb)
+		md.ParseMessage(s, msg, []byte(embed.Description), txtb)
 
 		semaphore.IdleMust(func() {
 			txtv.SetCursorVisible(false)
@@ -243,11 +243,11 @@ func newNormalEmbed(
 			col, row := 0, 0
 
 			for _, field := range embed.Fields {
-				text := semaphore.IdleMust(gtk.LabelNew, "").(*gtk.Label)
-				semaphore.IdleMust(text.SetLineWrap, true)
-				semaphore.IdleMust(text.SetLineWrapMode, pango.WRAP_WORD_CHAR)
-				semaphore.IdleMust(text.SetXAlign, float64(0.0))
-				semaphore.IdleMust(text.SetMarkup, fmt.Sprintf(
+				text, _ := gtk.LabelNew("")
+				text.SetLineWrap(true)
+				text.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+				text.SetXAlign(float64(0.0))
+				text.SetMarkup(fmt.Sprintf(
 					`<span weight="heavy">%s</span>`+"\n"+`<span weight="light">%s</span>`,
 					field.Name, field.Value,
 				))

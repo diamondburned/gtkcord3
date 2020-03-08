@@ -92,7 +92,7 @@ func NewMessageUploader(paths []string) (*MessageUploader, error) {
 	return m, nil
 }
 
-func (m *MessageUploader) MakeSendData(message discord.Message) api.SendMessageData {
+func (m *MessageUploader) MakeSendData(message *discord.Message) api.SendMessageData {
 	s := api.SendMessageData{
 		Content: message.Content,
 		Nonce:   message.Nonce,

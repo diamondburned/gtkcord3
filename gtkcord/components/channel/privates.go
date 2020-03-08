@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -99,6 +100,10 @@ func (pcs *PrivateChannels) Cleanup() {
 func (pcs *PrivateChannels) LoadChannels(s ningen.Presencer, channels []discord.Channel) {
 	// TODO: mutex
 	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
+
+	sort.Slice(channels, func(i, j int) bool {
+		return channels[i].LastMessageID > channels[j].LastMessageID
+	})
 
 	semaphore.IdleMust(func() {
 		for _, channel := range channels {

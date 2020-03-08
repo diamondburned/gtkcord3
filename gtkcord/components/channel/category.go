@@ -7,16 +7,16 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 )
 
 type _sortStructure struct {
-	parent    discord.Channel
-	hasParent bool
-	children  []discord.Channel
+	parent   discord.Channel
+	children []discord.Channel
 }
 
 func filterChannels(s *state.State, chs []discord.Channel) []discord.Channel {
-	filtered := chs[:0]
+	filtered := make([]discord.Channel, 0, len(chs))
 	u := s.Ready.User
 
 	for _, ch := range chs {
@@ -53,11 +53,9 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 			v, ok := tree[ch.ID]
 			if ok {
 				v.parent = ch
-				v.hasParent = true
 			} else {
 				tree[ch.ID] = &_sortStructure{
-					parent:    ch,
-					hasParent: true,
+					parent: ch,
 				}
 			}
 
@@ -78,8 +76,7 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 		}
 
 		tree[ch.ID] = &_sortStructure{
-			parent:    ch,
-			hasParent: true,
+			parent: ch,
 		}
 	}
 
@@ -87,7 +84,7 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 
 	for _, v := range tree {
 		if v.children != nil {
-			sort.Slice(v.children, func(i, j int) bool {
+			sort.SliceStable(v.children, func(i, j int) bool {
 				return v.children[i].Position < v.children[j].Position
 			})
 		}
@@ -107,12 +104,17 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 
 	semaphore.IdleMust(func() {
 		for _, sch := range list {
-			if sch.hasParent {
-				channels = append(channels, createChannelRead(sch.parent, s))
+			sch := sch
+
+			log.Println("Category:", sch.parent.Name)
+
+			if sch.parent.ID.Valid() {
+				channels = append(channels, createChannelRead(&sch.parent, s))
 			}
 
-			for _, ch := range sch.children {
-				channels = append(channels, createChannelRead(ch, s))
+			for i := range sch.children {
+				log.Println("Channel:", sch.children[i].Name)
+				channels = append(channels, createChannelRead(&sch.children[i], s))
 			}
 		}
 	})

@@ -7,7 +7,6 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -51,14 +50,13 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 		name = humanize.Strings(names)
 	}
 
-	icon, _ := icons.IconTheme.LoadIcon("network-workgroup-symbolic", DMAvatarSize, 0)
-
 	l, _ := gtk.LabelNew(html.EscapeString(name))
 	l.SetUseMarkup(true)
 	l.SetMarginStart(8)
 	l.SetEllipsize(pango.ELLIPSIZE_END)
 
-	a, _ := gtk.ImageNewFromPixbuf(icon)
+	a, _ := gtk.ImageNew()
+	gtkutils.ImageSetIcon(a, "network-workgroup-symbolic", DMAvatarSize)
 	gtkutils.Margin4(a, 4, 4, 8, 0)
 
 	s, _ := a.GetStyleContext()

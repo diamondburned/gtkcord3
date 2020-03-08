@@ -68,9 +68,19 @@ const CSS = `
 
 	.user-info, .user-info > box > *:nth-child(n+3) {
 		background-color: @theme_base_color;
+		color: @theme_fg_color;
 	}
 	.user-info.spotify {
 		background-color: #1db954;
+		color: white;
+	}
+	.user-info.twitch {
+		background-color: rgb(89, 54, 149);
+		color: white;
+	}
+	.user-info.game {
+		background-color: #7289da;
+		color: white;
 	}
 
 	.message-input {

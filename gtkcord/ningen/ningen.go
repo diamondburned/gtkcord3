@@ -3,6 +3,7 @@ package ningen
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
@@ -15,6 +16,11 @@ import (
 func init() {
 	gateway.Presence = &gateway.UpdateStatusData{
 		Status: discord.OnlineStatus,
+	}
+	gateway.WSRetries = 2
+	gateway.WSTimeout = 5 * time.Second
+	gateway.WSDebug = func(v ...interface{}) {
+		log.Debugln(v...)
 	}
 }
 
@@ -47,14 +53,22 @@ type Mute struct {
 }
 
 func Connect(token string) (*State, error) {
-	s, err := state.New(token)
+	store := state.NewDefaultStore(&state.DefaultStoreOptions{
+		MaxMessages: 50,
+	})
+
+	s, err := state.NewWithStore(token, store)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a new Discord session")
 	}
 
+	log.Println("Opening")
+
 	if err := s.Open(); err != nil {
 		return nil, errors.Wrap(err, "Failed to connect to Discord")
 	}
+
+	log.Println("Opened")
 
 	return Ningen(s)
 }
@@ -111,6 +125,10 @@ func Ningen(s *state.State) (*State, error) {
 		}
 	})
 
+	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
+		s.PresenceSet(0, state.JoinSession(r))
+	})
+
 	if s.Ready.SessionID == "" {
 		s.WaitFor(context.Background(), func(v interface{}) bool {
 			_, ok := v.(*gateway.ReadyEvent)
@@ -120,6 +138,38 @@ func Ningen(s *state.State) (*State, error) {
 
 	state.UpdateReady(s.Ready)
 	return state, nil
+}
+
+func (s *State) JoinSession(r *gateway.SessionsReplaceEvent) *discord.Presence {
+	ses := *r
+
+	var game *discord.Activity
+	var status discord.Status
+	var activities []discord.Activity
+
+	for i := len(ses) - 1; i >= 0; i-- {
+		presence := ses[i]
+
+		if presence.Game != nil {
+			game = presence.Game
+		}
+		if presence.Status != "" {
+			status = presence.Status
+		}
+
+		activities = append(activities, presence.Activities...)
+	}
+
+	if game == nil && len(activities) > 0 {
+		game = &activities[len(activities)-1]
+	}
+
+	return &discord.Presence{
+		User:       s.Ready.User,
+		Game:       game,
+		Status:     status,
+		Activities: activities,
+	}
 }
 
 func (s *State) UpdateReady(r gateway.ReadyEvent) {
@@ -207,6 +257,8 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 }
 
 func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
+	log.Debugln(log.Trace(0), "MarkUnread")
+
 	s.readMutex.Lock()
 
 	// Check for a ReadState
@@ -218,7 +270,7 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 		s.LastRead[chID] = st
 	}
 	// Update ReadState
-	st.ChannelID = msgID
+	// st.LastMessageID = msgID
 	st.MentionCount += mentions
 
 	s.readMutex.Unlock()
@@ -230,6 +282,8 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 }
 
 func (s *State) MarkRead(chID, msgID discord.Snowflake) {
+	log.Debugln(log.Trace(0), "MarkRead")
+
 	s.readMutex.Lock()
 
 	// Check for a ReadState
@@ -240,6 +294,12 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 		}
 		s.LastRead[chID] = st
 	}
+
+	if st.LastMessageID == msgID {
+		s.readMutex.Unlock()
+		return
+	}
+
 	// Update ReadState
 	st.LastMessageID = msgID
 	st.MentionCount = 0

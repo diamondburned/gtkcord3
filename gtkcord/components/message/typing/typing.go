@@ -34,25 +34,21 @@ func handler() {
 
 	for {
 		// First, catch a TypingState
-		for tOld == nil {
-			tOld = <-typingHandler
-			// stop until we get something
-		}
+		// for tOld == nil {
+		// 	tOld = <-typingHandler
+		// 	// stop until we get something
+		// }
 
 		// Block until a tick or a typing state
 		select {
 		case <-tick.C:
 		case t := <-typingHandler:
-			// If the incoming t is nil, but we still have the old t, close
-			// the old t.
-			if t == nil {
-				tOld.Stop()
-			} else {
-				// Drain the ticker if it's not drained:
-				if !tick.Stop() {
-					<-tick.C
-				}
+			// Drain the ticker if it's not drained:
+			if !tick.Stop() {
+				<-tick.C
+			}
 
+			if t != nil {
 				// Reset the timer to the shortest tick:
 				if T := t.Shortest(); !T.IsZero() {
 					tick.Reset(time.Now().Sub(T))
@@ -225,7 +221,7 @@ func (t *State) Shortest() time.Time {
 	}
 
 	t.sort()
-	return t.Users[0].Time
+	return t.Users[0].Time.Add(-1)
 }
 
 func (t *State) cleanUp() {

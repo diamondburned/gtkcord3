@@ -13,7 +13,6 @@ import (
 	"unicode"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -209,7 +208,7 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 			return
 		}
 
-		semaphore.Async(img.SetFromPixbuf, p)
+		img.SetFromPixbuf(p)
 	})
 
 	if _, err := l.Write(b); err != nil {
@@ -257,7 +256,7 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 				log.Errorln("Failed to get pixbuf during area-prepared:", err)
 				return
 			}
-			semaphore.Async(img.SetFromAnimation, p)
+			semaphore.IdleMust(img.SetFromAnimation, p)
 
 		} else {
 			p, err := l.GetPixbuf()
@@ -265,7 +264,7 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 				log.Errorln("Failed to get animation during area-prepared:", err)
 				return
 			}
-			semaphore.Async(img.SetFromPixbuf, p)
+			semaphore.IdleMust(img.SetFromPixbuf, p)
 		}
 	})
 
@@ -281,8 +280,7 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 }
 
 func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
-	icon := icons.GetIcon("image-missing", 24)
-	semaphore.IdleMust(img.SetFromPixbuf, icon)
+	semaphore.IdleMust(gtkutils.ImageSetIcon, img, "image-missing", 24)
 
 	if len(pp) == 0 && w != 0 && h != 0 {
 		go func() {

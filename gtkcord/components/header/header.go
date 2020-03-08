@@ -116,7 +116,7 @@ func newHeader(s *ningen.State) (*Header, error) {
 }
 
 func (h *Header) UpdateGuild(name string) {
-	semaphore.Async(h.GuildName.SetMarkup,
+	semaphore.IdleMust(h.GuildName.SetMarkup,
 		`<span weight="bold">`+html.EscapeString(name)+`</span>`)
 }
 
@@ -125,7 +125,7 @@ func (h *Header) UpdateChannel(name, topic string) {
 		name = `<span weight="bold">` + "#" + html.EscapeString(name) + `</span>`
 	}
 
-	semaphore.Async(func() {
+	semaphore.IdleMust(func() {
 		h.ChannelName.SetMarkup(name)
 		h.ChannelTopic.SetText(topic)
 	})
