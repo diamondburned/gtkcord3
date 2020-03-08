@@ -40,7 +40,7 @@ func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 		f := folders[i]
 
 		if len(f.GuildIDs) == 1 {
-			r, err := newGuildRow(s, f.GuildIDs[0], nil)
+			r, err := newGuildRow(s, f.GuildIDs[0], nil, nil)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to load guild "+f.GuildIDs[0].String())
 			}
@@ -86,7 +86,7 @@ func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 	})
 
 	for _, g := range guilds {
-		r, err := newGuildRow(s, g.ID, &g)
+		r, err := newGuildRow(s, g.ID, &g, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
 		}

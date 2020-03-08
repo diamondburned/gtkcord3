@@ -22,6 +22,8 @@ const (
 
 type Guild struct {
 	gtkutils.ExtendedWidget
+	Parent *GuildFolder
+
 	Row   *gtk.ListBoxRow
 	Style *gtk.StyleContext
 
@@ -39,7 +41,12 @@ type Guild struct {
 	unreadMu  sync.Mutex
 }
 
-func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (*Guild, error) {
+func newGuildRow(
+	s *ningen.State,
+	guildID discord.Snowflake,
+	g *discord.Guild,
+	parent *GuildFolder) (*Guild, error) {
+
 	var fetcherr error
 
 	if g == nil {
@@ -76,6 +83,7 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 
 		guild = &Guild{
 			ExtendedWidget: r,
+			Parent:         parent,
 
 			Row:       r,
 			Style:     style,
@@ -98,6 +106,11 @@ func newGuildRow(s *ningen.State, guildID discord.Snowflake, g *discord.Guild) (
 
 	// Prefetch unread state:
 	go func() {
+		if s.GuildMuted(guildID, false) {
+			guild.setClass("muted")
+			return
+		}
+
 		if rs := guild.containsUnreadChannel(s); rs != nil {
 			unread := true
 			pinged := rs.MentionCount > 0
@@ -167,6 +180,10 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 }
 
 func (guild *Guild) setUnread(unread, pinged bool) {
+	if guild.stateClass == "muted" {
+		return
+	}
+
 	switch {
 	case pinged:
 		guild.setClass("pinged")
@@ -174,6 +191,10 @@ func (guild *Guild) setUnread(unread, pinged bool) {
 		guild.setClass("unread")
 	default:
 		guild.setClass("")
+	}
+
+	if guild.Parent != nil {
+		guild.Parent.setUnread(unread, pinged)
 	}
 }
 

@@ -257,8 +257,6 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 }
 
 func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
-	log.Debugln(log.Trace(0), "MarkUnread")
-
 	s.readMutex.Lock()
 
 	// Check for a ReadState
@@ -282,8 +280,6 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 }
 
 func (s *State) MarkRead(chID, msgID discord.Snowflake) {
-	log.Debugln(log.Trace(0), "MarkRead")
-
 	s.readMutex.Lock()
 
 	// Check for a ReadState

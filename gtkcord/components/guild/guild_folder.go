@@ -4,6 +4,7 @@ import (
 	"html"
 
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -21,6 +22,8 @@ type GuildFolder struct {
 
 	Guilds   []*Guild
 	Revealed bool
+
+	stateClass string
 }
 
 func newGuildFolder(
@@ -85,13 +88,26 @@ func newGuildFolder(
 		})
 	})
 
+	var unread, pinged bool
+
 	for _, id := range folder.GuildIDs {
-		r, err := newGuildRow(s, id, nil)
+		r, err := newGuildRow(s, id, nil, Folder)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to load guild "+id.String())
 		}
+		r.Parent = Folder
 		Folder.Guilds = append(Folder.Guilds, r)
+
+		switch r.stateClass {
+		case "pinged":
+			pinged = true
+			fallthrough
+		case "unread":
+			unread = true
+		}
 	}
+
+	Folder.setUnread(unread, pinged)
 
 	semaphore.IdleMust(func() {
 		for _, r := range Folder.Guilds {
@@ -108,4 +124,37 @@ func newGuildFolder(
 	})
 
 	return Folder, nil
+}
+
+func (f *GuildFolder) setUnread(unread, pinged bool) {
+	// If unread but current folder is pinged, then set pinged to true.
+	// if unread && !pinged && f.stateClass == "pinged" {
+	// 	pinged = true
+	// }
+
+	// Check all children guilds
+	if !unread || !pinged {
+		for _, g := range f.Guilds {
+			switch g.stateClass {
+			case "pinged":
+				pinged = true
+				fallthrough
+			case "unread":
+				unread = true
+			}
+		}
+	}
+
+	switch {
+	case pinged:
+		f.setClass("pinged")
+	case unread:
+		f.setClass("unread")
+	default:
+		f.setClass("")
+	}
+}
+
+func (f *GuildFolder) setClass(class string) {
+	gtkutils.DiffClass(&f.stateClass, class, f.Style)
 }
