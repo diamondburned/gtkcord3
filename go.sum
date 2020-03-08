@@ -18,6 +18,12 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/diamondburned/arikawa v0.1.5-0.20200302003940-0aebea60bd12 h1:UnS4Ylx0uMV7q1xyYftASQHW1RcT+WF+vfBxObIbpJM=
 github.com/diamondburned/arikawa v0.1.5-0.20200302003940-0aebea60bd12/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
+github.com/diamondburned/arikawa v0.1.5 h1:RMfzPXwlhY7DkPlvOJNPUOYSDZrpEH4A5wiIngUxpmw=
+github.com/diamondburned/arikawa v0.1.5/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
+github.com/diamondburned/arikawa v0.1.6-0.20200305234944-6cd4b361ce56 h1:g25YdQ6hwUgNdrOH3kmWYsg4Xf+qlt8BbA6oxqFKZt8=
+github.com/diamondburned/arikawa v0.1.6-0.20200305234944-6cd4b361ce56/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
+github.com/diamondburned/arikawa v0.1.6-0.20200307195030-22ef50c49995 h1:xnIRydr2C6qNMN5/PdNoWWuYFWVrPEcHWOTF0kEBUF0=
+github.com/diamondburned/arikawa v0.1.6-0.20200307195030-22ef50c49995/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
 github.com/dlclark/regexp2 v1.1.6 h1:CqB4MjHw0MFCDj+PHHjiESmHX+N7t0tJzKvC6M97BRg=

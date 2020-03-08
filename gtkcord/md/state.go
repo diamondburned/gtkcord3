@@ -19,11 +19,10 @@ type match struct {
 	str      []byte
 }
 
-func newPool(p *Parser) sync.Pool {
+func newPool() sync.Pool {
 	return sync.Pool{
 		New: func() interface{} {
 			return &mdState{
-				p:      p,
 				fmtter: &Formatter{},
 				buffer: &bytes.Buffer{},
 			}
@@ -32,8 +31,6 @@ func newPool(p *Parser) sync.Pool {
 }
 
 type mdState struct {
-	p *Parser
-
 	m *discord.Message
 	d Discord
 
@@ -220,6 +217,14 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte, d Discord, msg *discord
 	for i := 0; i < len(found); i++ {
 		// If the match is an inline markup symbol:
 		if found[i][4*2] > -1 {
+			start := found[i][4*2]
+			end := found[i][4*2+1]
+
+			// Skip inline symbols that are in words
+			if start > 0 && end < len(input)-1 && input[start-1] != ' ' && input[end] != ' ' {
+				continue
+			}
+
 			// If the pair isn't already matched with a pair prior, and
 			// if we could not find a next matching pair:
 			if s.used, ok = findPairs(found, i, 4, s.used); !ok {

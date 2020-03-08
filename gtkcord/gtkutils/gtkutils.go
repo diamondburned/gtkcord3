@@ -2,10 +2,10 @@ package gtkutils
 
 import (
 	"html"
-	"log"
 	"sync"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -21,10 +21,30 @@ type ExtendedWidget interface {
 	Show()
 	ShowAll()
 	Destroy()
+	SetSizeRequest(w, h int)
+}
+
+type WidgetDestroyer interface {
+	gtk.IWidget
+	Destroy()
+}
+
+type WidgetConnector interface {
+	gtk.IWidget
+	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
+}
+
+type WidgetSizeRequester interface {
+	gtk.IWidget
+	SetSizeRequest(w, h int)
+	SetVExpand(bool)
+	SetHExpand(bool)
 }
 
 // Safe-guard
 var _ ExtendedWidget = (*gtk.Box)(nil)
+var _ WidgetDestroyer = (*gtk.Box)(nil)
+var _ WidgetConnector = (*gtk.Box)(nil)
 
 type Marginator interface {
 	SetMarginStart(int)
@@ -118,4 +138,27 @@ func DiffClass(old *string, new string, style *gtk.StyleContext) {
 	}
 
 	semaphore.IdleMust(style.AddClass, new)
+}
+
+func DiffClassUnsafe(old *string, new string, style *gtk.StyleContext) {
+	if *old == new {
+		return
+	}
+
+	if *old != "" {
+		style.RemoveClass(*old)
+	}
+
+	*old = new
+
+	if new == "" {
+		return
+	}
+
+	style.AddClass(new)
+}
+
+func ImageSetIcon(img *gtk.Image, icon string, px int) {
+	img.SetProperty("icon-name", icon)
+	img.SetProperty("pixel-size", px)
 }

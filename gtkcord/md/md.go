@@ -2,14 +2,12 @@ package md
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -35,7 +33,7 @@ var regexes = []string{
 	`(<(a?):\w+:(\d+)>)`,
 }
 
-var HighlightStyle = "monokailight"
+var HighlightStyle = "monokai"
 
 var (
 	style    = (*chroma.Style)(nil)
@@ -43,74 +41,32 @@ var (
 	fmtter   = Formatter{}
 	css      = map[chroma.TokenType]string{}
 	lexerMap = sync.Map{}
+	pool     = newPool()
 )
 
-type Parser struct {
-	pool  sync.Pool
-	State *state.State
+var ChannelPressed func(ev *gdk.EventButton, ch discord.Channel)
+var UserPressed func(ev *gdk.EventButton, user discord.GuildUser)
 
-	ChannelPressed func(ev *gdk.EventButton, ch discord.Channel)
-	UserPressed    func(ev *gdk.EventButton, user discord.GuildUser)
-
-	theme *gtk.IconTheme
-
-	icons map[string]*gdk.Pixbuf
-	icoMu sync.Mutex
-}
-
-func NewParser(s *state.State) *Parser {
+func init() {
 	log.Debugln("REGEX:", strings.Join(regexes, "|"))
+	refreshStyle()
+}
 
+func ChangeStyle(styleName string) {
+	HighlightStyle = styleName
+	refreshStyle()
+}
+
+func refreshStyle() {
+	style = styles.Get(HighlightStyle)
 	if style == nil {
-		style = styles.Get(HighlightStyle)
-		if style == nil {
-			panic("Unknown highlighting style: " + HighlightStyle)
-		}
-
-		css = styleToCSS(style)
+		panic("Unknown highlighting style: " + HighlightStyle)
 	}
-
-	i, err := gtk.IconThemeGetDefault()
-	if err != nil {
-		// We can panic here, as nothing would work if this ever panics.
-		log.Panicln("Couldn't get default GTK Icon Theme:", err)
-	}
-
-	p := &Parser{
-		State: s,
-		theme: i,
-		icons: map[string]*gdk.Pixbuf{},
-	}
-	p.pool = newPool(p)
-
-	return p
+	css = styleToCSS(style)
 }
 
-func (p *Parser) GetIcon(name string, size int) *gdk.Pixbuf {
-	var key = name + "#" + strconv.Itoa(size)
-
-	p.icoMu.Lock()
-	defer p.icoMu.Unlock()
-
-	if v, ok := p.icons[key]; ok {
-		return v
-	}
-
-	// pb := semaphore.IdleMust(p.theme.LoadIcon, name, size,
-	// gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE)).(*gdk.Pixbuf)
-
-	pb, err := p.theme.LoadIcon(name, size,
-		gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
-	if err != nil {
-		log.Panicln("Failed to load icon", name, err)
-	}
-
-	p.icons[key] = pb
-	return pb
-}
-
-func (p *Parser) Parse(md []byte, buf *gtk.TextBuffer) {
-	p.ParseMessage(nil, nil, md, buf)
+func Parse(md []byte, buf *gtk.TextBuffer) {
+	ParseMessage(nil, nil, md, buf)
 }
 
 type Discord interface {
@@ -118,8 +74,8 @@ type Discord interface {
 	Member(guild, user discord.Snowflake) (*discord.Member, error)
 }
 
-func (p *Parser) ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
-	s := p.pool.Get().(*mdState)
+func ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
+	s := pool.Get().(*mdState)
 	s.use(buf, md, d, m)
 
 	var tree func(i int)
@@ -167,5 +123,5 @@ func (p *Parser) ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk
 	s.attr = 0
 	s.color = ""
 
-	p.pool.Put(s)
+	pool.Put(s)
 }

@@ -9,11 +9,17 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/gtkcord/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/diamondburned/gtkcord3/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -22,11 +28,16 @@ var HTTPClient = http.Client{
 	Timeout: 10 * time.Second,
 }
 
-var App *application
+// var App *application
 
 func discordSettings() {
 	discord.DefaultEmbedColor = 0x808080
-	api.UserAgent = "linux"
+	api.UserAgent = "" +
+		"Mozilla/5.0 (X11; Linux x86_64) " +
+		"AppleWebKit/537.36 (KHTML, like Gecko) " +
+		"Chrome/79.0.3945.130 " +
+		"Safari/537.36"
+
 	gateway.Identity = gateway.IdentifyProperties{
 		OS: "linux",
 	}
@@ -35,480 +46,482 @@ func discordSettings() {
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	discordSettings()
-
-	App = new(application)
 }
 
-type application struct {
-	gtkutils.ExtendedWidget
+const (
+	SpinnerSize  = 56
+	ChannelWidth = 240
+)
 
-	Grid *gtk.Grid
-
+type Application struct {
 	State *ningen.State
 
-	// self stufff
-	Me *discord.User
+	// Main Grid
+	Grid *gtk.Grid
+	cols map[int]gtk.IWidget
+	// <item> <separator> <item> <separator> <item>
+	//  0      1           2      3           4
 
-	Header *Header
+	// Application states
+	Header   *header.Header
+	Guilds   *guild.Guilds
+	Privates *channel.PrivateChannels
+	Channels *channel.Channels
+	Messages *message.Messages
 
-	// Dynamic sidebars and main pages
-	Sidebar  gtkutils.ExtendedWidget
-	Messages gtkutils.ExtendedWidget
+	// GuildID -> ChannelID; if GuildID == 0 then DM
+	LastAccess map[discord.Snowflake]discord.Snowflake
 
-	// Stuff
-	Privates *PrivateChannels
-	Guilds   *Guilds
-
-	// current stuff
-	Guild   *Guild
-	Channel *Channel
-
-	// nil after finalize()
-	sbox      *gtk.Box
-	spinner   *gtk.Spinner
-	iconTheme *gtk.IconTheme
-
-	css       *gtk.CssProvider
-	parser    *md.Parser
-	clipboard *gtk.Clipboard
-
-	// used for events
-	busy sync.RWMutex
-	done chan struct{}
-
-	completionQueue chan func()
-	typingHandler   chan *TypingState
+	busy sync.Mutex
 }
 
-func Init() error {
-	if App.done != nil {
-		return nil
+// New is not thread-safe.
+func New() (*Application, error) {
+	var a = &Application{
+		cols:       map[int]gtk.IWidget{},
+		LastAccess: map[discord.Snowflake]discord.Snowflake{},
 	}
 
-	App.done = make(chan struct{})
-	a := App
-
+	// Pre-make the grid but don't use it:
 	g, err := gtk.GridNew()
 	if err != nil {
-		return errors.Wrap(err, "Failed to create grid")
+		return nil, errors.Wrap(err, "Failed to create grid")
 	}
 	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
 	g.SetRowHomogeneous(true)
 	a.Grid = g
 
-	// Instead of adding the above grid, we should add the spinning circle.
-	sbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	// Instead, use the spinner:
+	s, err := animations.NewSpinner(75)
 	if err != nil {
-		return errors.Wrap(err, "Failed to create spinner box")
+		return nil, errors.Wrap(err, "Failed to create spinner")
 	}
-	sbox.SetVAlign(gtk.ALIGN_CENTER)
-	sbox.SetHAlign(gtk.ALIGN_CENTER)
-	sbox.SetSizeRequest(50, 50)
 
-	// Add the spinner into the window instead of the spinner:
-	window.Display(sbox)
-	a.sbox = sbox
-
-	s, err := gtk.SpinnerNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create spinner")
-	}
-	s.SetVAlign(gtk.ALIGN_CENTER)
-	s.SetHAlign(gtk.ALIGN_CENTER)
-	s.SetSizeRequest(50, 50)
-	s.Start()
-
-	sbox.Add(s)
-	a.spinner = s
-
+	window.Display(s)
 	window.Resize(1200, 850)
 	window.ShowAll()
 
-	return nil
+	return a, nil
 }
 
-func Ready(s *ningen.State) error {
+func (a *Application) setCol(w gtk.IWidget, n int) {
+	if w, ok := a.cols[n]; ok {
+		a.Grid.Remove(w)
+	}
+	a.cols[n] = w
+	a.Grid.Attach(w, n, 0, 1, 1)
+}
+
+func (a *Application) Ready(s *ningen.State) error {
+	a.State = s
+
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
-		log.Errorln("Discord error:", err)
+		log.Debugln("Discord error:", err)
 	}
 
-	must(window.Resize, 1200, 850)
+	semaphore.IdleMust(window.Resize, 1200, 850)
 
-	// Create a new header placeholder:
-	h, err := newHeader()
+	// Set Markdown's highlighting theme
+	switch s.Ready.Settings.Theme {
+	case "dark":
+		md.ChangeStyle("monokai")
+	case "light":
+		md.ChangeStyle("monokailight")
+	}
+
+	// Create a new Header:
+	h, err := header.NewHeader(s)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create header")
 	}
-	App.Header = h
-	must(window.HeaderDisplay, h)
 
-	// Set variables, etc.
-	App.State = s
-	App.parser = md.NewParser(s.State)
-	App.parser.UserPressed = userMentionPressed
-	App.parser.ChannelPressed = channelMentionPressed
-
-	u, err := s.Me()
+	g, err := guild.NewGuilds(s)
 	if err != nil {
-		return errors.Wrap(err, "Failed to get current user")
+		return errors.Wrap(err, "Failed to make guilds")
 	}
-	App.Me = u
-	App.Header.Hamburger.User.Update(*u)
-	App.Header.Hamburger.User.UpdateStatus(s.Ready.Settings.Status)
+	g.OnSelect = a.SwitchGuild
+	g.DMButton.OnClick = a.SwitchDM
 
-	{
-		gw, err := gtk.ScrolledWindowNew(nil, nil)
-		if err != nil {
-			return errors.Wrap(err, "Failed to make guilds scrollbar")
-		}
-		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+	c := channel.NewChannels(s)
+	c.OnSelect = a.SwitchChannel
 
-		// spawned by passing nil to loadGuild
-		ps := newPrivateChannels(App.State.Ready.PrivateChannels)
-		App.Privates = ps
+	p := channel.NewPrivateChannels()
+	p.OnSelect = a.SwitchDMChannel
 
-		gs, err := newGuilds(ps.GuildRow)
-		if err != nil {
-			return errors.Wrap(err, "Failed to make guilds view")
-		}
-		App.Guilds = gs
-		gtkutils.InjectCSS(gs, "guilds", "")
-
-		must(gw.Add, gs)
-		must(App.Grid.Add, gw)
-
-		s1, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		s1.Show()
-		must(App.Grid.Attach, s1, 1, 0, 1, 1)
-
-		s2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-		s2.Show()
-		must(App.Grid.Attach, s2, 3, 0, 1, 1)
+	m, err := message.NewMessages(s)
+	if err != nil {
+		return errors.Wrap(err, "Failed to make messages")
 	}
 
-	// Finalize the window:
-	must(window.Display, App.Grid)
-	must(window.ShowAll)
+	a.Header = h
+	a.Guilds = g
+	a.Channels = c
+	a.Privates = p
+	a.Messages = m
 
-	// Finalize the spinner so it can be reused:
-	must(App.spinner.Stop)
-	must(App.sbox.SetHExpand, true)
-	must(App.sbox.SetHAlign, gtk.ALIGN_CENTER)
-	must(App.sbox.SetVAlign, gtk.ALIGN_CENTER)
+	semaphore.IdleMust(func() {
+		// Set the Guilds view to the grid
+		a.setCol(a.Guilds, 0)
 
-	// Start the completion queue:
-	App.completionQueue = make(chan func())
-	go func() {
-		for fn := range App.completionQueue {
-			fn()
-		}
-	}()
+		// Set sizes
+		a.Channels.SetSizeRequest(ChannelWidth, -1)
 
-	// Start the typing loop:
-	App.typingHandler = make(chan *TypingState)
-	go func() {
-		var tOld *TypingState
-		var tick = time.Tick(time.Second)
+		// Add in separators
+		a.setCol(newSeparator(), 1)
+		a.setCol(newSeparator(), 3)
 
-		for {
-			// First, catch a TypingState
-			for tOld == nil {
-				tOld = <-App.typingHandler
-				// stop until we get something
-			}
+		// Display the grid and header
+		window.Display(a.Grid)
+		window.HeaderDisplay(h)
 
-			// Block until a tick or a typing state
-			select {
-			case <-tick:
-			case t := <-App.typingHandler:
-				// If the incoming t is nil, but we still have the old t, close
-				// the old t.
-				if t == nil {
-					tOld.Stop()
-				}
-
-				// Then set the new tOld.
-				tOld = t
-			}
-
-			// if tOld is nil, skip this turn and let the above for loop do its
-			// work.
-			if tOld == nil {
-				continue
-			}
-
-			// Render the typing state:
-			tOld.render()
-
-			// If there's nothing left to update, mark it.
-			if tOld.Empty() {
-				tOld = nil
-			}
-		}
-	}()
-
-	App.hookEvents()
-	App.hookReads()
-
-	// Start the garbage collector:
-	// (Too unstable right now)
-	// go App.cleanUp()
+		// Show everything
+		window.ShowAll()
+	})
 
 	return nil
 }
 
-func (a *application) GuildID() discord.Snowflake {
-	if a.Guild == nil {
-		return 0
-	}
-	return a.Guild.ID
-}
+func (a *Application) SwitchGuild(g *guild.Guild) {
+	a.changeCol(a.Channels, 2, channel.ChannelsWidth, func() func() bool {
+		a.Channels.Cleanup()
+		a.Privates.Cleanup()
+		a.Messages.Cleanup()
 
-func (a *application) ChannelID() discord.Snowflake {
-	mw, ok := App.Messages.(*Messages)
+		return func() bool {
+			err := a.Channels.LoadGuild(g.ID)
+			if err != nil {
+				log.Errorln("Failed to load guild:", err)
+				return false
+			}
+
+			a.Header.UpdateGuild(g.Name)
+			return true
+		}
+	})
+
+	chID, ok := a.LastAccess[g.ID]
 	if !ok {
-		return 0
+		return
 	}
-	return mw.ChannelID
-}
 
-func (a *application) close() {
-	if err := a.State.Close(); err != nil {
-		log.Errorln("Failed to close Discord:", err)
-	}
-}
-
-func (a *application) setChannelCol(w gtkutils.ExtendedWidget) {
-	if w == nil {
-		if a.Sidebar != nil {
-			a.Grid.Remove(a.Sidebar)
-			a.Sidebar = nil
+	for _, ch := range a.Channels.Channels {
+		if ch.ID == chID {
+			a.SwitchChannel(ch)
+			return
 		}
-
-		return
 	}
-
-	a.Sidebar = w
-	a.Grid.Attach(w, 2, 0, 1, 1)
 }
 
-func (a *application) setMessagesCol(w gtkutils.ExtendedWidget) {
-	if w == nil {
-		if a.Messages != nil {
-			a.Grid.Remove(a.Messages)
-			a.Messages = nil
+func (a *Application) SwitchDM() {
+	a.changeCol(a.Privates, 2, channel.ChannelsWidth, func() func() bool {
+		a.Channels.Cleanup()
+		a.Privates.Cleanup()
+		a.Messages.Cleanup()
+
+		return func() bool {
+			a.Privates.LoadChannels(a.State, a.State.Ready.PrivateChannels)
+			a.Header.UpdateGuild("Private Messages")
+			return true
 		}
-
-		return
-	}
-
-	a.Messages = w
-	a.Grid.Attach(w, 4, 0, 1, 1)
-}
-
-func (a *application) loadGuild(g *Guild) {
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	// We don't need a spinner if it's a DM guild:
-	if g == nil {
-		a.Guild = nil
-
-		a.Header.UpdateGuild("Private Messages")
-		must(a.setChannelCol, App.Privates)
-
-		go a.loadPrivate(App.Privates.Selected())
-		return
-	}
-
-	a._loadGuild(g)
-
-	ch := g.Current()
-	if ch == nil {
-		return
-	}
-
-	go a.loadChannel(g, ch)
-}
-
-func (a *application) _loadGuild(g *Guild) {
-	must(a.Guilds.SetSensitive, false)
-
-	if a.Sidebar != nil {
-		must(a.Grid.Remove, a.Sidebar)
-	}
-
-	must(a.spinner.Start)
-	must(a.sbox.SetSizeRequest, ChannelsWidth, -1)
-	must(a.setChannelCol, a.sbox)
-
-	if err := g.loadChannels(); err != nil {
-		must(a._loadGuildDone, g)
-
-		logWrap(err, "Failed to load channels")
-		return
-	}
-
-	a.Guild = g
-	first := a.Sidebar == nil
-	must(a._loadGuildDone, g)
-
-	if first {
-		s := must(gtk.SeparatorNew, gtk.ORIENTATION_VERTICAL).(*gtk.Separator)
-		must(a.Grid.Add, s)
-	}
-
-	a.Header.UpdateGuild(g.Name)
-
-	// Subscribe to guild:
-	App.Guilds.subscribe(g.ID)
-}
-
-func (a *application) _loadGuildDone(g *Guild) {
-	a.spinner.Stop()
-	a.Grid.Remove(a.sbox)
-	a.setChannelCol(g.Channels)
-	g.Channels.ShowAll()
-	a.Guilds.SetSensitive(true)
-}
-
-func (a *application) loadChannel(g *Guild, ch *Channel) {
-	must(g.Channels.Main.SetSensitive, false)
-	defer must(g.Channels.Main.SetSensitive, true)
-
-	done := a.checkMessages(ch.Messages)
-	if done == nil {
-		return
-	}
-	defer done()
-
-	a._loadMessages(func() (*Messages, error) {
-		must(a.Header.UpdateChannel, ch.Name, ch.Topic)
-		if err := g.GoTo(ch); err != nil {
-			return nil, err
-		}
-		return ch.Messages, nil
-	})
-}
-
-func (a *application) loadPrivate(p *PrivateChannel) {
-	must(a.Privates.SetSensitive, false)
-	defer must(a.Privates.SetSensitive, true)
-
-	done := a.checkMessages(p.Messages)
-	if done == nil {
-		return
-	}
-	defer done()
-
-	a._loadMessages(func() (*Messages, error) {
-		must(a.Header.UpdateChannel, p.Name, "")
-		if err := p.loadMessages(); err != nil {
-			return nil, err
-		}
-		return p.Messages, nil
-	})
-}
-
-func (a *application) checkMessages(m *Messages) func() {
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	old := a.Messages
-	if old != nil {
-		if old == m {
-			return nil
-		}
-
-		must(a.Grid.Remove, old)
-		return func() { must(old.Destroy) }
-	}
-
-	return func() {}
-}
-
-func (a *application) _loadMessages(load func() (*Messages, error)) {
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	a.Messages = nil
-
-	must(func() {
-		a.spinner.Start()
-		a.sbox.SetSizeRequest(-1, -1)
-		a.Grid.Attach(a.sbox, 4, 0, 1, 1)
 	})
 
-	m, err := load()
-	if err != nil {
-		must(a._loadChannelDone)
-		logWrap(err, "Failed to go to channel")
+	chID, ok := a.LastAccess[0]
+	if !ok {
 		return
 	}
 
-	must(func() {
-		a._loadChannelDone()
-		a.setMessagesCol(m)
-		m.Show()
-	})
-}
-
-func (a *application) _loadChannelDone() {
-	a.spinner.Stop()
-	a.Grid.Remove(a.sbox)
-}
-
-func (a *application) cleanUp() {
-	for range time.Tick(30 * time.Second) {
-		a._cleanUp()
-	}
-}
-
-func (a *application) _cleanUp() {
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	if a.Guilds == nil {
+	ch, ok := a.Privates.Channels[chID.String()]
+	if !ok {
 		return
 	}
 
-	for _, guild := range a.Guilds.Guilds {
-		if guild.Channels == nil {
-			continue
-		}
+	a.SwitchDMChannel(ch)
+}
 
-		for _, channel := range guild.Channels.Channels {
-			if channel.Messages == nil {
-				continue
-			}
-			if channel.Messages == a.Messages {
-				continue
+func (a *Application) SwitchChannel(ch *channel.Channel) {
+	log.Println("Switching to channel", ch.Name)
+
+	a.changeCol(a.Messages, 4, -1, func() func() bool {
+		a.Messages.Cleanup()
+
+		return func() bool {
+			err := a.Messages.Load(ch.ID)
+			if err != nil {
+				log.Errorln("Failed to load messages:", err)
+				return false
 			}
 
-			m := channel.Messages
-			m.guard.Lock()
+			a.LastAccess[ch.Guild] = ch.ID
+			a.Header.UpdateChannel(ch.Name, ch.Topic)
+			return true
+		}
+	})
+}
 
-			var count = 0
+func (a *Application) SwitchDMChannel(pc *channel.PrivateChannel) {
+	a.changeCol(a.Messages, 4, -1, func() func() bool {
+		a.Messages.Cleanup()
 
-			for i, msg := range m.messages {
-				if msg == nil || msg.isBusy() {
-					continue
-				}
-				count++
-
-				m.Main.Remove(msg)
-				m.messages[i].main.Unref()
-				m.messages[i] = nil
+		return func() bool {
+			err := a.Messages.Load(pc.ID)
+			if err != nil {
+				log.Errorln("Failed to load messages:", err)
+				return false
 			}
 
-			m.guard.Unlock()
-
-			log.Infoln(
-				"Garbage collected", count,
-				"messages in channel",
-				channel.Name, "of guild", guild.Name,
-			)
+			a.LastAccess[0] = pc.ID
+			a.Header.UpdateChannel(pc.Name, "")
+			return true
 		}
-	}
+	})
 }
+
+func (a *Application) changeCol(
+	w gtkutils.ExtendedWidget, n int,
+	spinnerWidth int,
+	cleanup func() func() bool) {
+
+	log.Println("Acquiring lock...")
+
+	// Lock
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
+	log.Println("Lock acquired.")
+
+	// Clean up channels
+	fn := cleanup()
+
+	// Blur the grid
+	semaphore.IdleMust(a.Grid.SetSensitive, false)
+	defer semaphore.IdleMust(a.Grid.SetSensitive, true)
+
+	// Add a spinner here
+	semaphore.IdleMust(func() {
+		spinner, _ := animations.NewSizedSpinner(SpinnerSize)
+		spinner.SetSizeRequest(spinnerWidth, -1)
+		a.setCol(spinner, n)
+	})
+
+	log.Println("Loading fn")
+
+	if !fn() {
+		semaphore.IdleMust(func() {
+			sadface, _ := animations.NewSizedSadFace()
+			sadface.SetSizeRequest(spinnerWidth, -1)
+			a.setCol(sadface, n)
+		})
+
+		return
+	}
+
+	// Replace the spinner with the actual channel:
+	semaphore.IdleMust(func() {
+		a.setCol(w, n)
+		w.ShowAll()
+	})
+}
+
+func newSeparator() *gtk.Separator {
+	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	return s
+}
+
+// func (a *application) GuildID() discord.Snowflake {
+// 	if a.Guild == nil {
+// 		return 0
+// 	}
+// 	return a.Guild.ID
+// }
+
+// func (a *application) ChannelID() discord.Snowflake {
+// 	mw, ok := App.Messages.(*message.Messages)
+// 	if !ok {
+// 		return 0
+// 	}
+// 	return mw.ChannelID
+// }
+
+// func (a *application) close() {
+// 	if err := a.State.Close(); err != nil {
+// 		log.Errorln("Failed to close Discord:", err)
+// 	}
+// }
+
+// func (a *application) setChannelCol(w gtkutils.ExtendedWidget) {
+// 	if w == nil {
+// 		if a.Sidebar != nil {
+// 			a.Grid.Remove(a.Sidebar)
+// 			a.Sidebar = nil
+// 		}
+
+// 		return
+// 	}
+
+// 	a.Sidebar = w
+// 	a.Grid.Attach(w, 2, 0, 1, 1)
+// }
+
+// func (a *application) setMessagesCol(w gtkutils.ExtendedWidget) {
+// 	if w == nil {
+// 		if a.Messages != nil {
+// 			a.Grid.Remove(a.Messages)
+// 			a.Messages = nil
+// 		}
+
+// 		return
+// 	}
+
+// 	a.Messages = w
+// 	a.Grid.Attach(w, 4, 0, 1, 1)
+// }
+
+// func (a *application) loadGuild(g *Guild) {
+// 	a.busy.Lock()
+// 	defer a.busy.Unlock()
+
+// 	// We don't need a spinner if it's a DM guild:
+// 	if g == nil {
+// 		a.Guild = nil
+
+// 		a.Header.UpdateGuild("Private Messages")
+// 		must(a.setChannelCol, App.Privates)
+
+// 		go a.loadPrivate(App.Privates.Selected())
+// 		return
+// 	}
+
+// 	a._loadGuild(g)
+
+// 	ch := g.Current()
+// 	if ch == nil {
+// 		return
+// 	}
+
+// 	go a.loadChannel(g, ch)
+// }
+
+// func (a *application) _loadGuild(g *Guild) {
+// 	must(a.Guilds.SetSensitive, false)
+
+// 	if a.Sidebar != nil {
+// 		must(a.Grid.Remove, a.Sidebar)
+// 	}
+
+// 	must(a.spinner.Start)
+// 	must(a.sbox.SetSizeRequest, ChannelsWidth, -1)
+// 	must(a.setChannelCol, a.sbox)
+
+// 	if err := g.loadChannels(); err != nil {
+// 		must(a._loadGuildDone, g)
+
+// 		logWrap(err, "Failed to load channels")
+// 		return
+// 	}
+
+// 	a.Guild = g
+// 	first := a.Sidebar == nil
+// 	must(a._loadGuildDone, g)
+
+// 	if first {
+// 		s := must(gtk.SeparatorNew, gtk.ORIENTATION_VERTICAL).(*gtk.Separator)
+// 		must(a.Grid.Add, s)
+// 	}
+
+// 	a.Header.UpdateGuild(g.Name)
+// }
+
+// func (a *application) _loadGuildDone(g *Guild) {
+// 	a.spinner.Stop()
+// 	a.Grid.Remove(a.sbox)
+// 	a.setChannelCol(g.Channels)
+// 	g.Channels.ShowAll()
+// 	a.Guilds.SetSensitive(true)
+// }
+
+// func (a *application) loadChannel(g *Guild, ch *Channel) {
+// 	must(g.Channels.Main.SetSensitive, false)
+// 	defer must(g.Channels.Main.SetSensitive, true)
+
+// 	done := a.checkMessages(ch.Messages)
+// 	if done == nil {
+// 		return
+// 	}
+// 	defer done()
+
+// 	a._loadMessages(func() (*message.Messages, error) {
+// 		must(a.Header.UpdateChannel, ch.Name, ch.Topic)
+// 		if err := g.GoTo(ch); err != nil {
+// 			return nil, err
+// 		}
+// 		return ch.Messages, nil
+// 	})
+// }
+
+// func (a *application) loadPrivate(p *PrivateChannel) {
+// 	must(a.Privates.SetSensitive, false)
+// 	defer must(a.Privates.SetSensitive, true)
+
+// 	done := a.checkMessages(p.Messages)
+// 	if done == nil {
+// 		return
+// 	}
+// 	defer done()
+
+// 	a._loadMessages(func() (*message.Messages, error) {
+// 		must(a.Header.UpdateChannel, p.Name, "")
+// 		if err := p.loadMessages(); err != nil {
+// 			return nil, err
+// 		}
+// 		return p.Messages, nil
+// 	})
+// }
+
+// func (a *application) checkMessages(m *message.Messages) func() {
+// 	a.busy.Lock()
+// 	defer a.busy.Unlock()
+
+// 	old := a.Messages
+// 	if old != nil {
+// 		if old == m {
+// 			return nil
+// 		}
+
+// 		must(a.Grid.Remove, old)
+// 		return func() { must(old.Destroy) }
+// 	}
+
+// 	return func() {}
+// }
+
+// func (a *application) _loadMessages(load func() (*message.Messages, error)) {
+// 	a.busy.Lock()
+// 	defer a.busy.Unlock()
+
+// 	a.Messages = nil
+
+// 	must(func() {
+// 		a.spinner.Start()
+// 		a.sbox.SetSizeRequest(-1, -1)
+// 		a.Grid.Attach(a.sbox, 4, 0, 1, 1)
+// 	})
+
+// 	m, err := load()
+// 	if err != nil {
+// 		must(a._loadChannelDone)
+// 		logWrap(err, "Failed to go to channel")
+// 		return
+// 	}
+
+// 	must(func() {
+// 		a._loadChannelDone()
+// 		a.setMessagesCol(m)
+// 		m.Show()
+// 	})
+// }
+
+// func (a *application) _loadChannelDone() {
+// 	a.spinner.Stop()
+// 	a.Grid.Remove(a.sbox)
+// }

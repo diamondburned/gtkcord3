@@ -152,8 +152,8 @@ func (s *mdState) InsertUserMention(id []byte) {
 	}
 
 	t := s.MentionTag("@"+target.ID.String(), func(ev *gdk.EventButton) {
-		if s.p.UserPressed != nil {
-			s.p.UserPressed(ev, target)
+		if UserPressed != nil {
+			UserPressed(ev, target)
 		}
 	})
 
@@ -186,8 +186,8 @@ func (s *mdState) InsertChannelMention(id []byte) {
 	var channel = *c
 
 	t := s.MentionTag("#"+c.ID.String(), func(ev *gdk.EventButton) {
-		if s.p.ChannelPressed != nil {
-			s.p.ChannelPressed(ev, channel)
+		if ChannelPressed != nil {
+			ChannelPressed(ev, channel)
 		}
 	})
 
