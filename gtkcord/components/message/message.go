@@ -347,7 +347,7 @@ func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord
 		}
 	}
 
-	m.UpdateAvatar(u.AvatarURL())
+	go m.UpdateAvatar(u.AvatarURL())
 	m.author.SetMarkup(`<span weight="bold">` + html.EscapeString(u.Username) + `</span>`)
 }
 
@@ -369,7 +369,7 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 		}
 	}
 
-	m.UpdateAvatar(n.User.AvatarURL())
+	go m.UpdateAvatar(n.User.AvatarURL())
 	m.author.SetMarkup(`<span weight="bold">` + name + `</span>`)
 }
 
@@ -385,7 +385,7 @@ func (m *Message) UpdateAvatar(url string) {
 	}
 	m.pbURL = url
 
-	err := cache.SetImageScaled(url+"?size=64", m.avatar, AvatarSize, AvatarSize, cache.Round)
+	err := cache.SetImageScaled(url+"?size=64", &m.avatar, AvatarSize, AvatarSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get the pixbuf guild icon:", err)
 		return

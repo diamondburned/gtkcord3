@@ -166,7 +166,7 @@ func (pc *PrivateChannel) updateStatus(status discord.Status) {
 }
 
 func (pc *PrivateChannel) updateAvatar(url string) {
-	err := cache.SetImageScaled(url+"?size=64", pc.Avatar, DMAvatarSize, DMAvatarSize, cache.Round)
+	err := cache.SetImageScaled(url+"?size=64", &pc.Avatar, DMAvatarSize, DMAvatarSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get DM avatar", url+":", err)
 	}

@@ -23,7 +23,7 @@ var typingHandler chan *State
 
 func initHandler() {
 	if typingHandler == nil {
-		typingHandler = make(chan *State)
+		typingHandler = make(chan *State, 1)
 		go handler()
 	}
 }
@@ -209,7 +209,12 @@ func (t *State) render() {
 }
 
 func (t *State) Update() {
-	typingHandler <- t
+	select {
+	case typingHandler <- t:
+	default:
+		<-typingHandler
+		typingHandler <- t
+	}
 }
 
 func (t *State) Shortest() time.Time {

@@ -153,5 +153,5 @@ func (a *UserPopupActivity) image(id discord.Snowflake, asset, text string) {
 	}
 
 	a.Image.SetTooltipText(text)
-	go cache.AsyncFetch(asset, a.Image, PopupAvatarSize, PopupAvatarSize)
+	go cache.AsyncFetch(asset, &a.Image, PopupAvatarSize, PopupAvatarSize)
 }

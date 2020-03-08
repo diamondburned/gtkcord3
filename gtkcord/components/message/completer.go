@@ -403,7 +403,7 @@ func completerImage(url string) *gtk.Image {
 	i.SetMarginEnd(10)
 
 	if url != "" {
-		go cache.AsyncFetch(url, i, 24, 24, cache.Round)
+		go cache.AsyncFetch(url, &i, 24, 24, cache.Round)
 	}
 
 	return i

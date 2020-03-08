@@ -236,7 +236,7 @@ func (b *UserPopupBody) UpdateMemberPart(nick string, u discord.User) {
 
 func (b *UserPopupBody) updateAvatar(url string) {
 	err := cache.SetImageScaled(
-		url+"?size=64", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
+		url+"?size=64", &b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get the pixbuf avatar icon:", err)
 		return

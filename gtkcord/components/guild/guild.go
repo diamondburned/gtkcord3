@@ -136,7 +136,7 @@ func (g *Guild) UpdateImage() {
 		return
 	}
 
-	err := cache.SetImageScaled(g.IURL+"?size=64", g.Image, IconSize, IconSize, cache.Round)
+	err := cache.SetImageScaled(g.IURL+"?size=64", &g.Image, IconSize, IconSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to update the pixbuf guild icon:", err)
 		return
