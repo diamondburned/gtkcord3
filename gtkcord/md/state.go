@@ -227,7 +227,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte, d Discord, msg *discord
 
 			// If the pair isn't already matched with a pair prior, and
 			// if we could not find a next matching pair:
-			if s.used, ok = findPairs(found, i, 4, s.used); !ok {
+			if s.used, ok = findPairs(input, found, i, 4, s.used); !ok {
 				continue
 			}
 		}
@@ -273,7 +273,7 @@ func (s *mdState) use(buf *gtk.TextBuffer, input []byte, d Discord, msg *discord
 	s.matches = matchesList
 }
 
-func findPairs(found [][]int, start, match int, used []int) ([]int, bool) {
+func findPairs(str []byte, found [][]int, start, match int, used []int) ([]int, bool) {
 	for _, u := range used {
 		if u == start {
 			// seen
@@ -282,10 +282,12 @@ func findPairs(found [][]int, start, match int, used []int) ([]int, bool) {
 	}
 
 	match *= 2
+	currn := str[found[start][match]:found[start][match+1]]
 	start += 1
 
 	for j := start; j < len(found); j++ {
-		if found[j][match] > -1 {
+		// bytecmp is to check that the next token is the same as this one
+		if found[j][match] > -1 && bytecmp(str[found[j][match]:found[j][match+1]], currn) {
 			used = append(used, j)
 			return used, true
 		}
