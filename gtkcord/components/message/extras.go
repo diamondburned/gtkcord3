@@ -48,7 +48,7 @@ func newExtraImage(proxy, direct string, w, h int, pp ...cache.Processor) gtkuti
 		embedSetMargin(evb)
 	})
 
-	cache.AsyncFetch(proxy, &img, w, h, pp...)
+	cache.AsyncFetch(proxy, img, w, h, pp...)
 	return evb
 }
 
@@ -171,7 +171,7 @@ func newNormalEmbed(
 		if embed.Author.ProxyIcon != "" {
 			img := semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
 			semaphore.IdleMust(img.SetMarginEnd, EmbedMargin)
-			asyncFetch(embed.Author.ProxyIcon, &img, 24, 24, cache.Round)
+			asyncFetch(embed.Author.ProxyIcon, img, 24, 24, cache.Round)
 
 			semaphore.IdleMust(box.Add, img)
 		}
@@ -283,7 +283,7 @@ func newNormalEmbed(
 			if embed.Footer.ProxyIcon != "" {
 				img := semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
 				semaphore.IdleMust(img.SetMarginEnd, EmbedMargin)
-				asyncFetch(embed.Footer.ProxyIcon, &img, 24, 24, cache.Round)
+				asyncFetch(embed.Footer.ProxyIcon, img, 24, 24, cache.Round)
 
 				semaphore.IdleMust(footer.Add, img)
 			}
@@ -358,6 +358,6 @@ func embedSetMargin(w gtkutils.Marginator) {
 	w.SetMarginBottom(EmbedMargin / 2)
 }
 
-func asyncFetch(url string, img **gtk.Image, w, h int, pp ...cache.Processor) {
+func asyncFetch(url string, img *gtk.Image, w, h int, pp ...cache.Processor) {
 	cache.AsyncFetch(url, img, w, h, pp...)
 }

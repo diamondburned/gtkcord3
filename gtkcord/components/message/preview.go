@@ -117,7 +117,7 @@ func (od *PreviewDialog) Open() {
 }
 
 func (pd *PreviewDialog) Fetch(w, h int) {
-	err := cache.SetImage(pd.Proxy, &pd.Image, cache.Resize(w, h))
+	err := cache.SetImage(pd.Proxy, pd.Image, cache.Resize(w, h))
 	if err == nil {
 		return
 	}

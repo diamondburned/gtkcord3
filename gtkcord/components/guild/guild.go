@@ -92,6 +92,8 @@ func newGuildRow(
 			IURL:      g.IconURL(),
 			Image:     i,
 			BannerURL: g.BannerURL(),
+
+			unreadChs: map[discord.Snowflake]bool{},
 		}
 
 		// Check if the guild is unavailable:
@@ -136,7 +138,7 @@ func (g *Guild) UpdateImage() {
 		return
 	}
 
-	err := cache.SetImageScaled(g.IURL+"?size=64", &g.Image, IconSize, IconSize, cache.Round)
+	err := cache.SetImageScaled(g.IURL+"?size=64", g.Image, IconSize, IconSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to update the pixbuf guild icon:", err)
 		return
@@ -160,6 +162,10 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 	for _, ch := range channels {
 		// in a guild, only text channels matter:
 		if ch.Type != discord.GuildText {
+			continue
+		}
+
+		if s.CategoryMuted(ch.ID) {
 			continue
 		}
 

@@ -16,12 +16,6 @@ github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964/go.mod h1:Xd9
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/diamondburned/arikawa v0.1.5-0.20200302003940-0aebea60bd12 h1:UnS4Ylx0uMV7q1xyYftASQHW1RcT+WF+vfBxObIbpJM=
-github.com/diamondburned/arikawa v0.1.5-0.20200302003940-0aebea60bd12/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
-github.com/diamondburned/arikawa v0.1.5 h1:RMfzPXwlhY7DkPlvOJNPUOYSDZrpEH4A5wiIngUxpmw=
-github.com/diamondburned/arikawa v0.1.5/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
-github.com/diamondburned/arikawa v0.1.6-0.20200305234944-6cd4b361ce56 h1:g25YdQ6hwUgNdrOH3kmWYsg4Xf+qlt8BbA6oxqFKZt8=
-github.com/diamondburned/arikawa v0.1.6-0.20200305234944-6cd4b361ce56/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/diamondburned/arikawa v0.1.6-0.20200307195030-22ef50c49995 h1:xnIRydr2C6qNMN5/PdNoWWuYFWVrPEcHWOTF0kEBUF0=
 github.com/diamondburned/arikawa v0.1.6-0.20200307195030-22ef50c49995/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
@@ -54,6 +48,8 @@ github.com/gorilla/websocket v1.4.1 h1:q7AeDBpnBk8AogcD4DSag/Ukw/KV+YhzLj2bP5HvK
 github.com/gorilla/websocket v1.4.1/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gotk3/gotk3 v0.4.0 h1:TIuhyQitGeRTxOQIV3AJlYtEWWJpC74JHwAIsxlH8MU=
 github.com/gotk3/gotk3 v0.4.0/go.mod h1:Eew3QBwAOBTrfFFDmsDE5wZWbcagBL1NUslj1GhRveo=
+github.com/gotk3/gotk3 v0.4.1-0.20200303201101-011cec6a2372 h1:USQvH1WPtg7NSoq9sSyp7+4FNujz1MGfdKrT4TSFGbA=
+github.com/gotk3/gotk3 v0.4.1-0.20200303201101-011cec6a2372/go.mod h1:Eew3QBwAOBTrfFFDmsDE5wZWbcagBL1NUslj1GhRveo=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=

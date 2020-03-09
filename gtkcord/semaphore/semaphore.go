@@ -105,9 +105,9 @@ func Idle(fn interface{}, v ...interface{}) (interface{}, error) {
 }
 
 func Async(fn interface{}, v ...interface{}) {
-	log.Println(log.Trace(1), "Async start")
+	// log.Println(log.Trace(1), "Async start")
 	idleAdd(log.Trace(1), true, fn, v...)
-	log.Println(log.Trace(1), "Async done")
+	// log.Println(log.Trace(1), "Async done")
 }
 
 func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
@@ -132,7 +132,7 @@ func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
 }
 
 func IdleMust(fn interface{}, v ...interface{}) interface{} {
-	log.Println(log.Trace(1), "IdleMust start")
+	// log.Println(log.Trace(1), "IdleMust start")
 	var trace = log.Trace(1)
 
 	r, err := idle(trace, fn, v...)
@@ -140,7 +140,7 @@ func IdleMust(fn interface{}, v ...interface{}) interface{} {
 		log.Panicln(trace, "callback returned err != nil:", err)
 	}
 
-	log.Println(log.Trace(1), "IdleMust done")
+	// log.Println(log.Trace(1), "IdleMust done")
 	return r
 }
 

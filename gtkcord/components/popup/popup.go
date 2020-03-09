@@ -236,7 +236,7 @@ func (b *UserPopupBody) UpdateMemberPart(nick string, u discord.User) {
 
 func (b *UserPopupBody) updateAvatar(url string) {
 	err := cache.SetImageScaled(
-		url+"?size=64", &b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
+		url+"?size=64", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get the pixbuf avatar icon:", err)
 		return
@@ -260,8 +260,9 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 
 	b.Activity.Update(*a)
 
-	if strings.HasPrefix(a.Assets.LargeImage, "spotify:") {
-		b.UpdateStatus(discord.UnknownStatus)
+	switch a.Type {
+	case discord.GameActivity, discord.ListeningActivity, discord.StreamingActivity:
+		b.setAvatarClass("unknown")
 	}
 
 	semaphore.IdleMust(b.Box.ShowAll)
@@ -271,14 +272,19 @@ func (b *UserPopupBody) UpdateStatus(status discord.Status) {
 	semaphore.IdleMust(func() {
 		switch status {
 		case discord.OnlineStatus:
+			b.Avatar.SetTooltipText("Online")
 			b.setAvatarClass("online")
 		case discord.DoNotDisturbStatus:
+			b.Avatar.SetTooltipText("Busy")
 			b.setAvatarClass("busy")
 		case discord.IdleStatus:
+			b.Avatar.SetTooltipText("Idle")
 			b.setAvatarClass("idle")
 		case discord.InvisibleStatus, discord.OfflineStatus:
+			b.Avatar.SetTooltipText("Offline")
 			b.setAvatarClass("offline")
 		case discord.UnknownStatus:
+			// b.Avatar.SetTooltipText("")
 			b.setAvatarClass("unknown")
 		}
 	})

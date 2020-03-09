@@ -206,10 +206,13 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 	}
 
 	for _, ch := range a.Channels.Channels {
-		if ch.ID == chID {
-			a.SwitchChannel(ch)
-			return
+		if ch.ID != chID {
+			continue
 		}
+
+		semaphore.Async(a.Channels.ChList.SelectRow, ch.Row)
+		a.SwitchChannel(ch)
+		return
 	}
 }
 
@@ -231,12 +234,11 @@ func (a *Application) SwitchDM() {
 		return
 	}
 
-	ch, ok := a.Privates.Channels[chID.String()]
-	if !ok {
-		return
+	c, ok := a.Privates.Channels[chID.String()]
+	if ok {
+		semaphore.Async(a.Privates.List.SelectRow, c.ListBoxRow)
+		a.SwitchDMChannel(c)
 	}
-
-	a.SwitchDMChannel(ch)
 }
 
 func (a *Application) SwitchChannel(ch *channel.Channel) {

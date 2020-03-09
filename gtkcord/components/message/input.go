@@ -225,7 +225,7 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 
 		// If we're writing a blockquote:
 		if blockquote {
-			i.InputBuf.InsertAtCursor(">")
+			i.InputBuf.InsertAtCursor("> ")
 		}
 
 		return true

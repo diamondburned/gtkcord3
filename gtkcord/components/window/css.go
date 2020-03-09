@@ -119,17 +119,16 @@ const CSS = `
 		padding: 2px;
 	}
 
-	.channel, .category {
+	.channel label, .category label {
 		opacity: 0.5;
 	}
-	.channel.muted, .category.muted {
+	.channel.muted label, .category.muted label {
 		opacity: 0.25;
 	}
-	.channel.unread {
+	.channel.unread label, .opacity.pinged label {
 		opacity: 1;
 	}
 	.channel.pinged {
-		opacity: 1;
 		color: @color_pinged;
 		background-color: alpha(@color_pinged, 0.15);
 	}

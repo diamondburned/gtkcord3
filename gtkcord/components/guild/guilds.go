@@ -8,7 +8,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -197,7 +196,7 @@ func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {
 	ch, err := s.Store.Channel(rs.ChannelID)
 	if err != nil {
-		log.Errorln("Failed to find channel:", err)
+		// log.Errorln("Failed to find channel:", err)
 		return
 	}
 	if !ch.GuildID.Valid() {
@@ -215,6 +214,8 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 
 	if !unread {
 		delete(guild.unreadChs, rs.ChannelID)
+	} else {
+		guild.unreadChs[rs.ChannelID] = pinged
 	}
 
 	if !unread || !pinged {

@@ -84,6 +84,7 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
 		s.Show()
 
+		// Causes resize bugs:
 		v.Connect("size-allocate", m.onSizeAlloc)
 		v.Add(b)
 		v.Show()
@@ -194,24 +195,18 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	}
 
 	// Find the latest message and ack it:
-	for i := len(messages) - 1; i >= 0; i-- {
-		go m.c.MarkRead(m.ChannelID, messages[i].ID)
-		break
-	}
+	go m.c.MarkRead(m.ChannelID, messages[len(messages)-1].ID)
 
 	// Iterate backwards, from latest to earliest.
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		semaphore.Async(func(i int) {
+	semaphore.Async(func() {
+		for i := len(m.messages) - 1; i >= 0; i-- {
 			w := m.messages[i]
 			message := &messages[i]
 
 			w.updateAuthor(m.c, message.GuildID, message.Author)
 			go w.UpdateExtras(m.c, message)
-			// m.onSizeAlloc()
-		}, i)
-
-		m.Resetting.Store(false)
-	}
+		}
+	})
 
 	return nil
 }
@@ -256,27 +251,24 @@ func (m *Messages) Cleanup() {
 }
 
 func (m *Messages) onSizeAlloc() {
-	adj, err := m.Viewport.GetVAdjustment()
-	if err != nil {
-		log.Errorln("Failed to get viewport:", err)
-		return
-	}
+	adj, _ := m.Viewport.GetVAdjustment()
+	// if err != nil {
+	// 	log.Errorln("Failed to get viewport:", err)
+	// 	return
+	// }
 
 	max := adj.GetUpper()
 	cur := adj.GetValue() + adj.GetPageSize()
 
-	v, ok := m.Resetting.Load().(bool)
-	var loading = ok && v
-
 	// If the scroll is not close to the bottom and we're not loading messages:
-	if max-cur > 500 && !loading {
+	if max-cur > 1000 {
 		// Then we don't scroll.
-		log.Println("Not scrolling. Loading:", loading)
+		// log.Println("Not scrolling. Loading:", loading)
 		return
 	}
 
 	adj.SetValue(max)
-	m.Viewport.SetVAdjustment(adj)
+	// m.Viewport.SetVAdjustment(adj)
 }
 
 func (m *Messages) Insert(message *discord.Message) {

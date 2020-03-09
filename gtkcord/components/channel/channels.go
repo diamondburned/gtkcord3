@@ -178,7 +178,7 @@ func (chs *Channels) UpdateBanner(url string) {
 
 	if err := cache.SetImageScaled(
 		url+"?size=512",
-		&chs.BannerImage,
+		chs.BannerImage,
 		ChannelsWidth, BannerHeight); err != nil {
 
 		log.Errorln("Failed to get the pixbuf guild icon:", err)

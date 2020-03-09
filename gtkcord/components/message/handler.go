@@ -19,7 +19,6 @@ func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
 	if m.ChannelID != t.ChannelID {
 		return
 	}
-	log.Println("Got", t)
 	m.Typing.Add(t)
 }
 

@@ -147,7 +147,7 @@ func (pcs *PrivateChannels) Selected() *PrivateChannel {
 	return rw
 }
 
-func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ uintptr) bool {
+func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
 	if pcs.search == "" {
 		return true
 	}

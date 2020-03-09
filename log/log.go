@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -12,8 +13,8 @@ import (
 )
 
 var (
-	Output = os.Stderr
-	Flags  = log.Ltime | log.Lmicroseconds
+	Output io.Writer = os.Stderr
+	Flags            = log.Ltime | log.Lmicroseconds
 
 	PrefixPanic  = "PANIC! "
 	PrefixError  = "Error: "
@@ -21,7 +22,9 @@ var (
 	PrefixDebug  = "Debug: "
 	DebugGreyLvl = uint8(11)
 
-	EnableDebug = true
+	EnableDebug = false
+
+	LogPath = filepath.Join(os.TempDir(), "gtkcord3.log")
 )
 
 var (
@@ -34,6 +37,13 @@ var (
 )
 
 func init() {
+	f, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0775)
+	if err != nil {
+		Errorln("Failed to open log file:", err)
+	} else {
+		Output = io.MultiWriter(os.Stderr, f)
+	}
+
 	ResetLoggers()
 }
 

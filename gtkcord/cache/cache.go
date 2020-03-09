@@ -175,11 +175,11 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 	return pixbuf, nil
 }
 
-func SetImage(url string, img **gtk.Image, pp ...Processor) error {
+func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 	return SetImageScaled(url, img, 0, 0, pp...)
 }
 
-func SetImageScaled(url string, img **gtk.Image, w, h int, pp ...Processor) error {
+func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
 	b, err := get(url)
 	if err != nil {
 		return err
@@ -209,8 +209,7 @@ func SetImageScaled(url string, img **gtk.Image, w, h int, pp ...Processor) erro
 				return
 			}
 
-			image := *img
-			image.SetFromPixbuf(p)
+			img.SetFromPixbuf(p)
 		})
 	})
 
@@ -226,7 +225,7 @@ func SetImageScaled(url string, img **gtk.Image, w, h int, pp ...Processor) erro
 }
 
 // SetImageAsync is not cached.
-func SetImageAsync(url string, img **gtk.Image, w, h int) error {
+func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	r, err := Client.Get(url)
 	if err != nil {
 		return errors.Wrap(err, "Failed to GET "+url)
@@ -260,8 +259,7 @@ func SetImageAsync(url string, img **gtk.Image, w, h int) error {
 					log.Errorln("Failed to get pixbuf during area-prepared:", err)
 					return
 				}
-				image := *img
-				image.SetFromAnimation(p)
+				img.SetFromAnimation(p)
 			})
 		} else {
 			semaphore.IdleMust(func() {
@@ -270,8 +268,7 @@ func SetImageAsync(url string, img **gtk.Image, w, h int) error {
 					log.Errorln("Failed to get pixbuf during area-prepared:", err)
 					return
 				}
-				image := *img
-				image.SetFromPixbuf(p)
+				img.SetFromPixbuf(p)
 			})
 		}
 	})
@@ -287,11 +284,8 @@ func SetImageAsync(url string, img **gtk.Image, w, h int) error {
 	return nil
 }
 
-func AsyncFetch(url string, img **gtk.Image, w, h int, pp ...Processor) {
-	semaphore.IdleMust(func() {
-		image := *img
-		gtkutils.ImageSetIcon(image, "image-missing", 24)
-	})
+func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
+	semaphore.IdleMust(gtkutils.ImageSetIcon, img, "image-missing", 24)
 
 	if len(pp) == 0 && w != 0 && h != 0 {
 		go func() {

@@ -45,6 +45,10 @@ func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *State
 
 // must be thread-safe, function is running in a goroutine
 func (s *StatefulPopupBody) initialize() {
+	if !s.User.Valid() {
+		return
+	}
+
 	defer s.injectHandlers()
 
 	u, err := s.state.User(s.User)
