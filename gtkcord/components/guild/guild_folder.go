@@ -46,6 +46,7 @@ func newGuildFolder(
 		r.SetHAlign(gtk.ALIGN_CENTER)
 		r.SetVAlign(gtk.ALIGN_CENTER)
 		r.SetSizeRequest(IconSize+IconPadding*2, -1)
+		r.SetSelectable(false)
 
 		style, _ := r.GetStyleContext()
 		style.AddClass("guild-folder")

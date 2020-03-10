@@ -61,7 +61,7 @@ func cleanUpCache() {
 	}
 
 	for _, d := range dirs {
-		if strings.HasPrefix(d, CachePrefix) && d != DirName {
+		if strings.HasPrefix(d, CachePrefix+"-") && d != DirName {
 			path := filepath.Join(Temp, d)
 			log.Infoln("Deleting", path)
 			os.RemoveAll(path)
@@ -208,9 +208,9 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 			return
 		}
 
-		semaphore.IdleMust(func() {
+		semaphore.IdleMust(func(img *gtk.Image) {
 			img.SetFromPixbuf(p)
-		})
+		}, img)
 	})
 
 	if _, err := l.Write(b); err != nil {
