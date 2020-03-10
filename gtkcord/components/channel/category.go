@@ -7,7 +7,6 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/log"
 )
 
 type _sortStructure struct {
@@ -106,14 +105,11 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 		for _, sch := range list {
 			sch := sch
 
-			log.Println("Category:", sch.parent.Name)
-
 			if sch.parent.ID.Valid() {
 				channels = append(channels, createChannelRead(&sch.parent, s))
 			}
 
 			for i := range sch.children {
-				log.Println("Channel:", sch.children[i].Name)
 				channels = append(channels, createChannelRead(&sch.children[i], s))
 			}
 		}

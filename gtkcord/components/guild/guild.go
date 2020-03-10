@@ -35,10 +35,9 @@ type Guild struct {
 	ID   discord.Snowflake
 	Name string
 
+	busy       sync.Mutex
 	stateClass string
-
-	unreadChs map[discord.Snowflake]bool
-	unreadMu  sync.Mutex
+	unreadChs  map[discord.Snowflake]bool
 }
 
 func newGuildRow(
@@ -153,8 +152,8 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 		return nil
 	}
 
-	guild.unreadMu.Lock()
-	defer guild.unreadMu.Unlock()
+	guild.busy.Lock()
+	defer guild.busy.Unlock()
 
 	guild.unreadChs = map[discord.Snowflake]bool{}
 	var found *gateway.ReadState
@@ -186,7 +185,10 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 }
 
 func (guild *Guild) setUnread(unread, pinged bool) {
+	guild.busy.Lock()
+
 	if guild.stateClass == "muted" {
+		guild.busy.Unlock()
 		return
 	}
 
@@ -198,6 +200,8 @@ func (guild *Guild) setUnread(unread, pinged bool) {
 	default:
 		guild.setClass("")
 	}
+
+	guild.busy.Unlock()
 
 	if guild.Parent != nil {
 		guild.Parent.setUnread(unread, pinged)

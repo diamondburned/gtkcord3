@@ -202,13 +202,13 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	}
 
 	gtkutils.Connect(l, "closed", func() {
-		semaphore.IdleMust(func() {
-			p, err := l.GetPixbuf()
-			if err != nil || p == nil {
-				log.Errorln("Failed to get pixbuf during area-updated:", err)
-				return
-			}
+		p, err := l.GetPixbuf()
+		if err != nil || p == nil {
+			log.Errorln("Failed to get pixbuf during area-updated:", err)
+			return
+		}
 
+		semaphore.IdleMust(func() {
 			img.SetFromPixbuf(p)
 		})
 	})

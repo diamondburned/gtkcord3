@@ -107,9 +107,16 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 	return m, nil
 }
 
+func (m *Messages) GetChannelID() discord.Snowflake {
+	m.guard.RLock()
+	defer m.guard.RUnlock()
+
+	return m.ChannelID
+}
+
 func (m *Messages) LastFromMe() *Message {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	for n := len(m.messages) - 1; n >= 0; n-- {
 		if msg := m.messages[n]; msg.AuthorID == m.c.Ready.User.ID {
@@ -120,8 +127,9 @@ func (m *Messages) LastFromMe() *Message {
 }
 
 func (m *Messages) Last() *Message {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
+
 	if len(m.messages) == 0 {
 		return nil
 	}
@@ -189,16 +197,11 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		return nil
 	}
 
-	// Subscribe to guild:
-	if m.GuildID.Valid() {
-		go m.c.Subscribe(m.GuildID)
-	}
-
 	// Find the latest message and ack it:
 	go m.c.MarkRead(m.ChannelID, messages[len(messages)-1].ID)
 
 	// Iterate backwards, from latest to earliest.
-	semaphore.Async(func() {
+	semaphore.IdleMust(func() {
 		for i := len(m.messages) - 1; i >= 0; i-- {
 			w := m.messages[i]
 			message := &messages[i]

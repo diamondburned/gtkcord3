@@ -1,7 +1,6 @@
 package ningen
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -129,12 +128,13 @@ func Ningen(s *state.State) (*State, error) {
 		s.PresenceSet(0, state.JoinSession(r))
 	})
 
-	if s.Ready.SessionID == "" {
-		s.WaitFor(context.Background(), func(v interface{}) bool {
-			_, ok := v.(*gateway.ReadyEvent)
-			return ok
-		})
-	}
+	// // Causes obvious race condition
+	// if s.Ready.SessionID == "" {
+	// 	s.WaitFor(context.Background(), func(v interface{}) bool {
+	// 		_, ok := v.(*gateway.ReadyEvent)
+	// 		return ok
+	// 	})
+	// }
 
 	state.UpdateReady(s.Ready)
 	return state, nil

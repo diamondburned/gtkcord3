@@ -2,6 +2,7 @@ package guild
 
 import (
 	"html"
+	"sync"
 
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
@@ -23,6 +24,7 @@ type GuildFolder struct {
 	Guilds   []*Guild
 	Revealed bool
 
+	classMutex sync.Mutex
 	stateClass string
 }
 
@@ -131,6 +133,9 @@ func (f *GuildFolder) setUnread(unread, pinged bool) {
 	// if unread && !pinged && f.stateClass == "pinged" {
 	// 	pinged = true
 	// }
+
+	f.classMutex.Lock()
+	defer f.classMutex.Unlock()
 
 	// Check all children guilds
 	if !unread || !pinged {

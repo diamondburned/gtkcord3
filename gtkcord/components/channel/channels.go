@@ -37,7 +37,7 @@ type Channels struct {
 	Channels []*Channel
 	Selected *Channel
 
-	busy  sync.Mutex
+	busy  sync.RWMutex
 	state *ningen.State
 
 	OnSelect func(ch *Channel)
@@ -152,11 +152,7 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 		}
 	}()
 
-	log.Println("Transforming channels")
-
 	chs.Channels = transformChannels(chs.state, channels)
-
-	log.Println("Channel transformed")
 
 	semaphore.IdleMust(func() {
 		for _, ch := range chs.Channels {
@@ -187,6 +183,9 @@ func (chs *Channels) UpdateBanner(url string) {
 }
 
 func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
+	chs.busy.RLock()
+	defer chs.busy.RUnlock()
+
 	for _, ch := range chs.Channels {
 		if ch.ID == id {
 			return ch
@@ -196,6 +195,9 @@ func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
 }
 
 func (chs *Channels) FirstID() discord.Snowflake {
+	chs.busy.RLock()
+	defer chs.busy.RUnlock()
+
 	for _, ch := range chs.Channels {
 		if ch.Category {
 			continue
@@ -206,6 +208,9 @@ func (chs *Channels) FirstID() discord.Snowflake {
 }
 
 func (chs *Channels) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {
+	chs.busy.RLock()
+	defer chs.busy.RUnlock()
+
 	for _, ch := range chs.Channels {
 		if ch.ID != rs.ChannelID {
 			continue

@@ -210,7 +210,7 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 
 	pinged := rs.MentionCount > 0
 
-	guild.unreadMu.Lock()
+	guild.busy.Lock()
 
 	if !unread {
 		delete(guild.unreadChs, rs.ChannelID)
@@ -221,13 +221,16 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 	if !unread || !pinged {
 		for _, chPinged := range guild.unreadChs {
 			unread = true
+			if pinged {
+				break
+			}
 			if !pinged && chPinged {
 				pinged = true
 			}
 		}
 	}
 
-	guild.unreadMu.Unlock()
+	guild.busy.Unlock()
 
 	guild.setUnread(unread, pinged)
 }

@@ -385,15 +385,25 @@ func (m *Message) UpdateAvatar(url string) {
 	}
 	m.pbURL = url
 
-	img := *m.avatar
+	// o := m.avatar.Object
+	// runtime.KeepAlive(o)
 
 	go func(img *gtk.Image) {
+
+		// image := &gtk.Image{
+		// 	Widget: gtk.Widget{
+		// 		InitiallyUnowned: glib.InitiallyUnowned{
+		// 			Object: o,
+		// 		},
+		// 	},
+		// }
+
 		err := cache.SetImageScaled(url+"?size=64", img, AvatarSize, AvatarSize, cache.Round)
 		if err != nil {
 			log.Errorln("Failed to get the pixbuf guild icon:", err)
 			return
 		}
-	}(&img)
+	}(m.avatar)
 }
 
 func (m *Message) updateContentUnsafe(s string) {

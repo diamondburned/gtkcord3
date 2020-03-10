@@ -16,14 +16,14 @@ func (m *Messages) injectHandlers() {
 }
 
 func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
-	if m.ChannelID != t.ChannelID {
+	if m.GetChannelID() != t.ChannelID {
 		return
 	}
 	m.Typing.Add(t)
 }
 
 func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
-	if m.ChannelID != c.ChannelID {
+	if m.GetChannelID() != c.ChannelID {
 		return
 	}
 
@@ -34,7 +34,7 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
-	if m.ChannelID != u.ChannelID {
+	if m.GetChannelID() != u.ChannelID {
 		return
 	}
 
@@ -42,14 +42,14 @@ func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
 }
 
 func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
-	if m.ChannelID != d.ChannelID {
+	if m.GetChannelID() != d.ChannelID {
 		return
 	}
 
 	m.Delete(d.ID)
 }
 func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
-	if m.ChannelID != d.ChannelID {
+	if m.GetChannelID() != d.ChannelID {
 		return
 	}
 
