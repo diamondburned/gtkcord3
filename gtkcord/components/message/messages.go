@@ -18,6 +18,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const scrollMinDelta = 500
+
 type Messages struct {
 	gtkutils.ExtendedWidget
 	ChannelID discord.Snowflake
@@ -28,10 +30,11 @@ type Messages struct {
 
 	Main *gtk.Box
 
-	Scroll   *gtk.ScrolledWindow
-	Viewport *gtk.Viewport
-	Messages *gtk.ListBox
+	Scroll      *gtk.ScrolledWindow
+	Viewport    *gtk.Viewport
+	scrollDelta int32
 
+	Messages *gtk.ListBox
 	messages []*Message
 	guard    sync.RWMutex
 
@@ -276,8 +279,11 @@ func (m *Messages) onSizeAlloc() {
 	max := adj.GetUpper()
 	cur := adj.GetValue() + adj.GetPageSize()
 
+	delta := int32(max - cur)
+	atomic.StoreInt32(&m.scrollDelta, delta)
+
 	// If the scroll is not close to the bottom and we're not loading messages:
-	if max-cur > 1000 {
+	if delta > scrollMinDelta {
 		// Then we don't scroll.
 		// log.Println("Not scrolling. Loading:", loading)
 		return
@@ -287,9 +293,42 @@ func (m *Messages) onSizeAlloc() {
 	// m.Viewport.SetVAdjustment(adj)
 }
 
+func (m *Messages) clean() {
+	// Check the scrolling
+	if atomic.LoadInt32(&m.scrollDelta) > scrollMinDelta {
+		return
+	}
+
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	// Check the number of messages
+	if len(m.messages) <= m.fetch {
+		return
+	}
+
+	// Get the messages needed to be cleaned
+	cleanLen := len(m.messages) - m.fetch
+	cleaned := m.messages[:cleanLen]
+
+	// Clean the slice
+	m.messages = m.messages[cleanLen:]
+
+	// Destroy the messages:
+	semaphore.IdleMust(func() {
+		for i := range cleaned {
+			m.Messages.Remove(cleaned[i].ListBoxRow)
+			cleaned[i] = nil
+		}
+	})
+}
+
 func (m *Messages) Insert(message *discord.Message) {
 	// We ack the message after inserting:
 	defer func() {
+		// Clean the message view:
+		m.clean()
+
 		if message.ID.Valid() {
 			m.c.MarkRead(message.ChannelID, message.ID)
 		}

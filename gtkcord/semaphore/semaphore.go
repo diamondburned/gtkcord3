@@ -42,7 +42,6 @@ func init() {
 
 				if fn, ok := call.fn.(func()); ok {
 					fn()
-					val = nil
 				} else {
 					val = call.fn.(reflect.Value).Call(call.args)
 				}
