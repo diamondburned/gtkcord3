@@ -32,6 +32,7 @@ type Message struct {
 	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
+	Webhook  bool
 
 	Timestamp time.Time
 	Edited    time.Time
@@ -166,6 +167,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
+		Webhook:   m.WebhookID.Valid(),
 		Timestamp: m.Timestamp.Time().Local(),
 		Edited:    m.EditedTimestamp.Time().Local(),
 
@@ -205,9 +207,6 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		if message.OnUserClick != nil {
 			message.OnUserClick(message)
 		}
-		// p := msgs.c.SpawnUserPopup(message.Messages.GuildID, message.AuthorID)
-		// p.SetRelativeTo(message.avatar)
-		// p.Show()
 	})
 
 	message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
@@ -337,10 +336,11 @@ func (m *Message) UpdateAuthor(s *ningen.State, gID discord.Snowflake, u discord
 }
 
 func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
-	if gID.Valid() {
-		n, err := s.Store.Member(gID, u.ID)
+	// Webhooks don't have users.
+	if gID.Valid() && !m.Webhook {
+		n, err := s.Store.Member(gID, m.AuthorID)
 		if err != nil {
-			go s.RequestMember(gID, u.ID)
+			go s.RequestMember(gID, m.AuthorID)
 		} else {
 			m.updateMember(s, gID, *n)
 			return

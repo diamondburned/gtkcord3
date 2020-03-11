@@ -47,7 +47,7 @@ func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 			rows = append(rows, r)
 
 		} else {
-			e, err := newGuildFolder(s, f, g.onSelect)
+			e, err := newGuildFolder(s, f, g.onFolderSelect)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
 			}
@@ -160,10 +160,16 @@ func initGuilds(g *Guilds) {
 	})
 }
 
+func (guilds *Guilds) onFolderSelect(g *Guild) {
+	guilds.ListBox.SelectRow(nil)
+	guilds.onSelect(g)
+}
+
 func (guilds *Guilds) onSelect(g *Guild) {
 	if guilds.OnSelect == nil {
 		return
 	}
+
 	guilds.Current = g
 	go guilds.OnSelect(g)
 }

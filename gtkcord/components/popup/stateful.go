@@ -49,20 +49,15 @@ func (s *StatefulPopupBody) initialize() {
 		return
 	}
 
-	defer s.injectHandlers()
-
 	u, err := s.state.User(s.User)
 	if err != nil {
 		log.Errorln("Failed to get user:", err)
 		return
 	}
 
-	var p *discord.Presence
-
-	if u.ID != s.state.Ready.User.ID {
+	p, err := s.state.Presence(s.Guild, u.ID)
+	if err != nil {
 		p, err = s.state.Presence(0, u.ID)
-	} else {
-		p, err = s.state.Presence(s.Guild, u.ID)
 	}
 
 	if err == nil {
@@ -72,22 +67,26 @@ func (s *StatefulPopupBody) initialize() {
 
 	if !s.Guild.Valid() {
 		s.UserPopupBody.Update(*u)
+		semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
 		return
 	}
+
+	s.injectHandlers()
 
 	// fetch above presence if error not nil
 	if err != nil {
 		s.state.RequestMember(s.Guild, u.ID)
-		return
 	}
 
-	m, err := s.state.Member(s.Guild, u.ID)
+	m, err := s.state.Store.Member(s.Guild, u.ID)
 	if err != nil {
 		s.UserPopupBody.Update(*u)
+		semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
 		return
 	}
 
 	s.UserPopupBody.UpdateMember(*m)
+	semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
 
 	r, err := NewUserPopupRoles(s.state, s.Guild, m.RoleIDs)
 	if err != nil {
@@ -95,8 +94,10 @@ func (s *StatefulPopupBody) initialize() {
 		return
 	}
 
-	semaphore.IdleMust(s.UserPopupBody.Box.Add, r)
-	semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
+	semaphore.IdleMust(func() {
+		s.UserPopupBody.Box.Add(r)
+		s.UserPopupBody.Box.ShowAll()
+	})
 }
 
 func (s *StatefulPopupBody) injectHandlers() {

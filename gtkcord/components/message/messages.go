@@ -423,6 +423,11 @@ func (m *Messages) deleteNonce(nonce string) bool {
 }
 
 func (m *Messages) onAvatarClick(msg *Message) {
+	// Webhooks don't have users.
+	if msg.Webhook {
+		return
+	}
+
 	p := popup.NewPopover(msg.avatar)
 
 	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GuildID)

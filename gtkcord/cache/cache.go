@@ -208,9 +208,7 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 			return
 		}
 
-		semaphore.IdleMust(func(img *gtk.Image) {
-			img.SetFromPixbuf(p)
-		}, img)
+		semaphore.IdleMust(img.SetFromPixbuf, p)
 	})
 
 	if _, err := l.Write(b); err != nil {
