@@ -144,10 +144,14 @@ func (a *Application) Ready(s *ningen.State) error {
 	g.DMButton.OnClick = a.SwitchDM
 
 	c := channel.NewChannels(s)
-	c.OnSelect = a.SwitchChannel
+	c.OnSelect = func(ch *channel.Channel) {
+		a.SwitchChannel(ch)
+	}
 
-	p := channel.NewPrivateChannels()
-	p.OnSelect = a.SwitchDMChannel
+	p := channel.NewPrivateChannels(s)
+	p.OnSelect = func(ch *channel.PrivateChannel) {
+		a.SwitchChannel(ch)
+	}
 
 	m, err := message.NewMessages(s)
 	if err != nil {
@@ -223,7 +227,7 @@ func (a *Application) SwitchDM() {
 		a.Messages.Cleanup()
 
 		return func() bool {
-			a.Privates.LoadChannels(a.State, a.State.Ready.PrivateChannels)
+			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
 			a.Header.UpdateGuild("Private Messages")
 			return true
 		}
@@ -237,43 +241,29 @@ func (a *Application) SwitchDM() {
 	c, ok := a.Privates.Channels[chID.String()]
 	if ok {
 		semaphore.Async(a.Privates.List.SelectRow, c.ListBoxRow)
-		a.SwitchDMChannel(c)
+		a.SwitchChannel(c)
 	}
 }
 
-func (a *Application) SwitchChannel(ch *channel.Channel) {
-	log.Println("Switching to channel", ch.Name)
-
-	a.changeCol(a.Messages, 4, -1, func() func() bool {
-		a.Messages.Cleanup()
-
-		return func() bool {
-			err := a.Messages.Load(ch.ID)
-			if err != nil {
-				log.Errorln("Failed to load messages:", err)
-				return false
-			}
-
-			a.LastAccess[ch.Guild] = ch.ID
-			a.Header.UpdateChannel(ch.Name, ch.Topic)
-			return true
-		}
-	})
+type Channel interface {
+	GuildID() discord.Snowflake
+	ChannelID() discord.Snowflake
+	ChannelInfo() (name, topic string)
 }
 
-func (a *Application) SwitchDMChannel(pc *channel.PrivateChannel) {
+func (a *Application) SwitchChannel(ch Channel) {
 	a.changeCol(a.Messages, 4, -1, func() func() bool {
 		a.Messages.Cleanup()
 
 		return func() bool {
-			err := a.Messages.Load(pc.ID)
+			err := a.Messages.Load(ch.ChannelID())
 			if err != nil {
 				log.Errorln("Failed to load messages:", err)
 				return false
 			}
 
-			a.LastAccess[0] = pc.ID
-			a.Header.UpdateChannel(pc.Name, "")
+			a.LastAccess[ch.GuildID()] = a.Messages.ChannelID
+			a.Header.UpdateChannel(ch.ChannelInfo())
 			return true
 		}
 	})

@@ -216,8 +216,6 @@ func (chs *Channels) TraverseReadState(s *ningen.State, rs *gateway.ReadState, u
 			continue
 		}
 
-		// ack == read
-		log.Println(log.Trace(0), "marking channel as unread:", unread)
 		ch.setUnread(unread, rs.MentionCount > 0)
 		break
 	}

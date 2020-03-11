@@ -3,8 +3,10 @@ package channel
 import (
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -24,11 +26,14 @@ type PrivateChannels struct {
 	// Channels map[discord.Snowflake]*PrivateChannel
 	Channels map[string]*PrivateChannel
 
+	busy  sync.RWMutex
+	state *ningen.State
+
 	OnSelect func(pm *PrivateChannel)
 }
 
 // thread-safe
-func NewPrivateChannels() (pcs *PrivateChannels) {
+func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 	semaphore.IdleMust(func() {
 		l, _ := gtk.ListBoxNew()
 		gtkutils.InjectCSSUnsafe(l, "dmchannels", "")
@@ -51,6 +56,8 @@ func NewPrivateChannels() (pcs *PrivateChannels) {
 			List:   l,
 			Scroll: cs,
 			Search: e,
+
+			state: s,
 		}
 
 		e.Connect("changed", func() {
@@ -84,7 +91,9 @@ func NewPrivateChannels() (pcs *PrivateChannels) {
 }
 
 func (pcs *PrivateChannels) Cleanup() {
-	// fuck diffing.
+	pcs.busy.Lock()
+	defer pcs.busy.Unlock()
+
 	if pcs.Channels != nil {
 		semaphore.IdleMust(func() {
 			for _, ch := range pcs.Channels {
@@ -97,8 +106,10 @@ func (pcs *PrivateChannels) Cleanup() {
 }
 
 // thread-safe
-func (pcs *PrivateChannels) LoadChannels(s ningen.Presencer, channels []discord.Channel) {
-	// TODO: mutex
+func (pcs *PrivateChannels) LoadChannels(channels []discord.Channel) {
+	pcs.busy.Lock()
+	defer pcs.busy.Unlock()
+
 	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
 
 	sort.Slice(channels, func(i, j int) bool {
@@ -113,7 +124,7 @@ func (pcs *PrivateChannels) LoadChannels(s ningen.Presencer, channels []discord.
 				user := channel.DMRecipients[0]
 				go w.updateAvatar(user.AvatarURL())
 
-				if p, _ := s.Presence(0, user.ID); p != nil {
+				if p, _ := pcs.state.Presence(0, user.ID); p != nil {
 					w.updateStatus(p.Status)
 					w.updateActivity(p.Game)
 				}
@@ -130,6 +141,9 @@ func (pcs *PrivateChannels) LoadChannels(s ningen.Presencer, channels []discord.
 }
 
 func (pcs *PrivateChannels) Selected() *PrivateChannel {
+	pcs.busy.RLock()
+	defer pcs.busy.RUnlock()
+
 	if len(pcs.Channels) == 0 {
 		return nil
 	}
@@ -159,6 +173,23 @@ func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
 	}
 
 	return strings.Contains(strings.ToLower(pc.Name), pcs.search)
+}
+
+func (pcs *PrivateChannels) TraverseReadState(_ *ningen.State, rs *gateway.ReadState, unread bool) {
+	// Read lock is used, as the size of the slice isn't directly modified.
+	pcs.busy.RLock()
+	defer pcs.busy.RUnlock()
+
+	pc, ok := pcs.Channels[rs.ChannelID.String()]
+	if !ok {
+		return
+	}
+
+	// Prepend/move to top.
+	pcs.List.Remove(pc)
+	pcs.List.Insert(pc, -1)
+
+	pc.setUnread(unread)
 }
 
 // func (pcs *PrivateChannels) updatePresence(p discord.Presence) {

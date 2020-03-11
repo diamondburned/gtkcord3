@@ -144,6 +144,18 @@ func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	return chw
 }
 
+func (ch *Channel) ChannelID() discord.Snowflake {
+	return ch.ID
+}
+
+func (ch *Channel) GuildID() discord.Snowflake {
+	return ch.Guild
+}
+
+func (ch *Channel) ChannelInfo() (name, topic string) {
+	return ch.Name, ch.Topic
+}
+
 func (ch *Channel) setClass(class string) {
 	gtkutils.DiffClass(&ch.stateClass, class, ch.Style)
 }

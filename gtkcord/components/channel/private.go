@@ -107,6 +107,16 @@ func _ChIDFromRow(row *gtk.ListBoxRow) string {
 	return v.(string)
 }
 
+func (pc *PrivateChannel) GuildID() discord.Snowflake { return 0 }
+
+func (pc *PrivateChannel) ChannelID() discord.Snowflake {
+	return pc.ID
+}
+
+func (pc *PrivateChannel) ChannelInfo() (name, topic string) {
+	return pc.Name, ""
+}
+
 func (pc *PrivateChannel) setStatusClass(class string) {
 	gtkutils.DiffClassUnsafe(&pc.lastStatusClass, class, pc.AStyle)
 }
