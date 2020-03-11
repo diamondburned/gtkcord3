@@ -24,16 +24,12 @@ func (c Circle) Bounds() image.Rectangle {
 }
 
 func (c Circle) At(x, y int) color.Color {
-	if CircleAt(c.r, x, y) {
+	xx, yy, rr := float64(x-c.r)+0.5, float64(y-c.r)+0.5, float64(c.r)
+
+	delta := (xx*xx + yy*yy) - rr*rr
+	if delta <= 0 {
 		return color.Alpha{255}
 	}
-	return color.Alpha{0}
-}
 
-func CircleAt(radius, x, y int) bool {
-	xx, yy, rr := float64(x-radius)+0.5, float64(y-radius)+0.5, float64(radius)
-	if xx*xx+yy*yy < rr*rr {
-		return true
-	}
-	return false
+	return color.Alpha{0}
 }

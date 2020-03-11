@@ -2,26 +2,23 @@ package icons
 
 import (
 	"image"
-	"image/color"
-
-	"github.com/diamondburned/arikawa/discord"
 )
 
-func SolidCircle(sz int, hex uint32) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, sz, sz))
-	rad := sz / 2
-	r, g, b := discord.Color(hex).RGB()
+// func SolidCircle(sz int, hex uint32) image.Image {
+// 	img := image.NewRGBA(image.Rect(0, 0, sz, sz))
+// 	rad := sz / 2
+// 	r, g, b := discord.Color(hex).RGB()
 
-	for x := 0; x < sz; x++ {
-		for y := 0; y < sz; y++ {
-			if CircleAt(rad, x, y) {
-				img.SetRGBA(x, y, color.RGBA{r, g, b, 255})
-			}
-		}
-	}
+// 	for x := 0; x < sz; x++ {
+// 		for y := 0; y < sz; y++ {
+// 			if CircleAt(rad, x, y) {
+// 				img.SetRGBA(x, y, color.RGBA{r, g, b, 255})
+// 			}
+// 		}
+// 	}
 
-	return img
-}
+// 	return img
+// }
 
 func Solid(w, h int, r, g, b, a uint8) image.Image {
 	i := image.NewNRGBA(image.Rect(0, 0, w, h))

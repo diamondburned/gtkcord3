@@ -22,7 +22,7 @@ var (
 	PrefixDebug  = "Debug: "
 	DebugGreyLvl = uint8(11)
 
-	EnableDebug = false
+	EnableDebug = true
 
 	LogPath = filepath.Join(os.TempDir(), "gtkcord3.log")
 )

@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -101,10 +102,25 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		// Hijack Input's box and add the typing indicator:
 		m.Input.Main.Add(m.Typing)
 		m.Typing.ShowAll()
+
+		// On any key-press, focus onto the input box:
+		m.Main.Connect("key-press-event", func(_ *gtk.Box, ev *gdk.Event) bool {
+			m.Focus()
+			// Pass the event in
+			m.Input.Input.Event(ev)
+
+			// Stop the event from reaching the List:
+			return true
+		})
 	})
 
 	m.injectHandlers()
 	return m, nil
+}
+
+// Focus on the input box
+func (m *Messages) Focus() {
+	m.Input.Input.GrabFocus()
 }
 
 func (m *Messages) GetChannelID() discord.Snowflake {
@@ -158,13 +174,10 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
-	// Set GuildID
+	// Set GuildID and subscribe if it's valid:
 	if len(messages) > 0 {
 		m.GuildID = messages[0].GuildID
-		if !m.GuildID.Valid() {
-			// TODO: REMOVE ME
-			log.Errorln("Message does not have valid guildID")
-		} else {
+		if m.GuildID.Valid() {
 			go m.c.Subscribe(m.GuildID)
 		}
 	}
@@ -275,17 +288,17 @@ func (m *Messages) onSizeAlloc() {
 }
 
 func (m *Messages) Insert(message *discord.Message) {
-	// Are we sure this is not our message?
-	if m.Update(message) {
-		return
-	}
-
 	// We ack the message after inserting:
 	defer func() {
 		if message.ID.Valid() {
 			m.c.MarkRead(message.ChannelID, message.ID)
 		}
 	}()
+
+	// Are we sure this is not our message?
+	if m.Update(message) {
+		return
+	}
 
 	m.guard.Lock()
 	defer m.guard.Unlock()

@@ -87,6 +87,7 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 		})
 	})
 
+	s.OnReadChange = append(s.OnReadChange, pcs.TraverseReadState)
 	return
 }
 
@@ -186,8 +187,10 @@ func (pcs *PrivateChannels) TraverseReadState(_ *ningen.State, rs *gateway.ReadS
 	}
 
 	// Prepend/move to top.
-	pcs.List.Remove(pc)
-	pcs.List.Insert(pc, -1)
+	semaphore.IdleMust(func() {
+		pcs.List.Remove(pc)
+		pcs.List.Prepend(pc)
+	})
 
 	pc.setUnread(unread)
 }

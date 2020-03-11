@@ -315,6 +315,12 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 		fn(s, st, false)
 	}
 
+	// Check if this is our message or not:
+	if m, err := s.Store.Message(chID, msgID); err == nil && m.Author.ID == s.Ready.User.ID {
+		// If it is, don't Ack.
+		return
+	}
+
 	// Send over Ack.
 	if err := s.Ack(chID, msgID, &s.lastAck); err != nil {
 		log.Errorln("Failed to ack message:", err)

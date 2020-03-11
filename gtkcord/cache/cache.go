@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ var Client = http.Client{
 
 // DO NOT TOUCH.
 const (
-	CacheHash   = "trapsaregood"
+	CacheHash   = "trapsarecute"
 	CachePrefix = "gtkcord3"
 )
 
@@ -41,12 +42,6 @@ var (
 
 func init() {
 	cleanUpCache()
-
-	// store = diskv.New(diskv.Options{
-	// 	BasePath:          Path,
-	// 	AdvancedTransform: TransformURL,
-	// 	InverseTransform:  InverseTransformURL,
-	// })
 }
 
 func cleanUpCache() {
@@ -69,17 +64,24 @@ func cleanUpCache() {
 	}
 }
 
-func TransformURL(s string) string {
-	u, err := url.Parse(s)
-	if err != nil {
-		return filepath.Join(Path, SanitizeString(s))
+func TransformURL(s string, w, h int) string {
+	var sizeSuffix string
+	if w > 0 && h > 0 {
+		sizeSuffix = "_sz" + strconv.Itoa(w) + "x" + strconv.Itoa(h)
 	}
 
-	if err := os.MkdirAll(filepath.Join(Path, u.Hostname()), 0755|os.ModeDir); err != nil {
+	u, err := url.Parse(s)
+	if err != nil {
+		return filepath.Join(Path, SanitizeString(s)+sizeSuffix)
+	}
+
+	path := filepath.Join(Path, u.Hostname())
+
+	if err := os.MkdirAll(path, 0755|os.ModeDir); err != nil {
 		log.Errorln("Failed to mkdir:", err)
 	}
 
-	return filepath.Join(Path, u.Hostname(), SanitizeString(u.EscapedPath()+"?"+u.RawQuery))
+	return filepath.Join(path, SanitizeString(u.EscapedPath()+"?"+u.RawQuery)+sizeSuffix)
 }
 
 // SanitizeString makes the string friendly to put into the file system. It
@@ -94,44 +96,44 @@ func SanitizeString(str string) string {
 	}, str)
 }
 
-// func Get(url string) ([]byte, error) {
-// 	b, err := get(url)
-// 	if err != nil {
-// 		return b, err
-// 	}
-
-// 	return b, nil
-// }
-
 var fileIO sync.Mutex
 
-// get doesn't check if the file exists
-func get(url, dst string, pp []Processor) error {
+func download(url string, pp []Processor) ([]byte, error) {
 	r, err := Client.Get(url)
 	if err != nil {
-		return errors.Wrap(err, "Failed to GET")
+		return nil, errors.Wrap(err, "Failed to GET")
 	}
-	defer r.Body.Close()
 
 	if r.StatusCode < 200 || r.StatusCode > 299 {
-		return fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
+		return nil, fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return errors.Wrap(err, "Failed to download image")
+		return nil, errors.Wrap(err, "Failed to download image")
 	}
 
 	if len(b) == 0 {
-		return errors.New("nil body")
+		return nil, errors.New("nil body")
 	}
 
 	if len(pp) > 0 {
-		b = Process(b, pp)
+		b, err = Process(b, pp)
 	}
 
+	return b, nil
+}
+
+// get doesn't check if the file exists
+func get(url, dst string, pp []Processor) error {
+	// Unlock FileIO mutex to allow concurrent requests.
+	fileIO.Unlock()
+	b, err := download(url, pp)
 	fileIO.Lock()
-	defer fileIO.Unlock()
+
+	if err != nil {
+		return err
+	}
 
 	if err := ioutil.WriteFile(dst, b, 0755); err != nil {
 		return errors.Wrap(err, "Failed to write file to "+dst)
@@ -140,30 +142,26 @@ func get(url, dst string, pp []Processor) error {
 	return nil
 }
 
-func pixbufFromFile(file string) (*gdk.Pixbuf, error) {
-	fileIO.Lock()
-	defer fileIO.Unlock()
-
-	return gdk.PixbufNewFromFile(file)
-}
-
 func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 	return GetPixbufScaled(url, 0, 0, pp...)
 }
 
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
 	// Transform URL:
-	dst := TransformURL(url)
+	dst := TransformURL(url, w, h)
+
+	fileIO.Lock()
+	defer fileIO.Unlock()
 
 	// Try and get the Pixbuf from file:
-	p, err := pixbufFromFile(dst)
+	p, err := gdk.PixbufNewFromFile(dst)
 	if err == nil {
 		return p, nil
 	}
 
 	// If resize is requested, we resize using Go's instead.
 	if w > 0 && h > 0 {
-		pp = Prepend(Resize(w, h), pp)
+		pp = append(pp, Resize(w, h))
 	}
 
 	// Get the image into file (dst)
@@ -171,7 +169,7 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 		return nil, err
 	}
 
-	p, err = pixbufFromFile(dst)
+	p, err = gdk.PixbufNewFromFile(dst)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get pixbuf")
 	}

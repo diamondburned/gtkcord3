@@ -21,6 +21,7 @@ type ExtendedWidget interface {
 	Show()
 	ShowAll()
 	Destroy()
+	GrabFocus()
 	SetSizeRequest(w, h int)
 }
 

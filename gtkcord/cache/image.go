@@ -6,6 +6,7 @@ import (
 	"image/draw"
 	"image/gif"
 	"image/png"
+	"io"
 	"sync"
 
 	_ "image/jpeg"
@@ -13,6 +14,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/disintegration/imaging"
+	"github.com/pkg/errors"
 )
 
 var bufPool = sync.Pool{
@@ -42,7 +44,6 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 				frame.Set(x, y, img.At(x, y))
 			}
 		}
-
 	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -62,11 +63,14 @@ var pngEncoder = png.Encoder{
 	CompressionLevel: png.BestCompression,
 }
 
-func Process(data []byte, processors []Processor) []byte {
-	img, _, err := image.Decode(bytes.NewReader(data))
+func Process(data []byte, processors []Processor) ([]byte, error) {
+	return ProcessStream(bytes.NewReader(data), processors)
+}
+
+func ProcessStream(r io.Reader, processors []Processor) ([]byte, error) {
+	img, _, err := image.Decode(r)
 	if err != nil {
-		log.Errorln("Go: Failed to decode image:", err)
-		return data
+		return nil, errors.Wrap(err, "Failed to decode")
 	}
 
 	for _, proc := range processors {
@@ -78,11 +82,10 @@ func Process(data []byte, processors []Processor) []byte {
 	defer buf.Reset()
 
 	if err := pngEncoder.Encode(buf, img); err != nil {
-		log.Errorln("Go: Failed to encode PNG:", err)
-		return data
+		return nil, errors.Wrap(err, "Failed to encode")
 	}
 
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 func Prepend(p1 Processor, pN []Processor) []Processor {
@@ -101,6 +104,12 @@ func Resize(maxW, maxH int) Processor {
 }
 
 func Round(img image.Image) image.Image {
+	// Scale up
+	oldbounds := img.Bounds()
+	const scale = 2
+
+	img = imaging.Resize(img, oldbounds.Dx()*scale, oldbounds.Dy()*scale, imaging.Lanczos)
+
 	r := img.Bounds().Dx() / 2
 
 	var dst draw.Image
@@ -117,7 +126,8 @@ func Round(img image.Image) image.Image {
 	}
 
 	roundTo(img, dst, r)
-	return dst
+
+	return imaging.Resize(img, oldbounds.Dx(), oldbounds.Dy(), imaging.Lanczos)
 }
 
 // RoundTo round-crops an image
@@ -131,4 +141,11 @@ func roundTo(src image.Image, dst draw.Image, r int) {
 		image.ZP,
 		draw.Src,
 	)
+}
+
+func min(i, j int) int {
+	if i < j {
+		return i
+	}
+	return j
 }

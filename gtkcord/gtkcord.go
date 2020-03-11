@@ -267,6 +267,9 @@ func (a *Application) SwitchChannel(ch Channel) {
 			return true
 		}
 	})
+
+	// Grab the message input's focus:
+	semaphore.IdleMust(a.Messages.Focus)
 }
 
 func (a *Application) changeCol(
@@ -274,13 +277,9 @@ func (a *Application) changeCol(
 	spinnerWidth int,
 	cleanup func() func() bool) {
 
-	log.Println("Acquiring lock...")
-
 	// Lock
 	a.busy.Lock()
 	defer a.busy.Unlock()
-
-	log.Println("Lock acquired.")
 
 	// Clean up channels
 	fn := cleanup()
@@ -295,8 +294,6 @@ func (a *Application) changeCol(
 		spinner.SetSizeRequest(spinnerWidth, -1)
 		a.setCol(spinner, n)
 	})
-
-	log.Println("Loading fn")
 
 	if !fn() {
 		semaphore.IdleMust(func() {
