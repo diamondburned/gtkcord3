@@ -47,7 +47,7 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
-	buf.Reset()
+	defer buf.Reset()
 
 	if err := gif.EncodeAll(buf, GIF); err != nil {
 		log.Errorln("Go: Failed to encode GIF:", err)
@@ -61,7 +61,7 @@ var pngEncoder = png.Encoder{
 	CompressionLevel: png.NoCompression,
 }
 
-func Process(data []byte, processors ...Processor) []byte {
+func Process(data []byte, processors []Processor) []byte {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		log.Errorln("Go: Failed to decode image:", err)
@@ -74,7 +74,7 @@ func Process(data []byte, processors ...Processor) []byte {
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
-	buf.Reset()
+	defer buf.Reset()
 
 	if err := pngEncoder.Encode(buf, img); err != nil {
 		log.Errorln("Go: Failed to encode PNG:", err)
@@ -84,13 +84,18 @@ func Process(data []byte, processors ...Processor) []byte {
 	return buf.Bytes()
 }
 
-func Prepend(p1 Processor, pN ...Processor) []Processor {
+func Prepend(p1 Processor, pN []Processor) []Processor {
 	return append([]Processor{p1}, pN...)
 }
 
-func Resize(w, h int) Processor {
+func Resize(maxW, maxH int) Processor {
 	return func(img image.Image) image.Image {
-		return imaging.Fit(img, w, h, imaging.Linear)
+		bounds := img.Bounds()
+		imgW, imgH := bounds.Dx(), bounds.Dy()
+
+		w, h := maxSize(imgW, imgH, maxW, maxH)
+
+		return imaging.Resize(img, w, h, imaging.Linear)
 	}
 }
 

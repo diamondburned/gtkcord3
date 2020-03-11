@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/peterbourgon/diskv/v3"
 	"github.com/pkg/errors"
 )
 
@@ -27,7 +27,7 @@ var Client = http.Client{
 
 // DO NOT TOUCH.
 const (
-	CacheHash   = "Aethel1s"
+	CacheHash   = "trapsaregood"
 	CachePrefix = "gtkcord3"
 )
 
@@ -37,16 +37,16 @@ var (
 	Path    = filepath.Join(Temp, DirName)
 )
 
-var store *diskv.Diskv
+// var store *diskv.Diskv
 
 func init() {
 	cleanUpCache()
 
-	store = diskv.New(diskv.Options{
-		BasePath:          Path,
-		AdvancedTransform: TransformURL,
-		InverseTransform:  InverseTransformURL,
-	})
+	// store = diskv.New(diskv.Options{
+	// 	BasePath:          Path,
+	// 	AdvancedTransform: TransformURL,
+	// 	InverseTransform:  InverseTransformURL,
+	// })
 }
 
 func cleanUpCache() {
@@ -69,23 +69,17 @@ func cleanUpCache() {
 	}
 }
 
-func TransformURL(s string) *diskv.PathKey {
+func TransformURL(s string) string {
 	u, err := url.Parse(s)
 	if err != nil {
-		return &diskv.PathKey{
-			FileName: SanitizeString(s),
-		}
+		return filepath.Join(Path, SanitizeString(s))
 	}
 
-	return &diskv.PathKey{
-		FileName: SanitizeString(u.EscapedPath() + "?" + u.RawQuery),
-		Path:     []string{u.Hostname()},
+	if err := os.MkdirAll(filepath.Join(Path, u.Hostname()), 0755|os.ModeDir); err != nil {
+		log.Errorln("Failed to mkdir:", err)
 	}
-}
 
-func InverseTransformURL(pk *diskv.PathKey) string {
-	// like fuck do I know
-	return ""
+	return filepath.Join(Path, u.Hostname(), SanitizeString(u.EscapedPath()+"?"+u.RawQuery))
 }
 
 // SanitizeString makes the string friendly to put into the file system. It
@@ -100,45 +94,57 @@ func SanitizeString(str string) string {
 	}, str)
 }
 
-func Get(url string) ([]byte, error) {
-	b, err := get(url)
-	if err != nil {
-		return b, err
-	}
+// func Get(url string) ([]byte, error) {
+// 	b, err := get(url)
+// 	if err != nil {
+// 		return b, err
+// 	}
 
-	return b, nil
-}
+// 	return b, nil
+// }
 
-func get(url string) ([]byte, error) {
-	b, err := store.Read(url)
-	if err == nil {
-		return b, nil
-	}
+var fileIO sync.Mutex
 
+// get doesn't check if the file exists
+func get(url, dst string, pp []Processor) error {
 	r, err := Client.Get(url)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "Failed to GET")
 	}
 	defer r.Body.Close()
 
 	if r.StatusCode < 200 || r.StatusCode > 299 {
-		return nil, fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
+		return fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
 	}
 
-	b, err = ioutil.ReadAll(r.Body)
+	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to download image")
+		return errors.Wrap(err, "Failed to download image")
 	}
 
 	if len(b) == 0 {
-		return nil, errors.New("nil body")
+		return errors.New("nil body")
 	}
 
-	if err := store.Write(url, b); err != nil {
-		log.Errorln("Failed to store:", err)
+	if len(pp) > 0 {
+		b = Process(b, pp)
 	}
 
-	return b, nil
+	fileIO.Lock()
+	defer fileIO.Unlock()
+
+	if err := ioutil.WriteFile(dst, b, 0755); err != nil {
+		return errors.Wrap(err, "Failed to write file to "+dst)
+	}
+
+	return nil
+}
+
+func pixbufFromFile(file string) (*gdk.Pixbuf, error) {
+	fileIO.Lock()
+	defer fileIO.Unlock()
+
+	return gdk.PixbufNewFromFile(file)
 }
 
 func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
@@ -146,33 +152,31 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 }
 
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
-	b, err := get(url)
-	if err != nil {
+	// Transform URL:
+	dst := TransformURL(url)
+
+	// Try and get the Pixbuf from file:
+	p, err := pixbufFromFile(dst)
+	if err == nil {
+		return p, nil
+	}
+
+	// If resize is requested, we resize using Go's instead.
+	if w > 0 && h > 0 {
+		pp = Prepend(Resize(w, h), pp)
+	}
+
+	// Get the image into file (dst)
+	if err := get(url, dst, pp); err != nil {
 		return nil, err
 	}
 
-	if len(pp) > 0 {
-		b = Process(b, pp...)
-	}
-
-	l, err := gdk.PixbufLoaderNew()
+	p, err = pixbufFromFile(dst)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
+		return nil, errors.Wrap(err, "Failed to get pixbuf")
 	}
 
-	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
-			w, h = maxSize(_w, _h, w, h)
-			l.SetSize(w, h)
-		})
-	}
-
-	pixbuf, err := l.WriteAndReturnPixbuf(b)
-	if err != nil || pixbuf == nil {
-		return nil, errors.Wrap(err, "Failed to load pixbuf")
-	}
-
-	return pixbuf, nil
+	return p, nil
 }
 
 func SetImage(url string, img *gtk.Image, pp ...Processor) error {
@@ -180,45 +184,12 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 }
 
 func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
-	b, err := get(url)
+	p, err := GetPixbufScaled(url, w, h, pp...)
 	if err != nil {
 		return err
 	}
 
-	if len(pp) > 0 {
-		b = Process(b, pp...)
-	}
-
-	l, err := gdk.PixbufLoaderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a pixbuf_loader")
-	}
-
-	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
-			w, h = maxSize(_w, _h, w, h)
-			l.SetSize(w, h)
-		})
-	}
-
-	gtkutils.Connect(l, "closed", func() {
-		p, err := l.GetPixbuf()
-		if err != nil || p == nil {
-			log.Errorln("Failed to get pixbuf during area-updated:", err)
-			return
-		}
-
-		semaphore.IdleMust(img.SetFromPixbuf, p)
-	})
-
-	if _, err := l.Write(b); err != nil {
-		return errors.Wrap(err, "Failed to write to pixbuf_loader")
-	}
-
-	if err := l.Close(); err != nil {
-		return errors.Wrap(err, "Failed to close pixbuf_loader")
-	}
-
+	semaphore.IdleMust(img.SetFromPixbuf, p)
 	return nil
 }
 
