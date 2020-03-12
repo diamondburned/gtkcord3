@@ -8,6 +8,7 @@ import (
 
 func injectMessage(m *Messages, w *Message) {
 	w.OnUserClick = m.onAvatarClick
+	w.OnRightClick = m.onRightClick
 }
 
 func shouldCondense(msgs []*Message, msg *Message) bool {

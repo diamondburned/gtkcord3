@@ -568,3 +568,35 @@ func (m *Messages) onAvatarClick(msg *Message) {
 	p.SetChildren(body)
 	p.Show()
 }
+
+func (m *Messages) onRightClick(msg *Message, btn *gdk.EventButton) {
+	menu, _ := gtk.MenuNew()
+
+	// TODO: permission
+
+	iDel, _ := gtk.MenuItemNewWithLabel("Delete Message")
+	iDel.Connect("activate", func() {
+		go func() {
+			if err := m.c.DeleteMessage(m.ChannelID, msg.ID); err != nil {
+				log.Println("Error deleting message:", err)
+			}
+		}()
+	})
+	menu.Add(iDel)
+
+	if msg.AuthorID == m.c.Ready.User.ID {
+		iEdit, _ := gtk.MenuItemNewWithLabel("Edit Message")
+		iEdit.Connect("activate", func() {
+			go func() {
+				if err := m.Input.editMessage(msg.ID); err != nil {
+					log.Println("Error editing message:", err)
+				}
+			}()
+		})
+		menu.Add(iEdit)
+	}
+
+	menu.PopupAtPointer(btn.Event)
+	menu.ShowAll()
+	menu.GrabFocus()
+}

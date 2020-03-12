@@ -62,7 +62,8 @@ type Message struct {
 	Condensed      bool
 	CondenseOffset time.Duration
 
-	OnUserClick func(m *Message)
+	OnUserClick  func(m *Message)
+	OnRightClick func(m *Message, btn *gdk.EventButton)
 
 	busy int32
 }
@@ -133,7 +134,10 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		avatar, _   = gtk.ImageNew()
 		avatarEv, _ = gtk.EventBoxNew()
 
-		main, _        = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		// event box to wrap around main
+		mainEv, _ = gtk.EventBoxNew()
+		main, _   = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+
 		right, _       = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		rightTop, _    = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 		rightBottom, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
@@ -186,7 +190,24 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	}
 	defer message.markBusy()()
 
-	message.ListBoxRow.Add(message.main)
+	// Wrap main around an event box
+	mainEv.Add(message.main)
+	message.ListBoxRow.Add(mainEv)
+
+	// On message (which is in event box) right click:
+	mainEv.Connect("button_release_event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
+		if message.OnRightClick == nil {
+			return false
+		}
+
+		btn := gdk.EventButtonNewFromEvent(ev)
+		if btn.Button() != gdk.BUTTON_SECONDARY {
+			return false
+		}
+
+		message.OnRightClick(message, btn)
+		return true
+	})
 
 	gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
 
@@ -203,10 +224,17 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.avatarEv.SetMarginEnd(AvatarPadding)
 	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 	message.avatarEv.Add(message.avatar)
-	message.avatarEv.Connect("button_press_event", func() {
-		if message.OnUserClick != nil {
-			message.OnUserClick(message)
+	message.avatarEv.Connect("button_release_event", func(_ *gtk.EventBox, ev *gdk.Event) {
+		if message.OnUserClick == nil {
+			return
 		}
+
+		btn := gdk.EventButtonNewFromEvent(ev)
+		if btn.Button() != gdk.BUTTON_PRIMARY {
+			return
+		}
+
+		message.OnUserClick(message)
 	})
 
 	message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
