@@ -1,16 +1,16 @@
-package atomic
+package moreatomic
 
 import "sync/atomic"
 
-type AtomicBool struct {
+type Bool struct {
 	val uint32
 }
 
-func (b *AtomicBool) Get() bool {
+func (b *Bool) Get() bool {
 	return atomic.LoadUint32(&b.val) == 1
 }
 
-func (b *AtomicBool) Set(val bool) {
+func (b *Bool) Set(val bool) {
 	var x = uint32(0)
 	if val {
 		x = 1

@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/completer"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -26,7 +27,7 @@ type Input struct {
 	Style *gtk.StyleContext
 
 	InputBox  *gtk.Box
-	Completer *Completer
+	Completer *completer.State
 
 	Input    *gtk.TextView
 	InputBuf *gtk.TextBuffer
@@ -103,6 +104,16 @@ func NewInput(m *Messages) (i *Input) {
 	return
 }
 
+func (i *Input) initCompleter() {
+	if i.Completer == nil {
+		i.Completer = completer.New(
+			i.Messages.c, i.InputBuf,
+			// Passing by reference to avoid having to update too many structs.
+			&i.Messages.GuildID, &i.Messages.ChannelID,
+		)
+	}
+}
+
 func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	evKey := gdk.EventKeyNewFromEvent(ev)
 
@@ -121,7 +132,7 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		key   = evKey.KeyVal()
 	)
 
-	if i.Completer.keyDown(state, key) {
+	if i.Completer.KeyDown(state, key) {
 		return true
 	}
 

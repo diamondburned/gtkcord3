@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -39,7 +40,8 @@ type Messages struct {
 	guard    sync.RWMutex
 
 	resetting    bool
-	fetchingMore bool
+	fetchingMore moreatomic.Bool
+	lastFetched  moreatomic.Time
 
 	// Additional components
 	Input  *Input
@@ -135,6 +137,13 @@ func (m *Messages) GetChannelID() discord.Snowflake {
 	return m.ChannelID
 }
 
+func (m *Messages) GetGuildID() discord.Snowflake {
+	m.guard.RLock()
+	defer m.guard.RUnlock()
+
+	return m.GuildID
+}
+
 func (m *Messages) LastFromMe() *Message {
 	m.guard.RLock()
 	defer m.guard.RUnlock()
@@ -185,6 +194,10 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		if m.GuildID.Valid() {
 			go m.c.Subscribe(m.GuildID)
 		}
+
+	} else {
+		// If there are no messages, don't bother.
+		return nil
 	}
 
 	// Sort so that latest is last:
@@ -209,12 +222,6 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		}
 	})
 
-	// If there are no messages, don't bother.
-	if len(m.messages) == 0 {
-		m.resetting = false
-		return nil
-	}
-
 	// Find the latest message and ack it:
 	go m.c.MarkRead(m.ChannelID, messages[len(messages)-1].ID)
 
@@ -229,27 +236,17 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		}
 	})
 
+	m.resetting = false
+
 	return nil
 }
 
 func (m *Messages) ShouldCondense(msg *Message) bool {
-	if len(m.messages) == 0 {
-		return false
-	}
-
-	var last = m.messages[len(m.messages)-1]
-
-	return last.AuthorID == msg.AuthorID &&
-		msg.Timestamp.Sub(last.Timestamp) < 5*time.Minute
+	return shouldCondense(m.messages, msg)
 }
 
 func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		if msg := m.messages[i]; msg.AuthorID == author && !msg.Condensed {
-			return msg
-		}
-	}
-	return nil
+	return lastMessageFrom(m.messages, author)
 }
 
 func (m *Messages) Cleanup() {
@@ -302,21 +299,78 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
 	// Prevent fetching more if we're already fetching.
-	if m.fetchingMore {
+	if m.fetchingMore.Get() {
 		return
 	}
 
-	m.fetchingMore = true
-	defer func() {
-		m.fetchingMore = false
-	}()
+	// Prevent fetching if we've just fetched 5 (or less) seconds ago. HasBeen
+	// also implicitly updates.
+	if !m.lastFetched.HasBeen(5 * time.Second) {
+		return
+	}
 
-	log.Println("TODO: fetch more messages")
-	<-time.After(2 * time.Second)
+	m.fetchingMore.Set(true)
+	m.guard.Lock()
+
+	go m.fetchMore()
+}
+
+func (m *Messages) fetchMore() {
+	defer m.fetchingMore.Set(false)
+	defer m.guard.Unlock()
+
+	// Grab the first ID
+	first := m.messages[0].ID
+
+	// Bypass the state cache
+	messages, err := m.c.MessagesBefore(m.ChannelID, first, uint(m.fetch))
+	if err != nil {
+		// TODO: error popup
+		log.Errorln("Failed to fetch past messages:", err)
+		return
+	}
+
+	// Sort so that latest is last:
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].ID < messages[j].ID
+	})
+
+	// Allocate a new empty slice for past messages. The earliest message
+	// appears first.
+	oldMsgs := make([]*Message, 0, len(messages))
+
+	// Iterate from earliest to latest, in a thread-safe function.
+	semaphore.IdleMust(func() {
+		for i := 0; i < len(messages); i++ {
+			message := &messages[i]
+
+			// Create a new message without insert.
+			w := newMessageUnsafe(m.c, message)
+			injectMessage(m, w)
+			tryCondense(oldMsgs, w)
+
+			oldMsgs = append(oldMsgs, w)
+		}
+
+		// Now we're prepending the message, latest first.
+		for i := len(oldMsgs) - 1; i >= 0; i-- {
+			w := oldMsgs[i]
+			message := &messages[i]
+
+			// Prepend into the box and show the message:
+			m.Messages.Prepend(w)
+			w.ShowAll()
+
+			// Update the message too, only we use the channel's GuildID instead
+			// of the message's, as GuildID isn't populated for API-fetched messages.
+			w.updateAuthor(m.c, m.GuildID, message.Author)
+			go w.UpdateExtras(m.c, message)
+		}
+	})
+
+	// Prepend into the slice as well:
+	m.messages = append(oldMsgs, m.messages...)
 }
 
 func (m *Messages) cleanOldMessages() {
@@ -380,12 +434,11 @@ func (m *Messages) Insert(message *discord.Message) {
 
 // not thread safe
 func (m *Messages) insert(w *Message) {
-	w.OnUserClick = m.onAvatarClick
+	// Bind Message's fields to Messages'
+	injectMessage(m, w)
 
-	if m.ShouldCondense(w) {
-		w.setOffset(m.lastMessageFrom(w.AuthorID))
-		w.SetCondensedUnsafe(true)
-	}
+	// Try and see if the message should be condensed
+	tryCondense(m.messages, w)
 
 	m.Messages.Insert(w, -1)
 	m.messages = append(m.messages, w)

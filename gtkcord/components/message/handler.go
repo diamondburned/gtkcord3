@@ -57,7 +57,7 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	if m.GuildID != c.GuildID {
+	if m.GetGuildID() != c.GuildID {
 		log.Println("GuildMembersChunk not from our guild", m.GuildID)
 		return
 	}

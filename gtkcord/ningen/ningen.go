@@ -40,6 +40,9 @@ type State struct {
 
 	gmu    sync.Mutex
 	guilds map[discord.Snowflake]*guildState
+
+	// non-nil if nitro
+	globalEmojis []discord.Emoji
 }
 
 type Mute struct {
@@ -137,6 +140,7 @@ func Ningen(s *state.State) (*State, error) {
 	// }
 
 	state.UpdateReady(s.Ready)
+	// state.UpdateNitroEmojis()
 	return state, nil
 }
 
@@ -316,9 +320,11 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	}
 
 	// Check if this is our message or not:
-	if m, err := s.Store.Message(chID, msgID); err == nil && m.Author.ID == s.Ready.User.ID {
-		// If it is, don't Ack.
-		return
+	if m, err := s.Store.Message(chID, msgID); err == nil {
+		if m.Author.ID == s.Ready.User.ID {
+			// If it is, don't Ack.
+			return
+		}
 	}
 
 	// Send over Ack.
@@ -363,4 +369,74 @@ func (s *State) GuildMuted(guildID discord.Snowflake, everyone bool) bool {
 		return (!everyone && m.All) || (everyone && m.Everyone)
 	}
 	return false
+}
+
+// func (s *State) UpdateNitroEmojis() {
+// 	// If user doesn't have Nitro, exit.
+// 	if s.Ready.User.Nitro == discord.NoUserNitro {
+// 		s.emojis = nil
+// 		return
+// 	}
+
+// 	// Grab all guilds:
+
+// }
+
+type GuildEmojis struct {
+	Name   string
+	Emojis []discord.Emoji
+}
+
+func (s *State) SearchEmojis(guildID discord.Snowflake) []GuildEmojis {
+	// User doesn't have Nitro, so only non-GIF guild emojis are available:
+	if s.Ready.User.Nitro == discord.NoUserNitro {
+		// If we don't have a guildID, return nothing.
+		if !guildID.Valid() {
+			return nil
+		}
+
+		g, err := s.Store.Guild(guildID)
+		if err != nil {
+			log.Errorln("Failed to get guild while searching emojis:", err)
+		}
+
+		emojis, err := s.Store.Emojis(guildID)
+		if err != nil {
+			log.Errorln("Failed to get emojis:", err)
+			return nil
+		}
+
+		filtered := emojis[:0]
+
+		for _, e := range emojis {
+			if e.Animated == false {
+				filtered = append(filtered, e)
+			}
+		}
+
+		return []GuildEmojis{{
+			Name:   g.Name,
+			Emojis: emojis,
+		}}
+	}
+
+	// User has Nitro, grab all emojis.
+	guilds, err := s.Store.Guilds()
+	if err != nil {
+		log.Errorln("Failed to get guilds:", err)
+		return nil
+	}
+
+	var emojis = make([]GuildEmojis, 0, len(guilds))
+
+	for _, g := range guilds {
+		if e, err := s.Store.Emojis(g.ID); err == nil {
+			emojis = append(emojis, GuildEmojis{
+				Name:   g.Name,
+				Emojis: e,
+			})
+		}
+	}
+
+	return emojis
 }

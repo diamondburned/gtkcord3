@@ -121,6 +121,9 @@ func (a *Application) Ready(s *ningen.State) error {
 	}
 
 	semaphore.IdleMust(window.Resize, 1200, 850)
+	window.Window.Closer = func() {
+		s.Close()
+	}
 
 	// Set Markdown's highlighting theme
 	switch s.Ready.Settings.Theme {
