@@ -122,6 +122,7 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 	})
 
 	m.injectHandlers()
+	m.injectPopup()
 	return m, nil
 }
 

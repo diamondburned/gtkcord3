@@ -172,7 +172,7 @@ func NewUserPopupBody() *UserPopupBody {
 
 	l, _ := gtk.LabelNew("?")
 	l.SetXAlign(0.0)
-	l.SetMarginStart(7)
+	l.SetMarginEnd(7)
 	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 	b.Add(l)
