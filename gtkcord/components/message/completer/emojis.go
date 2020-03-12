@@ -1,6 +1,7 @@
 package completer
 
 import (
+	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
@@ -14,7 +15,7 @@ func (c *State) completeEmojis(word string) {
 	filteredLen := 0
 
 	for _, guild := range guildEmojis {
-		filteredEmojis := guild.Emojis[:0]
+		filteredEmojis := make([]discord.Emoji, 0, MaxCompletionEntries)
 
 		for _, e := range guild.Emojis {
 			if contains(e.Name, word) {
