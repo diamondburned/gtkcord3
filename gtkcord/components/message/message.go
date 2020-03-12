@@ -55,8 +55,8 @@ type Message struct {
 
 	// Right-bottom container, has message contents:
 	rightBottom *gtk.Box
-	textView    gtk.IWidget
-	content     *gtk.TextBuffer           // view declared implicitly
+	textView    *gtk.TextView
+	content     *gtk.TextBuffer
 	extras      []gtkutils.ExtendedWidget // embeds, images, etc
 
 	Condensed      bool
@@ -436,6 +436,7 @@ func (m *Message) UpdateAvatar(url string) {
 
 func (m *Message) updateContentUnsafe(s string) {
 	m.assertContentUnsafe()
+
 	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
 	m.content.InsertMarkup(m.content.GetEndIter(), s)
 }
@@ -445,7 +446,7 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 
 	if update.Content != "" {
 		semaphore.IdleMust(m.assertContentUnsafe)
-		md.ParseMessage(s, update, []byte(update.Content), m.content)
+		md.ParseMessage(s, update, nil, m.content)
 	}
 
 	for _, mention := range update.Mentions {

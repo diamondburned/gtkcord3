@@ -42,6 +42,11 @@ type WidgetSizeRequester interface {
 	SetHExpand(bool)
 }
 
+type Container interface {
+	gtk.IWidget
+	Add(gtk.IWidget)
+}
+
 // Safe-guard
 var _ ExtendedWidget = (*gtk.Box)(nil)
 var _ WidgetDestroyer = (*gtk.Box)(nil)

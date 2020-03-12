@@ -8,11 +8,9 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
@@ -27,19 +25,6 @@ const (
 	IdleColor    = 0xFAA61A
 	OnlineColor  = 0x43B581
 )
-
-func init() {
-	md.ChannelPressed = ChannelMentionPressed
-	md.UserPressed = UserMentionPressed
-}
-
-func UserMentionPressed(ev *gdk.EventButton, user discord.GuildUser) {
-	log.Println("User mention pressed:", user.Username)
-}
-
-func ChannelMentionPressed(ev *gdk.EventButton, ch discord.Channel) {
-	log.Println("Channel mention pressed:", ch.Name)
-}
 
 type Popover struct {
 	*gtk.Popover

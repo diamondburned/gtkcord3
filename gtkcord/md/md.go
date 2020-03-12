@@ -44,8 +44,13 @@ var (
 	pool     = newPool()
 )
 
-var ChannelPressed func(ev *gdk.EventButton, ch discord.Channel)
-var UserPressed func(ev *gdk.EventButton, user discord.GuildUser)
+type PressedEvent struct {
+	*gdk.EventButton
+	TextView *gtk.TextView
+}
+
+var ChannelPressed func(ev PressedEvent, ch discord.Channel)
+var UserPressed func(ev PressedEvent, user discord.GuildUser)
 
 func init() {
 	log.Debugln("REGEX:", strings.Join(regexes, "|"))
@@ -75,8 +80,20 @@ type Discord interface {
 }
 
 func ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
+	// Boolean for message content:
+	var content = false
+	if m != nil && md == nil {
+		content = true
+		md = []byte(m.Content)
+	}
+
 	s := pool.Get().(*mdState)
-	s.use(buf, md, d, m)
+	s.d = d
+	s.m = m
+	s.buf = buf
+	s.fmtter.Reset()
+
+	s.parseInput(md)
 
 	var tree func(i int)
 	if d == nil || m == nil {
@@ -87,8 +104,12 @@ func ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer)
 
 	s.iterMu.Lock()
 
-	// Wipe the buffer clean
 	semaphore.IdleMust(func() {
+		// Populate the tags:
+		s.tagTable()
+		s.tag = s.colorTag(s.attr, s.color)
+
+		// Wipe the buffer clean
 		buf.Delete(buf.GetStartIter(), buf.GetEndIter())
 	})
 
@@ -103,7 +124,7 @@ func ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer)
 	s.insertWithTag(md[s.last:], nil)
 
 	// Check if the message is edited:
-	if m != nil && m.EditedTimestamp.Valid() {
+	if m != nil && content && m.EditedTimestamp.Valid() {
 		s.addEditedStamp(m.EditedTimestamp.Time())
 	}
 

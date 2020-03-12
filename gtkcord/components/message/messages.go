@@ -8,7 +8,6 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/typing"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -504,7 +503,6 @@ func (m *Messages) Delete(ids ...discord.Snowflake) {
 	defer m.guard.Unlock()
 
 	for _, id := range ids {
-	FindLoop:
 		for i, message := range m.messages {
 			if message.ID != id {
 				continue
@@ -521,7 +519,7 @@ func (m *Messages) Delete(ids ...discord.Snowflake) {
 			// Check if the last message (relative to i) is the author's:
 			if i > 0 && m.messages[i-1].AuthorID == message.AuthorID {
 				// Then we continue, since we don't need to uncollapse.
-				break FindLoop
+				break
 			}
 
 			// Check if next message is author's:
@@ -530,7 +528,7 @@ func (m *Messages) Delete(ids ...discord.Snowflake) {
 				semaphore.IdleMust(m.messages[i].SetCondensedUnsafe, false)
 			}
 
-			break FindLoop
+			break
 		}
 	}
 
@@ -552,51 +550,4 @@ func (m *Messages) deleteNonce(nonce string) bool {
 	}
 
 	return false
-}
-
-func (m *Messages) onAvatarClick(msg *Message) {
-	// Webhooks don't have users.
-	if msg.Webhook {
-		return
-	}
-
-	p := popup.NewPopover(msg.avatar)
-
-	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GuildID)
-	body.ParentStyle, _ = p.GetStyleContext()
-
-	p.SetChildren(body)
-	p.Show()
-}
-
-func (m *Messages) onRightClick(msg *Message, btn *gdk.EventButton) {
-	menu, _ := gtk.MenuNew()
-
-	// TODO: permission
-
-	iDel, _ := gtk.MenuItemNewWithLabel("Delete Message")
-	iDel.Connect("activate", func() {
-		go func() {
-			if err := m.c.DeleteMessage(m.ChannelID, msg.ID); err != nil {
-				log.Println("Error deleting message:", err)
-			}
-		}()
-	})
-	menu.Add(iDel)
-
-	if msg.AuthorID == m.c.Ready.User.ID {
-		iEdit, _ := gtk.MenuItemNewWithLabel("Edit Message")
-		iEdit.Connect("activate", func() {
-			go func() {
-				if err := m.Input.editMessage(msg.ID); err != nil {
-					log.Println("Error editing message:", err)
-				}
-			}()
-		})
-		menu.Add(iEdit)
-	}
-
-	menu.PopupAtPointer(btn.Event)
-	menu.ShowAll()
-	menu.GrabFocus()
 }

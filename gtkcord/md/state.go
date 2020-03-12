@@ -189,17 +189,8 @@ func (s *mdState) getLastIndex(currentIndex int) int32 {
 	return s.matches[currentIndex][0].to
 }
 
-func (s *mdState) use(buf *gtk.TextBuffer, input []byte, d Discord, msg *discord.Message) {
+func (s *mdState) parseInput(input []byte) {
 	found := regex.FindAllSubmatchIndex(input, -1)
-
-	s.buf = buf
-	s.tagTable()
-
-	s.d = d
-	s.m = msg
-
-	s.tag = s.ColorTag(s.attr, s.color)
-	s.fmtter.Reset()
 
 	// We're not clearing s.matches
 

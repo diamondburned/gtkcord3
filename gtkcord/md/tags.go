@@ -93,14 +93,18 @@ func (s *mdState) tagTable() *gtk.TextTagTable {
 	return ttt
 }
 
-func newAsyncHandler(fn func(*gdk.EventButton)) func(*gtk.TextTag, *gtk.TextView, *gdk.Event) {
-	return func(_ *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
+func (s *mdState) setHandler(fn func(PressedEvent)) func(*gtk.TextTag, *gtk.TextView, *gdk.Event) {
+	return func(_ *gtk.TextTag, tv *gtk.TextView, ev *gdk.Event) {
 		evButton := gdk.EventButtonNewFromEvent(ev)
 		if evButton.Type() != gdk.EVENT_BUTTON_RELEASE || evButton.Button() != 1 {
 			return
 		}
 
-		go fn(evButton)
+		fn(PressedEvent{
+			EventButton: evButton,
+			// copy textview so we can still reuse mdState
+			TextView: tv,
+		})
 	}
 }
 
@@ -121,7 +125,7 @@ func (s *mdState) hyperlink(url string) *gtk.TextTag {
 
 	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
 	t.SetProperty("foreground", "#3F7CE0")
-	t.Connect("event", newAsyncHandler(func(*gdk.EventButton) {
+	t.Connect("event", s.setHandler(func(PressedEvent) {
 		if err := open.Run(url); err != nil {
 			log.Errorln("Failed to open image URL:", err)
 		}
@@ -151,7 +155,7 @@ func (s *mdState) InsertUserMention(id []byte) {
 		return
 	}
 
-	t := s.MentionTag("@"+target.ID.String(), func(ev *gdk.EventButton) {
+	t := s.MentionTag("@"+target.ID.String(), func(ev PressedEvent) {
 		if UserPressed != nil {
 			UserPressed(ev, target)
 		}
@@ -185,7 +189,7 @@ func (s *mdState) InsertChannelMention(id []byte) {
 
 	var channel = *c
 
-	t := s.MentionTag("#"+c.ID.String(), func(ev *gdk.EventButton) {
+	t := s.MentionTag("#"+c.ID.String(), func(ev PressedEvent) {
 		if ChannelPressed != nil {
 			ChannelPressed(ev, channel)
 		}
@@ -194,11 +198,11 @@ func (s *mdState) InsertChannelMention(id []byte) {
 	s.insertWithTag([]byte("#"+c.Name), t)
 }
 
-func (s *mdState) MentionTag(key string, asyncH func(*gdk.EventButton)) *gtk.TextTag {
+func (s *mdState) MentionTag(key string, asyncH func(PressedEvent)) *gtk.TextTag {
 	return semaphore.IdleMust(s.mentionTag, key, asyncH).(*gtk.TextTag)
 }
 
-func (s *mdState) mentionTag(key string, asyncH func(*gdk.EventButton)) *gtk.TextTag {
+func (s *mdState) mentionTag(key string, asyncH func(PressedEvent)) *gtk.TextTag {
 	v, err := s.ttt.Lookup(key)
 	if err == nil {
 		return v
@@ -209,7 +213,7 @@ func (s *mdState) mentionTag(key string, asyncH func(*gdk.EventButton)) *gtk.Tex
 		log.Panicln("Failed to create new hyperlink tag:", err)
 	}
 	t.SetProperty("foreground", "#7289DA")
-	t.Connect("event", newAsyncHandler(asyncH))
+	t.Connect("event", s.setHandler(asyncH))
 
 	s.ttt.Add(t)
 	return t

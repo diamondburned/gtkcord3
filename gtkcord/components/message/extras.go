@@ -214,11 +214,12 @@ func newNormalEmbed(
 	}
 
 	if embed.Description != "" {
-		txtv := semaphore.IdleMust(gtk.TextViewNew).(*gtk.TextView)
-		txtb := semaphore.IdleMust(txtv.GetBuffer).(*gtk.TextBuffer)
+		txtb := semaphore.IdleMust(gtk.TextBufferNew, (*gtk.TextTagTable)(nil)).(*gtk.TextBuffer)
 		md.ParseMessage(s, msg, []byte(embed.Description), txtb)
 
 		semaphore.IdleMust(func() {
+			txtv, _ := gtk.TextViewNew()
+			txtv.SetBuffer(txtb)
 			txtv.SetCursorVisible(false)
 			txtv.SetEditable(false)
 			txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
