@@ -26,7 +26,7 @@ type Messages struct {
 	GuildID   discord.Snowflake
 
 	c     *ningen.State
-	fetch int
+	fetch int // max messages
 
 	Main *gtk.Box
 
@@ -38,7 +38,8 @@ type Messages struct {
 	messages []*Message
 	guard    sync.RWMutex
 
-	Resetting atomic.Value
+	resetting    bool
+	fetchingMore bool
 
 	// Additional components
 	Input  *Input
@@ -85,6 +86,7 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 			}
 		`)
 
+		s.Connect("edge-overshot", m.onEdgeReached)
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
 		s.Show()
 
@@ -169,7 +171,7 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	m.ChannelID = channel
 
 	// Mark that we're loading messages.
-	m.Resetting.Store(true)
+	m.resetting = true
 
 	// Order: latest is first.
 	messages, err := m.c.Messages(m.ChannelID)
@@ -209,7 +211,7 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 
 	// If there are no messages, don't bother.
 	if len(m.messages) == 0 {
-		m.Resetting.Store(false)
+		m.resetting = false
 		return nil
 	}
 
@@ -293,7 +295,31 @@ func (m *Messages) onSizeAlloc() {
 	// m.Viewport.SetVAdjustment(adj)
 }
 
-func (m *Messages) clean() {
+// mainly used for fetching extra message when scrolled to the top
+func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
+	// only count scroll to top
+	if pos != gtk.POS_TOP {
+		return
+	}
+
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	// Prevent fetching more if we're already fetching.
+	if m.fetchingMore {
+		return
+	}
+
+	m.fetchingMore = true
+	defer func() {
+		m.fetchingMore = false
+	}()
+
+	log.Println("TODO: fetch more messages")
+	<-time.After(2 * time.Second)
+}
+
+func (m *Messages) cleanOldMessages() {
 	// Check the scrolling
 	if atomic.LoadInt32(&m.scrollDelta) > scrollMinDelta {
 		return
@@ -326,8 +352,8 @@ func (m *Messages) clean() {
 func (m *Messages) Insert(message *discord.Message) {
 	// We ack the message after inserting:
 	defer func() {
-		// Clean the message view:
-		m.clean()
+		// Clean up old messages (thread-safe):
+		m.cleanOldMessages()
 
 		if message.ID.Valid() {
 			m.c.MarkRead(message.ChannelID, message.ID)
