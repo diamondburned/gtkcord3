@@ -74,10 +74,14 @@ func wrapHamburger(s *ningen.State, body *popup.UserPopupBody) gtkutils.WidgetDe
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	body.Attach(main, 3)
 
+	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	main.Add(sep)
+
 	menu, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	menu.Show()
 
 	gtkutils.Margin(menu, popup.SectionPadding)
+	menu.SetMarginTop(0)
 	main.Add(menu)
 
 	statusBtn := newModelButton("Status")

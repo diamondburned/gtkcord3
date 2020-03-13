@@ -214,8 +214,7 @@ func (t *State) Update() {
 	select {
 	case typingHandler <- t:
 	default:
-		<-typingHandler
-		typingHandler <- t
+		log.Println("Not updating typing indicator.")
 	}
 }
 
@@ -258,8 +257,6 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
-	log.Println("Adding", typing.UserID)
 
 	// Check duplicates:
 	for _, u := range t.Users {
