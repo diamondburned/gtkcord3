@@ -59,8 +59,7 @@ go get github.com/diamondburned/gtkcord3 # auto updates
 
 ## Known Bugs/Limitations
 
-- [x] Emojis always appear large
 - [ ] Random crashes (very rare)
-- [x] Thread (un)safety with Xorg/xcb
-- [x] Rampant concurrency
-- [x] Semaphore limits
+	- [ ] Might crash on channel switch because glib.PixbufLoader sucks
+- [ ] Rapid recursive ack bug
+	- High priority, might count as API abuse
