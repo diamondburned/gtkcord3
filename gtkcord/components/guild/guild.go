@@ -125,7 +125,7 @@ func newGuildRow(
 
 // thread safe
 func (g *Guild) setClass(class string) {
-	// gtkutils.DiffClass(&g.stateClass, class, g.Style)
+	gtkutils.DiffClass(&g.stateClass, class, g.Style)
 }
 
 func (g *Guild) SetUnavailable(unavailable bool) {

@@ -256,6 +256,14 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 		s.Store.ChannelSet(ch)
 	}
 
+	// Check if this is our message or not:
+	if m, err := s.Store.Message(chID, msgID); err == nil {
+		if m.Author.ID == s.Ready.User.ID {
+			// If it is, don't mark as unread.
+			return
+		}
+	}
+
 	// Announce that there's a read state change
 	for _, fn := range s.OnReadChange {
 		fn(s, st, true)
