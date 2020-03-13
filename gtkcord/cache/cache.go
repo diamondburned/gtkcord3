@@ -244,9 +244,9 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 			}
 
 			if gif {
-				semaphore.Async(img.SetFromAnimation, p)
+				semaphore.IdleMust(img.SetFromAnimation, p)
 			} else {
-				semaphore.Async(img.SetFromPixbuf, p)
+				semaphore.IdleMust(img.SetFromPixbuf, p)
 			}
 		})
 	})

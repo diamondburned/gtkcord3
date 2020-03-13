@@ -61,8 +61,9 @@ func init() {
 func idleAdd(trace string, async bool, fn interface{}, v ...interface{}) []reflect.Value {
 	var ch chan []reflect.Value
 	if !async {
-		ch = recvPool.Get().(chan []reflect.Value)
-		defer recvPool.Put(ch)
+		ch = make(chan []reflect.Value)
+		// 	ch = recvPool.Get().(chan []reflect.Value)
+		// 	defer recvPool.Put(ch)
 	}
 
 	switch fn := fn.(type) {
@@ -105,7 +106,7 @@ func Idle(fn interface{}, v ...interface{}) (interface{}, error) {
 
 func Async(fn interface{}, v ...interface{}) {
 	// log.Println(log.Trace(1), "Async start")
-	idleAdd(log.Trace(1), false, fn, v...)
+	idleAdd(log.Trace(1), true, fn, v...)
 	// log.Println(log.Trace(1), "Async done")
 }
 
