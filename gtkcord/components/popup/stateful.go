@@ -67,7 +67,7 @@ func (s *StatefulPopupBody) initialize() {
 
 	if !s.Guild.Valid() {
 		s.UserPopupBody.Update(*u)
-		semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
+		semaphore.IdleMust(s.UserPopupBody.Grid.ShowAll)
 		return
 	}
 
@@ -81,12 +81,12 @@ func (s *StatefulPopupBody) initialize() {
 	m, err := s.state.Store.Member(s.Guild, u.ID)
 	if err != nil {
 		s.UserPopupBody.Update(*u)
-		semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
+		semaphore.IdleMust(s.UserPopupBody.Grid.ShowAll)
 		return
 	}
 
 	s.UserPopupBody.UpdateMember(*m)
-	semaphore.IdleMust(s.UserPopupBody.Box.ShowAll)
+	semaphore.IdleMust(s.UserPopupBody.Grid.ShowAll)
 
 	r, err := NewUserPopupRoles(s.state, s.Guild, m.RoleIDs)
 	if err != nil {
@@ -95,8 +95,8 @@ func (s *StatefulPopupBody) initialize() {
 	}
 
 	semaphore.IdleMust(func() {
-		s.UserPopupBody.Box.Add(r)
-		s.UserPopupBody.Box.ShowAll()
+		s.UserPopupBody.Attach(r, 2)
+		s.UserPopupBody.Grid.ShowAll()
 	})
 }
 

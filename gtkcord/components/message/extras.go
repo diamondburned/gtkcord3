@@ -20,8 +20,8 @@ import (
 
 const (
 	EmbedAvatarSize = 24
-	EmbedMaxWidth   = 450
-	EmbedImgHeight  = 350 // max
+	EmbedMaxWidth   = 300
+	EmbedImgHeight  = 300 // max
 	EmbedMargin     = 8
 
 	EmbedMainCSS = `

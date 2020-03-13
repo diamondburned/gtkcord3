@@ -62,13 +62,13 @@ const CSS = `
 		background-color: alpha(@theme_selected_bg_color, 0.5);
 	}
 
-	.message:not(.condensed) {
-		border-top: 1px solid rgba(0, 0, 0, 0.12);
-	}
-
-	.user-info, .user-info > box > *:nth-child(n+3) {
+	.user-info, .popup-grid > *:not(.popup-user):not(.popup-activity) {
 		background-color: @theme_base_color;
 		color: @theme_fg_color;
+	}
+
+	.user-info {
+		padding: 0;
 	}
 	.user-info.spotify {
 		background-color: #1db954;

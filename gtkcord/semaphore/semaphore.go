@@ -12,7 +12,7 @@ import (
 // var MaxWorkers = runtime.GOMAXPROCS(0)
 // var sema = semaphore.NewWeighted(int64(MaxWorkers))
 
-var idleAdds = make(chan *idleCall, 4000)
+var idleAdds = make(chan *idleCall, 1000)
 var recvPool = sync.Pool{
 	New: func() interface{} {
 		return make(chan []reflect.Value)
@@ -33,7 +33,9 @@ func init() {
 		for call := range idleAdds {
 			call := call
 
-			glib.IdleAdd(func(call *idleCall) {
+			log.Debugln(call.trace, "adding into main thread")
+
+			glib.IdleAdd(func() {
 				// now := time.Now()
 
 				var val []reflect.Value
@@ -50,10 +52,8 @@ func init() {
 					call.done <- val
 				}
 
-				// if delta := time.Now().Sub(now); delta > time.Millisecond {
-				// 	log.Infoln(call.trace, "took", time.Now().Sub(now))
-				// }
-			}, call)
+				log.Debugln(call.trace, "main thread done")
+			})
 		}
 	}()
 }
@@ -105,7 +105,7 @@ func Idle(fn interface{}, v ...interface{}) (interface{}, error) {
 
 func Async(fn interface{}, v ...interface{}) {
 	// log.Println(log.Trace(1), "Async start")
-	idleAdd(log.Trace(1), true, fn, v...)
+	idleAdd(log.Trace(1), false, fn, v...)
 	// log.Println(log.Trace(1), "Async done")
 }
 

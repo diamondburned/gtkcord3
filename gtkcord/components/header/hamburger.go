@@ -1,10 +1,12 @@
 package header
 
 import (
+	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -42,8 +44,7 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	p := popup.NewDynamicPopover(mb, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
 		body := popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
 		body.ParentStyle, _ = p.GetStyleContext()
-		hamburgerAddExtras(s, body.Box)
-		return body
+		return wrapHamburger(s, body.UserPopupBody)
 	})
 
 	mb.SetPopover(p.Popover)
@@ -58,6 +59,93 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	return hm, nil
 }
 
-func hamburgerAddExtras(s *ningen.State, box *gtk.Box) {
-	// menu, _ := gtk.PopoverMenuNew()
+func wrapHamburger(s *ningen.State, body *popup.UserPopupBody) gtkutils.WidgetDestroyer {
+	// body MUST starts at 3
+
+	stack, _ := gtk.StackNew()
+	stack.AddNamed(body, "main")
+	stack.AddNamed(newStatusPage(s), "status")
+	stack.Show()
+
+	gtkutils.InjectCSSUnsafe(stack, "", `
+		stack { margin: 0; }
+	`)
+
+	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	body.Attach(main, 3)
+
+	menu, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	menu.Show()
+
+	gtkutils.Margin(menu, popup.SectionPadding)
+	main.Add(menu)
+
+	statusBtn := newModelButton("Status")
+	statusBtn.SetProperty("menu-name", "status")
+	menu.Add(statusBtn)
+
+	return stack
+}
+
+func newStatusPage(s *ningen.State) gtk.IWidget {
+	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	box.Show()
+	gtkutils.Margin(box, popup.SectionPadding)
+
+	statuses := [][3]string{
+		{"#43B581", "Online", string(discord.OnlineStatus)},
+		{"#FAA61A", "Idle", string(discord.IdleStatus)},
+		{"#F04747", "Do Not Disturb", string(discord.DoNotDisturbStatus)},
+		{"#747F8D", "Invisible", string(discord.InvisibleStatus)},
+	}
+
+	var p, _ = s.Presence(0, s.Ready.User.ID)
+
+	for _, status := range statuses {
+		btn := newModelButton(`<span color="` + status[0] + `">●</span> ` + status[1])
+		btn.Connect("activate", func() {
+			log.Println("Changing status to", status[2])
+		})
+
+		if p != nil && string(p.Status) == status[2] {
+			s, _ := btn.GetStyleContext()
+			s.SetState(gtk.STATE_FLAG_ACTIVE)
+		}
+
+		box.Add(btn)
+	}
+
+	return box
+}
+
+func newNamedRow(markup, name string) *gtk.ListBoxRow {
+	row, _ := gtk.ListBoxRowNew()
+	row.SetName(name)
+
+	l, _ := gtk.LabelNew("")
+	l.SetMarkup(markup)
+	l.SetHAlign(gtk.ALIGN_START)
+	row.Add(l)
+
+	return row
+}
+
+func newModelButton(markup string) *gtk.ModelButton {
+	// Create the button
+	btn, _ := gtk.ModelButtonNew()
+	btn.SetLabel("")
+
+	// Set the label
+	c, err := btn.GetChild()
+	if err != nil {
+		log.Errorln("Failed to get child of ModelButton")
+		return btn
+	}
+
+	l := &gtk.Label{Widget: *c}
+	l.SetMarkup(markup)
+	l.SetHAlign(gtk.ALIGN_START)
+
+	btn.ShowAll()
+	return btn
 }

@@ -186,9 +186,9 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 
 func (guild *Guild) setUnread(unread, pinged bool) {
 	guild.busy.Lock()
+	defer guild.busy.Unlock()
 
 	if guild.stateClass == "muted" {
-		guild.busy.Unlock()
 		return
 	}
 
@@ -200,8 +200,6 @@ func (guild *Guild) setUnread(unread, pinged bool) {
 	default:
 		guild.setClass("")
 	}
-
-	guild.busy.Unlock()
 
 	if guild.Parent != nil {
 		guild.Parent.setUnread(unread, pinged)

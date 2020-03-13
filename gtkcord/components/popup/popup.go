@@ -38,9 +38,7 @@ func NewPopover(relative gtk.IWidget) *Popover {
 	p, _ := gtk.PopoverNew(relative)
 	style, _ := p.GetStyleContext()
 
-	gtkutils.InjectCSSUnsafe(p, "user-info", `
-		popover.user-info { padding: 0; }
-	`)
+	gtkutils.InjectCSSUnsafe(p, "user-info", "")
 
 	return &Popover{
 		Popover: p,
@@ -80,7 +78,8 @@ type UserPopup struct {
 }
 
 type UserPopupBody struct {
-	*gtk.Box
+	*gtk.Grid
+	GridMax int
 
 	Avatar      *gtk.Image
 	AvatarStyle *gtk.StyleContext // .avatar
@@ -137,13 +136,17 @@ func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 }
 
 func NewUserPopupBody() *UserPopupBody {
-	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	main, _ := gtk.GridNew()
+	main.Show()
+	gtkutils.InjectCSSUnsafe(main, "popup-grid", "")
 
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	b.SetSizeRequest(PopupWidth, -1)
 	b.SetMarginTop(10)
 	b.SetMarginBottom(10)
-	main.Add(b)
+
+	gtkutils.InjectCSSUnsafe(b, "popup-user", "")
+	main.Attach(b, 0, 0, 1, 1)
 
 	iAvatar, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
 	iAvatar.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
@@ -163,7 +166,7 @@ func NewUserPopupBody() *UserPopupBody {
 	b.Add(l)
 
 	return &UserPopupBody{
-		Box:         main,
+		Grid:        main,
 		Avatar:      iAvatar,
 		AvatarStyle: sAvatar,
 		Username:    l,
@@ -175,6 +178,14 @@ func formatUser(u discord.User) string {
 		"<span weight=\"bold\">%s</span><span size=\"smaller\">#%s</span>",
 		html.EscapeString(u.Username), u.Discriminator,
 	)
+}
+
+// row > 0
+func (b *UserPopupBody) Attach(w gtk.IWidget, row int) {
+	if row > b.GridMax {
+		b.GridMax = row
+	}
+	b.Grid.Attach(w, 0, row, 1, 1)
 }
 
 func (b *UserPopupBody) setAvatarClass(class string) {
@@ -231,7 +242,7 @@ func (b *UserPopupBody) updateAvatar(url string) {
 func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	if a == nil {
 		if b.Activity != nil {
-			semaphore.IdleMust(b.Box.Remove, b.Activity)
+			semaphore.IdleMust(b.Grid.Remove, b.Activity)
 			b.Activity = nil
 			// b.setClass("")
 		}
@@ -239,8 +250,10 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	}
 
 	if b.Activity == nil {
-		b.Activity = semaphore.IdleMust(NewUserPopupActivity).(*UserPopupActivity)
-		semaphore.IdleMust(b.Box.Add, b.Activity)
+		semaphore.IdleMust(func() {
+			b.Activity = NewUserPopupActivity()
+			b.Attach(b.Activity, 1)
+		})
 	}
 
 	b.Activity.Update(*a)
@@ -250,7 +263,7 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 		b.setAvatarClass("unknown")
 	}
 
-	semaphore.IdleMust(b.Box.ShowAll)
+	semaphore.IdleMust(b.Grid.ShowAll)
 }
 
 func (b *UserPopupBody) UpdateStatus(status discord.Status) {
@@ -365,49 +378,49 @@ func NewUserPopupRoles(s *ningen.State,
 	return popup, nil
 }
 
-func SpawnUserPopup(s *ningen.State, guildID, userID discord.Snowflake) *gtk.Popover {
-	popup := NewUserPopup(nil)
+// func SpawnUserPopup(s *ningen.State, guildID, userID discord.Snowflake) *gtk.Popover {
+// 	popup := NewUserPopup(nil)
 
-	go func() {
-		u, err := s.User(userID)
-		if err != nil {
-			log.Errorln("Failed to get user:", err)
-			return
-		}
+// 	go func() {
+// 		u, err := s.User(userID)
+// 		if err != nil {
+// 			log.Errorln("Failed to get user:", err)
+// 			return
+// 		}
 
-		p, err := s.Presence(guildID, u.ID)
-		if err == nil {
-			popup.UpdateStatus(p.Status)
-			popup.UpdateActivity(p.Game)
-		}
+// 		p, err := s.Presence(guildID, u.ID)
+// 		if err == nil {
+// 			popup.UpdateStatus(p.Status)
+// 			popup.UpdateActivity(p.Game)
+// 		}
 
-		if !guildID.Valid() {
-			popup.Update(*u)
-			return
-		}
+// 		if !guildID.Valid() {
+// 			popup.Update(*u)
+// 			return
+// 		}
 
-		// fetch above presence if error not nil
-		if err != nil {
-			s.RequestMember(guildID, userID)
-		}
+// 		// fetch above presence if error not nil
+// 		if err != nil {
+// 			s.RequestMember(guildID, userID)
+// 		}
 
-		m, err := s.Member(guildID, u.ID)
-		if err != nil {
-			popup.Update(*u)
-			return
-		}
+// 		m, err := s.Member(guildID, u.ID)
+// 		if err != nil {
+// 			popup.Update(*u)
+// 			return
+// 		}
 
-		popup.UpdateMember(*m)
+// 		popup.UpdateMember(*m)
 
-		r, err := NewUserPopupRoles(s, guildID, m.RoleIDs)
-		if err != nil {
-			log.Errorln("Failed to get roles:", err)
-			return
-		}
+// 		r, err := NewUserPopupRoles(s, guildID, m.RoleIDs)
+// 		if err != nil {
+// 			log.Errorln("Failed to get roles:", err)
+// 			return
+// 		}
 
-		semaphore.IdleMust(popup.Box.Add, r)
-		semaphore.IdleMust(popup.Box.ShowAll)
-	}()
+// 		semaphore.IdleMust(popup.Attach, r, 2)
+// 		semaphore.IdleMust(popup.Grid.ShowAll)
+// 	}()
 
-	return popup.Popover.Popover
-}
+// 	return popup.Popover.Popover
+// }

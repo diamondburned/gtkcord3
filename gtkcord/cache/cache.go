@@ -18,6 +18,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -214,27 +215,38 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 		}
 
 		if w > 0 && h > 0 {
-			l.Connect("size-prepared", func(_ interface{}, _w, _h int) {
-				w, h = maxSize(_w, _h, w, h)
-				l.SetSize(w, h)
+			l.Connect("size-prepared", func(_ *glib.Object, imgW, imgH int) {
+				l.SetSize(maxSize(imgW, imgH, w, h))
 			})
 		}
 
+		var p interface{}
+
 		l.Connect("area-prepared", func() {
 			if gif {
-				p, err := l.GetAnimation()
+				p, err = l.GetAnimation()
 				if err != nil || p == nil {
 					log.Errorln("Failed to get animation during area-prepared:", err)
 					return
 				}
-				semaphore.IdleMust(img.SetFromAnimation, p)
 			} else {
-				p, err := l.GetPixbuf()
+				p, err = l.GetPixbuf()
 				if err != nil || p == nil {
 					log.Errorln("Failed to get pixbuf during area-prepared:", err)
 					return
 				}
-				semaphore.IdleMust(img.SetFromPixbuf, p)
+			}
+		})
+
+		l.Connect("area-updated", func() {
+			if p == nil {
+				return
+			}
+
+			if gif {
+				semaphore.Async(img.SetFromAnimation, p)
+			} else {
+				semaphore.Async(img.SetFromPixbuf, p)
 			}
 		})
 	})
@@ -270,6 +282,10 @@ func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
 }
 
 func maxSize(w, h, maxW, maxH int) (int, int) {
+	if w < maxW && h < maxH {
+		return w, h
+	}
+
 	if w > h {
 		h = h * maxW / w
 		w = maxW

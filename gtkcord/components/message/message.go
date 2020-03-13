@@ -3,7 +3,6 @@ package message
 import (
 	"fmt"
 	"html"
-	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -275,12 +274,14 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 }
 
 func (m *Message) markBusy() func() {
-	atomic.AddInt32(&m.busy, 1)
-	return func() { atomic.AddInt32(&m.busy, -1) }
+	// atomic.AddInt32(&m.busy, 1)
+	// return func() { atomic.AddInt32(&m.busy, -1) }
+	return func() {}
 }
 
 func (m *Message) isBusy() bool {
-	return atomic.LoadInt32(&m.busy) == 0
+	// return atomic.LoadInt32(&m.busy) == 0
+	return false
 }
 
 // func (m *Message) getAvailable() bool {
@@ -413,25 +414,13 @@ func (m *Message) UpdateAvatar(url string) {
 	}
 	m.pbURL = url
 
-	// o := m.avatar.Object
-	// runtime.KeepAlive(o)
-
-	go func(img *gtk.Image) {
-
-		// image := &gtk.Image{
-		// 	Widget: gtk.Widget{
-		// 		InitiallyUnowned: glib.InitiallyUnowned{
-		// 			Object: o,
-		// 		},
-		// 	},
-		// }
-
-		err := cache.SetImageScaled(url+"?size=64", img, AvatarSize, AvatarSize, cache.Round)
+	go func() {
+		err := cache.SetImageScaled(url+"?size=64", m.avatar, AvatarSize, AvatarSize, cache.Round)
 		if err != nil {
 			log.Errorln("Failed to get the pixbuf guild icon:", err)
 			return
 		}
-	}(m.avatar)
+	}()
 }
 
 func (m *Message) updateContentUnsafe(s string) {
@@ -451,7 +440,7 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 
 	for _, mention := range update.Mentions {
 		if mention.ID == s.Ready.User.ID {
-			semaphore.Async(m.style.AddClass, "mentioned")
+			semaphore.IdleMust(m.style.AddClass, "mentioned")
 			return
 		}
 	}
@@ -459,13 +448,14 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 	// We only try this if we know the message is edited. If it's new, there
 	// wouldn't be a .mentioned class to remove.
 	if update.EditedTimestamp.Valid() {
-		semaphore.Async(m.style.RemoveClass, "mentioned")
+		semaphore.IdleMust(m.style.RemoveClass, "mentioned")
 	}
 }
 
 func (m *Message) assertContentUnsafe() {
 	if m.textView == nil {
 		msgTv, _ := gtk.TextViewNew()
+		msgTv.Show()
 		m.textView = msgTv
 		msgTb, _ := msgTv.GetBuffer()
 		m.content = msgTb
@@ -476,7 +466,6 @@ func (m *Message) assertContentUnsafe() {
 		msgTv.SetCanFocus(false)
 
 		m.rightBottom.Add(msgTv)
-		m.rightBottom.ShowAll()
 	}
 }
 
@@ -494,7 +483,7 @@ func (m *Message) UpdateExtras(s *ningen.State, update *discord.Message) {
 	m.extras = append(m.extras, NewEmbed(s, update)...)
 	m.extras = append(m.extras, NewAttachment(update)...)
 
-	semaphore.Async(func() {
+	semaphore.IdleMust(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Add(extra)
 		}

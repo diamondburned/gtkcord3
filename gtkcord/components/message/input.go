@@ -247,7 +247,7 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	// Shift is not being held, send the message:
 	go func() {
 		if err := i.send(text); err != nil {
-			log.Errorln("Failed to paste message:", err)
+			log.Errorln("Failed to send message:", err)
 		}
 	}()
 
@@ -309,7 +309,7 @@ func (i *Input) makeMessage(content string) *discord.Message {
 		Author:    i.Messages.c.Ready.User,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),
-		Nonce:     "gtkcord_" + randString(),
+		Nonce:     randString(),
 	}
 }
 
