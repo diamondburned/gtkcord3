@@ -59,5 +59,5 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 }
 
 func hamburgerAddExtras(s *ningen.State, box *gtk.Box) {
-
+	// menu, _ := gtk.PopoverMenuNew()
 }
