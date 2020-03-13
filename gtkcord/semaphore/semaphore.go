@@ -54,6 +54,8 @@ func init() {
 
 				log.Debugln(call.trace, "main thread done")
 			})
+
+			log.Debugln(call.trace, "addED into main thread")
 		}
 	}()
 }
@@ -61,9 +63,8 @@ func init() {
 func idleAdd(trace string, async bool, fn interface{}, v ...interface{}) []reflect.Value {
 	var ch chan []reflect.Value
 	if !async {
-		ch = make(chan []reflect.Value)
-		// 	ch = recvPool.Get().(chan []reflect.Value)
-		// 	defer recvPool.Put(ch)
+		ch = recvPool.Get().(chan []reflect.Value)
+		defer recvPool.Put(ch)
 	}
 
 	switch fn := fn.(type) {

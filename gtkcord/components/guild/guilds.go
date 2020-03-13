@@ -57,8 +57,7 @@ func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 	}
 
 	g.Guilds = rows
-	initGuilds(g)
-	s.OnReadChange = append(s.OnReadChange, g.TraverseReadState)
+	initGuilds(g, s)
 	return g, nil
 }
 
@@ -96,12 +95,11 @@ func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 	g := &Guilds{
 		Guilds: rows,
 	}
-	initGuilds(g)
-	s.OnReadChange = append(s.OnReadChange, g.TraverseReadState)
+	initGuilds(g, s)
 	return g, nil
 }
 
-func initGuilds(g *Guilds) {
+func initGuilds(g *Guilds, s *ningen.State) {
 	dm := NewPMButton()
 	g.DMButton = dm
 
@@ -158,6 +156,8 @@ func initGuilds(g *Guilds) {
 		g.UpdateImage()
 		return false
 	})
+
+	s.AddReadChange(g.TraverseReadState)
 }
 
 func (guilds *Guilds) onFolderSelect(g *Guild) {

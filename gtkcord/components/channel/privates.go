@@ -87,7 +87,7 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 		})
 	})
 
-	s.OnReadChange = append(s.OnReadChange, pcs.TraverseReadState)
+	s.AddReadChange(pcs.TraverseReadState)
 	return
 }
 

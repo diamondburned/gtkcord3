@@ -415,8 +415,8 @@ func (m *Messages) cleanOldMessages() {
 
 	// Destroy the messages:
 	semaphore.IdleMust(func() {
-		for i := range cleaned {
-			m.Messages.Remove(cleaned[i].ListBoxRow)
+		for i, r := range cleaned {
+			m.Messages.Remove(r.ListBoxRow)
 			cleaned[i] = nil
 		}
 	})
