@@ -125,7 +125,7 @@ func newGuildRow(
 
 // thread safe
 func (g *Guild) setClass(class string) {
-	gtkutils.DiffClass(&g.stateClass, class, g.Style)
+	// gtkutils.DiffClass(&g.stateClass, class, g.Style)
 }
 
 func (g *Guild) SetUnavailable(unavailable bool) {
@@ -186,9 +186,9 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 
 func (guild *Guild) setUnread(unread, pinged bool) {
 	guild.busy.Lock()
+	defer guild.busy.Unlock()
 
 	if guild.stateClass == "muted" {
-		guild.busy.Unlock()
 		return
 	}
 
@@ -200,8 +200,6 @@ func (guild *Guild) setUnread(unread, pinged bool) {
 	default:
 		guild.setClass("")
 	}
-
-	guild.busy.Unlock()
 
 	if guild.Parent != nil {
 		guild.Parent.setUnread(unread, pinged)

@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
@@ -32,7 +33,7 @@ func newPool() sync.Pool {
 
 type mdState struct {
 	m *discord.Message
-	d Discord
+	d *ningen.State
 
 	// We need to lock the iterators so they can't be invalidated while we're
 	// using them.

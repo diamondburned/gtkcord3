@@ -71,6 +71,7 @@ type Application struct {
 
 	// GuildID -> ChannelID; if GuildID == 0 then DM
 	LastAccess map[discord.Snowflake]discord.Snowflake
+	lastAccMut sync.Mutex
 
 	busy sync.Mutex
 }
@@ -207,8 +208,8 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 		}
 	})
 
-	chID, ok := a.LastAccess[g.ID]
-	if !ok {
+	chID := a.lastAccess(g.ID, 0)
+	if !chID.Valid() {
 		return
 	}
 
@@ -236,12 +237,7 @@ func (a *Application) SwitchDM() {
 		}
 	})
 
-	chID, ok := a.LastAccess[0]
-	if !ok {
-		return
-	}
-
-	c, ok := a.Privates.Channels[chID.String()]
+	c, ok := a.Privates.Channels[a.lastAccess(0, 0).String()]
 	if ok {
 		semaphore.Async(a.Privates.List.SelectRow, c.ListBoxRow)
 		a.SwitchChannel(c)
@@ -265,7 +261,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 				return false
 			}
 
-			a.LastAccess[ch.GuildID()] = a.Messages.ChannelID
+			a.lastAccess(ch.GuildID(), a.Messages.GetChannelID())
 			a.Header.UpdateChannel(ch.ChannelInfo())
 			return true
 		}
@@ -313,6 +309,21 @@ func (a *Application) changeCol(
 		a.setCol(w, n)
 		w.ShowAll()
 	})
+}
+
+func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake {
+	a.lastAccMut.Lock()
+	defer a.lastAccMut.Unlock()
+
+	if !ch.Valid() {
+		if id, ok := a.LastAccess[guild]; ok {
+			return id
+		}
+		return 0
+	}
+
+	a.LastAccess[guild] = ch
+	return ch
 }
 
 func newSeparator() *gtk.Separator {

@@ -80,7 +80,7 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 		})
 	})
 
-	state.OnReadChange = append(state.OnReadChange, chs.TraverseReadState)
+	state.AddReadChange(chs.TraverseReadState)
 	return
 }
 

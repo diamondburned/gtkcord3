@@ -35,6 +35,7 @@ type State struct {
 	LastRead  map[discord.Snowflake]*gateway.ReadState
 
 	// rs is updated
+	callbackMut  sync.Mutex
 	OnReadChange []func(s *State, rs *gateway.ReadState, unread bool)
 	// OnGuildPosChange func(*gateway.UserSettings)
 
@@ -127,6 +128,13 @@ func Ningen(s *state.State) (*State, error) {
 	state.UpdateReady(s.Ready)
 	// state.UpdateNitroEmojis()
 	return state, nil
+}
+
+func (s *State) AddReadChange(fn func(s *State, rs *gateway.ReadState, unread bool)) {
+	s.callbackMut.Lock()
+	defer s.callbackMut.Unlock()
+
+	s.OnReadChange = append(s.OnReadChange, fn)
 }
 
 func (s *State) JoinSession(r *gateway.SessionsReplaceEvent) *discord.Presence {
@@ -228,7 +236,7 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 
 func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	s.readMutex.Lock()
-	log.Debugln(log.Trace(0), "MarkUnead")
+	// log.Debugln(log.Trace(0), "MarkUnread")
 
 	// Check for a ReadState
 	st, ok := s.LastRead[chID]
@@ -248,17 +256,17 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 		s.Store.ChannelSet(ch)
 	}
 
-	s.readMutex.Unlock()
-
 	// Announce that there's a read state change
 	for _, fn := range s.OnReadChange {
 		fn(s, st, true)
 	}
+
+	s.readMutex.Unlock()
 }
 
 func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	s.readMutex.Lock()
-	log.Debugln(log.Trace(0), "MarkRead")
+	// log.Debugln(log.Trace(0), "MarkRead")
 
 	// Check for a ReadState
 	st, ok := s.LastRead[chID]
@@ -278,12 +286,12 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	st.LastMessageID = msgID
 	st.MentionCount = 0
 
-	s.readMutex.Unlock()
-
 	// Announce that there's a read state change
 	for _, fn := range s.OnReadChange {
 		fn(s, st, false)
 	}
+
+	s.readMutex.Unlock()
 
 	// Check if this is our message or not:
 	if m, err := s.Store.Message(chID, msgID); err == nil {

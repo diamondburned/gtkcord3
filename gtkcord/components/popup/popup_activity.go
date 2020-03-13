@@ -13,7 +13,7 @@ import (
 	"github.com/gotk3/gotk3/pango"
 )
 
-const SectionPadding = 7
+const SectionPadding = 10
 
 type UserPopupActivity struct {
 	*gtk.Box
@@ -30,6 +30,7 @@ type UserPopupActivity struct {
 
 func NewUserPopupActivity() *UserPopupActivity {
 	details, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	gtkutils.InjectCSSUnsafe(details, "popup-activity", "")
 
 	header, _ := gtk.LabelNew("")
 	header.SetHAlign(gtk.ALIGN_START)

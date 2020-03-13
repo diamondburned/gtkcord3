@@ -101,12 +101,11 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 		pd.Dialog.Destroy()
 	})
 
-	// Calculate the sizee so that the image is just slightly (90%) smaller:
-	w = w * 9 / 10
-	h = h * 9 / 10
+	// Calculate the sizee so that the image is just slightly (80%) smaller:
+	w = w * 8 / 10
+	h = h * 8 / 10
 
 	go pd.Fetch(w, h)
-
 	d.Run()
 }
 
@@ -117,10 +116,11 @@ func (od *PreviewDialog) Open() {
 }
 
 func (pd *PreviewDialog) Fetch(w, h int) {
-	err := cache.SetImage(pd.Proxy, pd.Image, cache.Resize(w, h))
+	err := cache.SetImageAsync(pd.Proxy, pd.Image, w, h)
 	if err == nil {
 		return
 	}
+
 	err = errors.Wrap(err, "Failed to download the image")
 	log.Errorln(err)
 

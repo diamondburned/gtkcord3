@@ -71,25 +71,25 @@ func Trace(n int) string {
 	_, file1, line1, _ := runtime.Caller(n + 1)
 	_, file2, line2, _ := runtime.Caller(n + 2)
 	_, file3, line3, _ := runtime.Caller(n + 3)
-	// _, file4, line4, _ := runtime.Caller(n + 4)
-	// _, file5, line5, _ := runtime.Caller(n + 5)
-	// _, file6, line6, _ := runtime.Caller(n + 6)
+	_, file4, line4, _ := runtime.Caller(n + 4)
+	_, file5, line5, _ := runtime.Caller(n + 5)
+	_, file6, line6, _ := runtime.Caller(n + 6)
 
 	file1 = filepath.Base(file1)
 	file2 = filepath.Base(file2)
 	file3 = filepath.Base(file3)
-	// file4 = filepath.Base(file4)
-	// file5 = filepath.Base(file5)
-	// file6 = filepath.Base(file6)
+	file4 = filepath.Base(file4)
+	file5 = filepath.Base(file5)
+	file6 = filepath.Base(file6)
 
-	// return fmt.Sprintf(
-	// 	"%d ::: %s:%d > %s:%d > %s:%d > %s:%d > %s:%d > %s:%d >",
-	// 	i, file6, line6, file5, line5, file4, line4, file3, line3, file2, line2, file1, line1,
-	// )
 	return fmt.Sprintf(
-		"%d ::: %s:%d > %s:%d > %s:%d >",
-		i, file3, line3, file2, line2, file1, line1,
+		"%d ::: %s:%d > %s:%d > %s:%d > %s:%d > %s:%d > %s:%d >",
+		i, file6, line6, file5, line5, file4, line4, file3, line3, file2, line2, file1, line1,
 	)
+	// return fmt.Sprintf(
+	// 	"%d ::: %s:%d > %s:%d > %s:%d >",
+	// 	i, file3, line3, file2, line2, file1, line1,
+	// )
 }
 
 func Infof(f string, v ...interface{}) {

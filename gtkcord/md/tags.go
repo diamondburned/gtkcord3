@@ -167,7 +167,7 @@ func (s *mdState) InsertUserMention(id []byte) {
 	}
 
 	var name = target.User.Username
-	if m, err := s.d.Member(s.m.GuildID, target.ID); err == nil && m.Nick != "" {
+	if m, err := s.d.Store.Member(s.m.GuildID, target.ID); err == nil && m.Nick != "" {
 		name = m.Nick
 	}
 
