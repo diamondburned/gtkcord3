@@ -40,9 +40,6 @@ type State struct {
 
 	gmu    sync.Mutex
 	guilds map[discord.Snowflake]*guildState
-
-	// non-nil if nitro
-	globalEmojis []discord.Emoji
 }
 
 type Mute struct {
@@ -64,13 +61,9 @@ func Connect(token string) (*State, error) {
 		return nil, errors.Wrap(err, "Failed to create a new Discord session")
 	}
 
-	log.Println("Opening")
-
 	if err := s.Open(); err != nil {
 		return nil, errors.Wrap(err, "Failed to connect to Discord")
 	}
-
-	log.Println("Opened")
 
 	return Ningen(s)
 }
@@ -130,14 +123,6 @@ func Ningen(s *state.State) (*State, error) {
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
 		s.PresenceSet(0, state.JoinSession(r))
 	})
-
-	// // Causes obvious race condition
-	// if s.Ready.SessionID == "" {
-	// 	s.WaitFor(context.Background(), func(v interface{}) bool {
-	// 		_, ok := v.(*gateway.ReadyEvent)
-	// 		return ok
-	// 	})
-	// }
 
 	state.UpdateReady(s.Ready)
 	// state.UpdateNitroEmojis()
@@ -225,25 +210,6 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 		}
 	}
 }
-
-// returns *ReadState if updated, marks the message as unread.
-// func (s *State) hookIncomingMessage(channel, message discord.Snowflake, ack bool) bool {
-// 	s.readMutex.Lock()
-// 	defer s.readMutex.Unlock()
-
-// 	st, ok := s.LastRead[channel]
-// 	if !ok {
-// 		st = &gateway.ReadState{
-// 			ChannelID: channel,
-// 		}
-// 		s.LastRead[channel] = st
-// 	}
-
-// 	st.LastMessageID = message
-
-// 	s.OnReadChange(st, ack)
-// 	return true
-// }
 
 func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	if s.ChannelMuted(channelID) {
@@ -370,17 +336,6 @@ func (s *State) GuildMuted(guildID discord.Snowflake, everyone bool) bool {
 	}
 	return false
 }
-
-// func (s *State) UpdateNitroEmojis() {
-// 	// If user doesn't have Nitro, exit.
-// 	if s.Ready.User.Nitro == discord.NoUserNitro {
-// 		s.emojis = nil
-// 		return
-// 	}
-
-// 	// Grab all guilds:
-
-// }
 
 type GuildEmojis struct {
 	Name   string

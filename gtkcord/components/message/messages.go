@@ -45,6 +45,8 @@ type Messages struct {
 	// Additional components
 	Input  *Input
 	Typing *typing.State
+
+	acked bool
 }
 
 func NewMessages(s *ningen.State) (*Messages, error) {
@@ -87,7 +89,8 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 			}
 		`)
 
-		s.Connect("edge-overshot", m.onEdgeReached)
+		s.Connect("edge-reached", m.onEdgeReached)
+		s.Connect("edge-overshot", m.onEdgeOvershot)
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
 		s.Show()
 
@@ -222,8 +225,8 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		}
 	})
 
-	// Find the latest message and ack it:
-	go m.c.MarkRead(m.ChannelID, messages[len(messages)-1].ID)
+	// Mark for ack, check onEdgeReached
+	m.acked = false
 
 	// Iterate backwards, from latest to earliest.
 	semaphore.IdleMust(func() {
@@ -292,8 +295,24 @@ func (m *Messages) onSizeAlloc() {
 	// m.Viewport.SetVAdjustment(adj)
 }
 
-// mainly used for fetching extra message when scrolled to the top
+// mainly used to mark something as read when scrolled to the bottom
 func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
+	// only count scroll to bottom
+	if pos != gtk.POS_BOTTOM {
+		return
+	}
+
+	if m.acked {
+		return
+	}
+	m.acked = true
+
+	// Find the latest message and ack it:
+	go m.c.MarkRead(m.ChannelID, m.LastID())
+}
+
+// mainly used for fetching extra message when scrolled to the top
+func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	// only count scroll to top
 	if pos != gtk.POS_TOP {
 		return
@@ -404,15 +423,8 @@ func (m *Messages) cleanOldMessages() {
 }
 
 func (m *Messages) Insert(message *discord.Message) {
-	// We ack the message after inserting:
-	defer func() {
-		// Clean up old messages (thread-safe):
-		m.cleanOldMessages()
-
-		if message.ID.Valid() {
-			m.c.MarkRead(message.ChannelID, message.ID)
-		}
-	}()
+	// Clean up old messages (thread-safe):
+	defer m.cleanOldMessages()
 
 	// Are we sure this is not our message?
 	if m.Update(message) {
@@ -421,6 +433,9 @@ func (m *Messages) Insert(message *discord.Message) {
 
 	m.guard.Lock()
 	defer m.guard.Unlock()
+
+	// Mark for ack, check onEdgeReached
+	m.acked = false
 
 	var w *Message
 	semaphore.IdleMust(func() {
@@ -473,7 +488,7 @@ func (m *Messages) Update(update *discord.Message) bool {
 	})
 
 	target.ID = update.ID
-	target.Nonce = ""
+	// target.Nonce = ""
 
 	if update.Content != "" {
 		target.UpdateContent(m.c, update)

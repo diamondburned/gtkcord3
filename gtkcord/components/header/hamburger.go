@@ -42,6 +42,7 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	p := popup.NewDynamicPopover(mb, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
 		body := popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
 		body.ParentStyle, _ = p.GetStyleContext()
+		hamburgerAddExtras(s, body.Box)
 		return body
 	})
 
@@ -55,4 +56,8 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	hm.ShowAll()
 
 	return hm, nil
+}
+
+func hamburgerAddExtras(s *ningen.State, box *gtk.Box) {
+
 }

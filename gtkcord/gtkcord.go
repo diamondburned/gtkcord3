@@ -59,8 +59,8 @@ type Application struct {
 	// Main Grid
 	Grid *gtk.Grid
 	cols map[int]gtk.IWidget
-	// <item> <separator> <item> <separator> <item>
-	//  0      1           2      3           4
+	// <item> <separator> <item> <separator> <item> <separator> <item>
+	//  0      1           2      3           4      5           6
 
 	// Application states
 	Header   *header.Header

@@ -309,7 +309,7 @@ func (i *Input) makeMessage(content string) *discord.Message {
 		Author:    i.Messages.c.Ready.User,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),
-		Nonce:     randString(),
+		Nonce:     "gtkcord_" + randString(),
 	}
 }
 
