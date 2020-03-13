@@ -206,46 +206,47 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	var gif = strings.Contains(url, ".gif")
 	var l *gdk.PixbufLoader
 
-	l, err = gdk.PixbufLoaderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a pixbuf_loader")
-	}
+	semaphore.IdleMust(func() {
+		l, err = gdk.PixbufLoaderNew()
+		if err != nil {
+			err = errors.Wrap(err, "Failed to create a pixbuf_loader")
+			return
+		}
 
-	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ interface{}, _w, _h int) {
-			w, h = maxSize(_w, _h, w, h)
-			l.SetSize(w, h)
-		})
-	}
+		if w > 0 && h > 0 {
+			l.Connect("size-prepared", func(_ interface{}, _w, _h int) {
+				w, h = maxSize(_w, _h, w, h)
+				l.SetSize(w, h)
+			})
+		}
 
-	gtkutils.Connect(l, "area-updated", func() {
-		if gif {
-			semaphore.IdleMust(func() {
+		l.Connect("area-prepared", func() {
+			if gif {
 				p, err := l.GetAnimation()
 				if err != nil || p == nil {
-					log.Errorln("Failed to get pixbuf during area-prepared:", err)
+					log.Errorln("Failed to get animation during area-prepared:", err)
 					return
 				}
-				img.SetFromAnimation(p)
-			})
-		} else {
-			semaphore.IdleMust(func() {
+				semaphore.IdleMust(img.SetFromAnimation, p)
+			} else {
 				p, err := l.GetPixbuf()
 				if err != nil || p == nil {
 					log.Errorln("Failed to get pixbuf during area-prepared:", err)
 					return
 				}
-				img.SetFromPixbuf(p)
-			})
-		}
+				semaphore.IdleMust(img.SetFromPixbuf, p)
+			}
+		})
 	})
+
+	if err != nil {
+		return err
+	}
+
+	defer l.Close()
 
 	if _, err := io.Copy(l, r.Body); err != nil {
 		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
-	}
-
-	if err := l.Close(); err != nil {
-		return errors.Wrap(err, "Failed to close pixbuf_loader")
 	}
 
 	return nil
@@ -254,22 +255,18 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
 	semaphore.IdleMust(gtkutils.ImageSetIcon, img, "image-missing", 24)
 
-	if len(pp) == 0 && w != 0 && h != 0 {
-		go func() {
-			if err := SetImageAsync(url, img, w, h); err != nil {
-				log.Errorln("Failed to get image", url+":", err)
-				return
-			}
-		}()
-
-	} else {
-		go func() {
-			if err := SetImageScaled(url, img, w, h, pp...); err != nil {
-				log.Errorln("Failed to get image", url+":", err)
-				return
-			}
-		}()
-	}
+	go func() {
+		var err error
+		if len(pp) == 0 {
+			err = SetImageAsync(url, img, w, h)
+		} else {
+			err = SetImageScaled(url, img, w, h, pp...)
+		}
+		if err != nil {
+			log.Errorln("Failed to get image", url+":", err)
+			return
+		}
+	}()
 }
 
 func maxSize(w, h, maxW, maxH int) (int, int) {

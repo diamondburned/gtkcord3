@@ -6,6 +6,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
@@ -139,11 +140,21 @@ func newEmbed(s *ningen.State, msg *discord.Message, embed discord.Embed) gtkuti
 		return newNormalEmbed(s, msg, embed)
 	case discord.ImageEmbed:
 		return newImageEmbed(embed)
+
 	case discord.VideoEmbed:
-		// Unsupported
-		return nil
+		// I'm tired and lazy.
+		img := embed.Thumbnail
+		embed.Image = &discord.EmbedImage{
+			URL:    img.URL,
+			Proxy:  img.Proxy,
+			Width:  img.Width,
+			Height: img.Height,
+		}
+		embed.Thumbnail = nil
+		return newNormalEmbed(s, msg, embed)
 	}
 
+	spew.Dump(embed)
 	return nil
 }
 
