@@ -197,6 +197,8 @@ func (t *State) render() {
 
 	t.mu.Unlock()
 
+	log.Println("Rendered", text)
+
 	semaphore.IdleMust(func() {
 		t.Label.SetMarkup(text)
 		// Show or hide the breathing animation as well:
@@ -256,6 +258,8 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	log.Println("Adding", typing.UserID)
 
 	// Check duplicates:
 	for _, u := range t.Users {

@@ -160,6 +160,8 @@ func (m *Messages) LastFromMe() *Message {
 }
 
 func (m *Messages) Last() *Message {
+	// yolo, this causes a freeze bug.
+
 	m.guard.RLock()
 	defer m.guard.RUnlock()
 
@@ -307,8 +309,20 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	}
 	m.acked = true
 
-	// Find the latest message and ack it:
-	go m.c.MarkRead(m.ChannelID, m.LastID())
+	go func() {
+		m.guard.RLock()
+		defer m.guard.RUnlock()
+
+		if len(m.messages) == 0 {
+			return
+		}
+
+		msID := m.messages[len(m.messages)-1].ID
+		chID := m.ChannelID
+
+		// Find the latest message and ack it:
+		m.c.MarkRead(chID, msID)
+	}()
 }
 
 // mainly used for fetching extra message when scrolled to the top

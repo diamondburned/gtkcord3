@@ -92,6 +92,14 @@ func newStatusPage(s *ningen.State) gtk.IWidget {
 	box.Show()
 	gtkutils.Margin(box, popup.SectionPadding)
 
+	// Make a back button
+	btn, _ := gtk.ModelButtonNew()
+	btn.SetLabel("Status")
+	btn.SetProperty("inverted", true)
+	btn.SetProperty("menu-name", "main")
+	btn.Show()
+	box.Add(btn)
+
 	statuses := [][3]string{
 		{"#43B581", "Online", string(discord.OnlineStatus)},
 		{"#FAA61A", "Idle", string(discord.IdleStatus)},

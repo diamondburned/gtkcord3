@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
@@ -79,7 +80,7 @@ type Discord interface {
 	Member(guild, user discord.Snowflake) (*discord.Member, error)
 }
 
-func ParseMessage(d Discord, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
+func ParseMessage(d *ningen.State, m *discord.Message, md []byte, buf *gtk.TextBuffer) {
 	// Boolean for message content:
 	var content = false
 	if m != nil && md == nil {
