@@ -2,6 +2,7 @@ package header
 
 import (
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/about"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
@@ -88,6 +89,10 @@ func wrapHamburger(s *ningen.State, body *popup.UserPopupBody) gtkutils.WidgetDe
 	statusBtn.SetProperty("menu-name", "status")
 	menu.Add(statusBtn)
 
+	aboutBtn := newModelButton("About")
+	aboutBtn.Connect("activate", about.Spawn)
+	menu.Add(aboutBtn)
+
 	return stack
 }
 
@@ -130,22 +135,10 @@ func newStatusPage(s *ningen.State) gtk.IWidget {
 	return box
 }
 
-func newNamedRow(markup, name string) *gtk.ListBoxRow {
-	row, _ := gtk.ListBoxRowNew()
-	row.SetName(name)
-
-	l, _ := gtk.LabelNew("")
-	l.SetMarkup(markup)
-	l.SetHAlign(gtk.ALIGN_START)
-	row.Add(l)
-
-	return row
-}
-
 func newModelButton(markup string) *gtk.ModelButton {
 	// Create the button
 	btn, _ := gtk.ModelButtonNew()
-	btn.SetLabel("")
+	btn.SetLabel(markup)
 
 	// Set the label
 	c, err := btn.GetChild()
@@ -155,7 +148,7 @@ func newModelButton(markup string) *gtk.ModelButton {
 	}
 
 	l := &gtk.Label{Widget: *c}
-	l.SetMarkup(markup)
+	l.SetUseMarkup(true)
 	l.SetHAlign(gtk.ALIGN_START)
 
 	btn.ShowAll()

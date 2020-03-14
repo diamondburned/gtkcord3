@@ -203,7 +203,9 @@ func (b *UserPopupBody) setAvatarClass(class string) {
 }
 
 func (b *UserPopupBody) Update(u discord.User) {
-	b.Username.SetMarkup(formatUser(u))
+	if b.Username != nil {
+		b.Username.SetMarkup(formatUser(u))
+	}
 
 	if u.Avatar != "" {
 		go b.updateAvatar(u.AvatarURL())
