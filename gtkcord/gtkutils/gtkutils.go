@@ -168,3 +168,12 @@ func ImageSetIcon(img *gtk.Image, icon string, px int) {
 	img.SetProperty("icon-name", icon)
 	img.SetProperty("pixel-size", px)
 }
+
+func EventIsRightClick(ev *gdk.Event) bool {
+	btn := gdk.EventButtonNewFromEvent(ev)
+	return btn.Button() == gdk.BUTTON_SECONDARY
+}
+func EventIsLeftClick(ev *gdk.Event) bool {
+	btn := gdk.EventButtonNewFromEvent(ev)
+	return btn.Button() == gdk.BUTTON_PRIMARY
+}

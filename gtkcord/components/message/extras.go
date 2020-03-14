@@ -14,6 +14,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 )
@@ -43,7 +44,10 @@ func newExtraImage(proxy, direct string, w, h int, pp ...cache.Processor) gtkuti
 
 		evb, _ = gtk.EventBoxNew()
 		evb.Add(img)
-		evb.Connect("button-release-event", func() {
+		evb.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) {
+			if !gtkutils.EventIsLeftClick(ev) {
+				return
+			}
 			SpawnPreviewDialog(proxy, direct)
 		})
 		embedSetMargin(evb)

@@ -45,7 +45,7 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	p := popup.NewDynamicPopover(mb, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
 		body := popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
 		body.ParentStyle, _ = p.GetStyleContext()
-		return wrapHamburger(s, body.UserPopupBody)
+		return wrapHamburger(s, body.UserPopupBody, p.Hide)
 	})
 
 	mb.SetPopover(p.Popover)
@@ -60,12 +60,13 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	return hm, nil
 }
 
-func wrapHamburger(s *ningen.State, body *popup.UserPopupBody) gtkutils.WidgetDestroyer {
+func wrapHamburger(
+	s *ningen.State, body *popup.UserPopupBody, destroy func()) gtkutils.WidgetDestroyer {
 	// body MUST starts at 3
 
 	stack, _ := gtk.StackNew()
 	stack.AddNamed(body, "main")
-	stack.AddNamed(newStatusPage(s), "status")
+	stack.AddNamed(newStatusPage(s, destroy), "status")
 	stack.Show()
 
 	gtkutils.InjectCSSUnsafe(stack, "", `
@@ -89,14 +90,16 @@ func wrapHamburger(s *ningen.State, body *popup.UserPopupBody) gtkutils.WidgetDe
 	statusBtn.SetProperty("menu-name", "status")
 	menu.Add(statusBtn)
 
-	aboutBtn := newModelButton("About")
-	aboutBtn.Connect("activate", about.Spawn)
+	aboutBtn := newButton("About", func() {
+		destroy()
+		about.Spawn()
+	})
 	menu.Add(aboutBtn)
 
 	return stack
 }
 
-func newStatusPage(s *ningen.State) gtk.IWidget {
+func newStatusPage(s *ningen.State, destroy func()) gtk.IWidget {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	box.Show()
 	gtkutils.Margin(box, popup.SectionPadding)
@@ -120,8 +123,9 @@ func newStatusPage(s *ningen.State) gtk.IWidget {
 
 	for _, status := range statuses {
 		btn := newModelButton(`<span color="` + status[0] + `">●</span> ` + status[1])
-		btn.Connect("activate", func() {
-			log.Println("Changing status to", status[2])
+		btn.Connect("button-release-event", func() bool {
+			destroy()
+			return true
 		})
 
 		if p != nil && string(p.Status) == status[2] {
@@ -152,5 +156,15 @@ func newModelButton(markup string) *gtk.ModelButton {
 	l.SetHAlign(gtk.ALIGN_START)
 
 	btn.ShowAll()
+	return btn
+}
+
+func newButton(markup string, callback func()) *gtk.ModelButton {
+	btn := newModelButton(markup)
+	btn.Connect("button-release-event", func() bool {
+		callback()
+		return true
+	})
+
 	return btn
 }
