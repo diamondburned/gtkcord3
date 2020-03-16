@@ -1,13 +1,13 @@
-<center>
+<p align="center">
+	
+<img width="128" src="gtkcord/components/logo/logo.png" />
+<h1 align="center">gtkcord</h1>
+<p  align="center">A lightweight Discord client which uses GTK3 for the user interface.</p>
 
-<h1>gtkcord</h1>
-A lightweight Discord client which uses GTK3 for the user interface.
-
-<img width="64" height="64" src="gtkcord/components/logo/logo.png" />
 <img src=".readme-resources/images/screenshot3.png" />
-<h6><a href="https://www.pixiv.net/en/artworks/70546791">(Background is not included.)</a></h6>
+<h6 align="center"><a href="https://www.pixiv.net/en/artworks/70546791">(Background is not included.)</a></h6>
 
-</center>
+</p>
 
 ## It's time to ditch the Discord Electron application (soon).
 
