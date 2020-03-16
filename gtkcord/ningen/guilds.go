@@ -9,7 +9,7 @@ import (
 )
 
 type guildState struct {
-	subscribed        bool
+	subscribedMax     int // 0, 99, 199, 299, etc
 	requestingMembers map[discord.Snowflake]struct{}
 
 	lastRequested time.Time
@@ -84,12 +84,25 @@ func (n *State) RequestMember(guildID, memID discord.Snowflake) {
 	return
 }
 
-func (n *State) Subscribe(guildID discord.Snowflake) {
+func (n *State) Subscribe(guildID discord.Snowflake, chID discord.Snowflake, chunk int) {
 	n.gmu.Lock()
 	defer n.gmu.Unlock()
 
+	// Round chunk to its maximum (ceiling-ed):
+	chunk /= 100
+	chunk++
+
+	chunks := make([][2]int, 0, chunk)
+
+	for i := 0; i < chunk; i++ {
+		chunks = append(chunks, [2]int{
+			(i * 100),      // start: 100
+			(i * 100) + 99, // end:   199
+		})
+	}
+
 	gd := n.getGuild(guildID)
-	if gd.subscribed {
+	if gd.subscribedMax >= chunk {
 		return
 	}
 
@@ -101,6 +114,9 @@ func (n *State) Subscribe(guildID discord.Snowflake) {
 		GuildID:    guildID,
 		Typing:     true,
 		Activities: true,
+		Channels: map[discord.Snowflake][][2]int{
+			chID: chunks,
+		},
 	})
 
 	// relock
@@ -111,5 +127,5 @@ func (n *State) Subscribe(guildID discord.Snowflake) {
 		return
 	}
 
-	gd.subscribed = true
+	gd.subscribedMax = chunk
 }

@@ -48,14 +48,14 @@ func init() {
 					val = call.fn.(reflect.Value).Call(call.args)
 				}
 
+				log.Debugln(call.trace, "main thread done")
+
 				if call.done != nil {
 					call.done <- val
 				}
 
-				log.Debugln(call.trace, "main thread done")
+				log.Debugln(call.trace, "main thread replied")
 			})
-
-			log.Debugln(call.trace, "addED into main thread")
 		}
 	}()
 }
@@ -123,9 +123,15 @@ func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
 
 		fallthrough
 	case 1:
-		return values[0].Interface(), nil
+		v := values[0].Interface()
+		if err, ok := v.(error); ok {
+			return nil, err
+		}
+		return v, nil
+
 	case 0:
 		return nil, nil
+
 	default:
 		log.Panicln(trace, "Unknown returns:", values)
 		return nil, nil

@@ -82,6 +82,7 @@ func newCategory(ch *discord.Channel) (chw *Channel) {
 	name := `<span font_size="smaller">` + html.EscapeString(strings.ToUpper(ch.Name)) + "</span>"
 
 	l, _ := gtk.LabelNew(name)
+	l.Show()
 	l.SetUseMarkup(true)
 	l.SetXAlign(0.0)
 	l.SetMarginStart(15)
@@ -91,6 +92,7 @@ func newCategory(ch *discord.Channel) (chw *Channel) {
 	l.SetMaxWidthChars(40)
 
 	r, _ := gtk.ListBoxRowNew()
+	r.Show()
 	r.SetSelectable(false)
 	r.SetSensitive(false)
 	r.Add(l)
@@ -118,11 +120,13 @@ func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	name := `<span weight="bold">` + html.EscapeString(ch.Name) + `</span>`
 
 	l, _ := gtk.LabelNew(ChannelHash + name)
+	l.Show()
 	l.SetUseMarkup(true)
 	l.SetXAlign(0.0)
 	l.SetMarginStart(8)
 
 	r, _ := gtk.ListBoxRowNew()
+	r.Show()
 	r.Add(l)
 
 	s, _ := r.GetStyleContext()

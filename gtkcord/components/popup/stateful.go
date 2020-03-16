@@ -1,6 +1,8 @@
 package popup
 
 import (
+	"sync"
+
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
@@ -21,6 +23,7 @@ type StatefulPopupBody struct {
 	Guild discord.Snowflake
 
 	unhandlers []func()
+	mutex      sync.Mutex
 }
 
 func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *StatefulPopupBody {
@@ -33,13 +36,14 @@ func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *State
 		User:  user,
 		Guild: guild,
 	}
-	go body.initialize()
 
 	b.Connect("destroy", func() {
 		log.Infoln("Destroying stateful popup body")
 		body.Destroy()
+		log.Infoln("Destroyed")
 	})
 
+	go body.initialize()
 	return body
 }
 
@@ -49,44 +53,56 @@ func (s *StatefulPopupBody) initialize() {
 		return
 	}
 
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	u, err := s.state.User(s.User)
 	if err != nil {
 		log.Errorln("Failed to get user:", err)
 		return
 	}
 
-	p, err := s.state.Presence(s.Guild, u.ID)
+	p, err := s.state.Store.Presence(s.Guild, u.ID)
 	if err != nil {
-		p, err = s.state.Presence(0, u.ID)
+		p, err = s.state.Store.Presence(0, u.ID)
 	}
 
 	if err == nil {
-		s.UserPopupBody.UpdateStatus(p.Status)
-		s.UpdateActivity(p.Game)
-	}
-
-	if !s.Guild.Valid() {
-		s.UserPopupBody.Update(*u)
-		semaphore.IdleMust(s.UserPopupBody.Grid.ShowAll)
-		return
+		semaphore.IdleMust(func() {
+			s.UserPopupBody.UpdateStatus(p.Status)
+			s.UpdateActivity(p.Game)
+		})
 	}
 
 	s.injectHandlers()
 
+	if !s.Guild.Valid() {
+		semaphore.IdleMust(func() {
+			s.UserPopupBody.Update(*u)
+			s.UserPopupBody.Grid.ShowAll()
+		})
+		return
+	}
+
 	// fetch above presence if error not nil
 	if err != nil {
 		s.state.RequestMember(s.Guild, u.ID)
+		return
 	}
 
 	m, err := s.state.Store.Member(s.Guild, u.ID)
 	if err != nil {
-		s.UserPopupBody.Update(*u)
-		semaphore.IdleMust(s.UserPopupBody.Grid.ShowAll)
+		semaphore.IdleMust(func() {
+			s.UserPopupBody.Update(*u)
+			s.UserPopupBody.Grid.ShowAll()
+		})
 		return
 	}
 
-	s.UserPopupBody.UpdateMember(*m)
-	semaphore.IdleMust(s.UserPopupBody.Grid.ShowAll)
+	semaphore.IdleMust(func() {
+		s.UserPopupBody.UpdateMember(*m)
+		s.UserPopupBody.Grid.ShowAll()
+	})
 
 	r, err := NewUserPopupRoles(s.state, s.Guild, m.RoleIDs)
 	if err != nil {
@@ -109,11 +125,43 @@ func (s *StatefulPopupBody) injectHandlers() {
 					return
 				}
 
-				s.UserPopupBody.UpdateMemberPart(g.Nick, g.User)
-				s.UserPopupBody.UpdateStatus(g.Status)
-				s.UpdateActivity(g.Game)
+				s.mutex.Lock()
+				defer s.mutex.Unlock()
+
+				if s.UserPopupBody == nil {
+					return
+				}
+
+				semaphore.IdleMust(func() {
+					s.UserPopupBody.UpdateMemberPart(g.Nick, g.User)
+					s.UserPopupBody.UpdateStatus(g.Status)
+					s.UpdateActivity(g.Game)
+				})
 
 				// TODO: roles
+			}),
+			s.state.AddHandler(func(g *gateway.GuildMembersChunkEvent) {
+				if g.GuildID != s.Guild {
+					return
+				}
+				for _, m := range g.Members {
+					if m.User.ID != s.User {
+						continue
+					}
+
+					s.mutex.Lock()
+					defer s.mutex.Unlock()
+
+					if s.UserPopupBody == nil {
+						return
+					}
+
+					semaphore.IdleMust(func() {
+						s.UserPopupBody.UpdateMember(m)
+					})
+
+					return
+				}
 			}),
 		)
 	}
@@ -122,9 +170,19 @@ func (s *StatefulPopupBody) injectHandlers() {
 	if s.User == s.state.Ready.User.ID {
 		s.unhandlers = append(s.unhandlers,
 			s.state.AddHandler(func(g *gateway.SessionsReplaceEvent) {
+				s.mutex.Lock()
+				defer s.mutex.Unlock()
+
+				if s.UserPopupBody == nil {
+					return
+				}
+
 				presence := s.state.JoinSession(g)
-				s.UserPopupBody.UpdateStatus(presence.Status)
-				s.UpdateActivity(presence.Game)
+
+				semaphore.IdleMust(func() {
+					s.UserPopupBody.UpdateStatus(presence.Status)
+					s.UpdateActivity(presence.Game)
+				})
 			}),
 		)
 	}
@@ -156,7 +214,17 @@ func (s *StatefulPopupBody) UpdateActivity(a *discord.Activity) {
 	}
 }
 
+func (s *StatefulPopupBody) AddUnhandler(u func()) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.unhandlers = append(s.unhandlers, u)
+}
+
 func (s *StatefulPopupBody) Destroy() {
+	// s.mutex.Lock()
+	// defer s.mutex.Unlock()
+
 	for _, h := range s.unhandlers {
 		h()
 	}
@@ -166,5 +234,5 @@ func (s *StatefulPopupBody) Destroy() {
 
 // thread-safe
 func (s *StatefulPopupBody) setParentClass(class string) {
-	gtkutils.DiffClass(&s.parentClass, class, s.ParentStyle)
+	gtkutils.DiffClassUnsafe(&s.parentClass, class, s.ParentStyle)
 }

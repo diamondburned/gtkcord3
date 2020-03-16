@@ -15,6 +15,7 @@ import (
 type Hamburger struct {
 	gtkutils.ExtendedWidget
 	Popover *popup.Popover
+	GuildID *discord.Snowflake
 
 	// About
 }
@@ -41,22 +42,25 @@ func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
 	}
 	mb.Add(i)
 
+	hm := &Hamburger{ExtendedWidget: b}
+
 	// Header box
 	p := popup.NewDynamicPopover(mb, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
-		body := popup.NewStatefulPopupBody(s, s.Ready.User.ID, 0)
+		var guildID discord.Snowflake
+		if hm.GuildID != nil {
+			guildID = *hm.GuildID
+		}
+
+		body := popup.NewStatefulPopupBody(s, s.Ready.User.ID, guildID)
 		body.ParentStyle, _ = p.GetStyleContext()
 		return wrapHamburger(s, body.UserPopupBody, p.Hide)
 	})
+	hm.Popover = p
 
 	mb.SetPopover(p.Popover)
 	mb.SetUsePopover(true)
 
-	hm := &Hamburger{
-		ExtendedWidget: b,
-		Popover:        p,
-	}
 	hm.ShowAll()
-
 	return hm, nil
 }
 
@@ -64,27 +68,27 @@ func wrapHamburger(
 	s *ningen.State, body *popup.UserPopupBody, destroy func()) gtkutils.WidgetDestroyer {
 	// body MUST starts at 3
 
-	stack, _ := gtk.StackNew()
-	stack.AddNamed(body, "main")
-	stack.AddNamed(newStatusPage(s, destroy), "status")
-	stack.Show()
-
-	gtkutils.InjectCSSUnsafe(stack, "", `
-		stack { margin: 0; }
-	`)
-
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	main.Show()
 	body.Attach(main, 3)
 
 	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	sep.Show()
 	main.Add(sep)
 
 	menu, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	menu.Show()
-
 	gtkutils.Margin(menu, popup.SectionPadding)
-	menu.SetMarginTop(0)
-	main.Add(menu)
+
+	stack, _ := gtk.StackNew()
+	stack.AddNamed(menu, "main")
+	stack.AddNamed(newStatusPage(s, destroy), "status")
+	stack.Show()
+	main.Add(stack)
+
+	gtkutils.InjectCSSUnsafe(stack, "", `
+		stack { margin: 0; }
+	`)
 
 	statusBtn := newModelButton("Status")
 	statusBtn.SetProperty("menu-name", "status")
@@ -96,7 +100,7 @@ func wrapHamburger(
 	})
 	menu.Add(aboutBtn)
 
-	return stack
+	return body
 }
 
 func newStatusPage(s *ningen.State, destroy func()) gtk.IWidget {

@@ -3,7 +3,6 @@ package message
 import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/log"
 )
 
 func (m *Messages) injectHandlers() {
@@ -58,7 +57,7 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 	if m.GetGuildID() != c.GuildID {
-		log.Println("GuildMembersChunk not from our guild", m.GuildID)
+		// log.Println("GuildMembersChunk not from our guild", c.GuildID)
 		return
 	}
 

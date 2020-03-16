@@ -1,6 +1,7 @@
 package log
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -37,6 +38,9 @@ var (
 )
 
 func init() {
+	// Hijack
+	flag.BoolVar(&EnableDebug, "debug", false, "Enable debug")
+
 	f, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0775)
 	if err != nil {
 		Errorln("Failed to open log file:", err)

@@ -447,9 +447,9 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 
 	// We only try this if we know the message is edited. If it's new, there
 	// wouldn't be a .mentioned class to remove.
-	if update.EditedTimestamp.Valid() {
-		semaphore.IdleMust(m.style.RemoveClass, "mentioned")
-	}
+	// if update.EditedTimestamp.Valid() {
+	// 	semaphore.IdleMust(m.style.RemoveClass, "mentioned")
+	// }
 }
 
 func (m *Message) assertContentUnsafe() {

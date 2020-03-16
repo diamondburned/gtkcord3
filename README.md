@@ -1,8 +1,13 @@
-# gtkcord
+<center>
 
+<h1>gtkcord</h1>
 A lightweight Discord client which uses GTK3 for the user interface.
 
-![Screenshot of gtkcord](.readme-resources/images/screenshot2.png)
+<img width="64" height="64" src="gtkcord/components/logo/logo.png" />
+<img src=".readme-resources/images/screenshot3.png" />
+<h6><a href="https://www.pixiv.net/en/artworks/70546791">(Background is not included.)</a></h6>
+
+</center>
 
 ## It's time to ditch the Discord Electron application (soon).
 

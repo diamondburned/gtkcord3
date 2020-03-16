@@ -10,7 +10,7 @@ import (
 
 const CSS = `
 	.status {
-		padding: 3px;
+		padding: 2px;
 		border-radius: 9999px;
 	}
 	.status.online {
@@ -35,7 +35,7 @@ const CSS = `
 	headerbar button { box-shadow: none; }
 	textview, textview > text { background-color: transparent; }
 
-	.guilds, .channels {
+	.guilds, .channels, .dmchannels {
 		background-color: @theme_bg_color;
 	}
 	.messages {
@@ -63,12 +63,15 @@ const CSS = `
 	}
 
 	.user-info, .popup-grid > *:not(.popup-user):not(.popup-activity) {
-		background-color: @theme_base_color;
+		background-color: @theme_bg_color;
 		color: @theme_fg_color;
 	}
 
 	.user-info {
 		padding: 0;
+	}
+	.user-info separator {
+		margin-top: 0;
 	}
 	.user-info.spotify {
 		background-color: #1db954;
@@ -119,10 +122,10 @@ const CSS = `
 		padding: 2px;
 	}
 
-	.channel label, .category label {
+	.channel label, .category.muted label {
 		opacity: 0.5;
 	}
-	.channel.muted label, .category.muted label {
+	.channel.muted label {
 		opacity: 0.25;
 	}
 	.channel.unread label, .opacity.pinged label {
@@ -134,6 +137,10 @@ const CSS = `
 	}
 	.dmchannel.pinged {
 		background-color: alpha(@color_pinged, 0.15);
+	}
+
+	.member-section list {
+		background-color: transparent;
 	}
 `
 

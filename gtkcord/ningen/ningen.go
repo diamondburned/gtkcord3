@@ -41,6 +41,8 @@ type State struct {
 
 	gmu    sync.Mutex
 	guilds map[discord.Snowflake]*guildState
+
+	MemberList *MemberListState
 }
 
 type Mute struct {
@@ -61,6 +63,15 @@ func Connect(token string) (*State, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a new Discord session")
 	}
+
+	// s.Gateway.OP = make(chan *gateway.OP)
+	// go func() {
+	// 	for ev := range s.Gateway.OP {
+	// 		if ev.EventName == "READY" {
+	// 			log.Println(string(ev.Data))
+	// 		}
+	// 	}
+	// }()
 
 	if err := s.Open(); err != nil {
 		return nil, errors.Wrap(err, "Failed to connect to Discord")
@@ -123,6 +134,24 @@ func Ningen(s *state.State) (*State, error) {
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
 		s.PresenceSet(0, state.JoinSession(r))
+	})
+
+	state.MemberList = NewMemberListState()
+	s.AddHandler(state.MemberList.handle)
+
+	s.AddHandler(func(ev *gateway.GuildMemberListUpdate) {
+		for _, op := range ev.Ops {
+			items := append(op.Items, op.Item)
+
+			for _, it := range items {
+				if it.Member == nil {
+					continue
+				}
+
+				s.Store.MemberSet(ev.GuildID, &it.Member.Member)
+				s.Store.PresenceSet(ev.GuildID, &it.Member.Presence)
+			}
+		}
 	})
 
 	state.UpdateReady(s.Ready)
@@ -236,6 +265,7 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 
 func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	s.readMutex.Lock()
+	defer s.readMutex.Unlock()
 	// log.Debugln(log.Trace(0), "MarkUnread")
 
 	// Check for a ReadState
@@ -268,8 +298,6 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	for _, fn := range s.OnReadChange {
 		fn(s, st, true)
 	}
-
-	s.readMutex.Unlock()
 }
 
 func (s *State) MarkRead(chID, msgID discord.Snowflake) {

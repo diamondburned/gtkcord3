@@ -126,7 +126,7 @@ func (s *mdState) hyperlink(url string) *gtk.TextTag {
 	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
 	t.SetProperty("foreground", "#3F7CE0")
 	t.Connect("event", s.setHandler(func(PressedEvent) {
-		if err := open.Run(url); err != nil {
+		if err := open.Start(url); err != nil {
 			log.Errorln("Failed to open image URL:", err)
 		}
 	}))
@@ -261,6 +261,8 @@ func (s *mdState) colorTag(attr Attribute, color string) *gtk.TextTag {
 	if err != nil {
 		log.Panicln("Failed to create new tag with", attr, color)
 	}
+
+	t.SetProperty("weight", pango.WEIGHT_MEDIUM)
 
 	if color != "" {
 		t.SetProperty("foreground", color)

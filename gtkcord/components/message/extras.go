@@ -140,21 +140,24 @@ func NewEmbed(s *ningen.State, msg *discord.Message) []gtkutils.ExtendedWidget {
 
 func newEmbed(s *ningen.State, msg *discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 	switch embed.Type {
-	case discord.NormalEmbed, discord.LinkEmbed:
+	case discord.NormalEmbed, discord.LinkEmbed, discord.ArticleEmbed:
 		return newNormalEmbed(s, msg, embed)
 	case discord.ImageEmbed:
 		return newImageEmbed(embed)
 
 	case discord.VideoEmbed:
 		// I'm tired and lazy.
-		img := embed.Thumbnail
-		embed.Image = &discord.EmbedImage{
-			URL:    img.URL,
-			Proxy:  img.Proxy,
-			Width:  img.Width,
-			Height: img.Height,
+		if embed.Thumbnail != nil && embed.Image == nil {
+			img := embed.Thumbnail
+			embed.Image = &discord.EmbedImage{
+				URL:    img.URL,
+				Proxy:  img.Proxy,
+				Width:  img.Width,
+				Height: img.Height,
+			}
+			embed.Thumbnail = nil
 		}
-		embed.Thumbnail = nil
+
 		return newNormalEmbed(s, msg, embed)
 	}
 
@@ -200,7 +203,7 @@ func newNormalEmbed(
 			if embed.Author.URL != "" {
 				semaphore.IdleMust(author.SetMarkup, fmt.Sprintf(
 					`<a href="%s">%s</a>`,
-					embed.Author.URL, html.EscapeString(embed.Author.Name),
+					html.EscapeString(embed.Author.URL), html.EscapeString(embed.Author.Name),
 				))
 			}
 
@@ -213,7 +216,7 @@ func newNormalEmbed(
 	if embed.Title != "" {
 		var title = `<span weight="heavy">` + html.EscapeString(embed.Title) + `</span>`
 		if embed.URL != "" {
-			title = fmt.Sprintf(`<a href="%s">%s</a>`, embed.URL, title)
+			title = fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(embed.URL), title)
 		}
 
 		semaphore.IdleMust(func() {

@@ -41,9 +41,17 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	d.SetTransientFor(window.Window)
 	d.SetDefaultSize(w, h)
 
+	// Hack for close button
+	d.Connect("response", func(_ *gtk.Dialog, resp gtk.ResponseType) {
+		if resp == gtk.RESPONSE_DELETE_EVENT {
+			d.Hide()
+		}
+	})
+
 	// Header
 
 	header, _ := gtk.HeaderBarNew()
+	header.SetShowCloseButton(true)
 
 	bOriginal, _ := gtk.ButtonNewFromIconName(
 		"image-x-generic-symbolic",
@@ -53,17 +61,8 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	bOriginal.SetMarginStart(10)
 	bOriginal.SetHAlign(gtk.ALIGN_START)
 
-	bExit, _ := gtk.ButtonNewFromIconName(
-		"window-close-symbolic",
-		gtk.ICON_SIZE_LARGE_TOOLBAR,
-	)
-	bExit.SetTooltipText("Close")
-	bExit.SetMarginEnd(10)
-	bExit.SetHAlign(gtk.ALIGN_END)
-
 	header.PackStart(bOriginal)
 	header.SetTitle(path.Base(imageURL))
-	header.PackEnd(bExit)
 
 	d.SetTitlebar(header)
 
@@ -95,10 +94,6 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	bOriginal.Connect("clicked", func() {
 		go pd.Open()
-	})
-	bExit.Connect("clicked", func() {
-		pd.Dialog.Hide()
-		pd.Dialog.Destroy()
 	})
 
 	// Calculate the sizee so that the image is just slightly (80%) smaller:

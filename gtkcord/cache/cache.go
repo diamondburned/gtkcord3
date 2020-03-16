@@ -183,13 +183,44 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 }
 
 func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
-	p, err := GetPixbufScaled(url, w, h, pp...)
-	if err != nil {
+	// Transform URL:
+	dst := TransformURL(url, w, h)
+
+	fileIO.Lock()
+	defer fileIO.Unlock()
+
+	// Try and get the Pixbuf from file:
+	_, err := semaphore.Idle(func() error {
+		p, err := gdk.PixbufNewFromFile(dst)
+		if err == nil {
+			img.SetFromPixbuf(p)
+		}
+		return err
+	})
+	if err == nil {
+		return nil
+	}
+
+	// If resize is requested, we resize using Go's instead.
+	if w > 0 && h > 0 {
+		pp = append(pp, Resize(w, h))
+	}
+
+	// Get the image into file (dst)
+	if err := get(url, dst, pp); err != nil {
 		return err
 	}
 
-	semaphore.IdleMust(img.SetFromPixbuf, p)
-	return nil
+	_, err = semaphore.Idle(func() error {
+		p, err := gdk.PixbufNewFromFile(dst)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get pixbuf")
+		}
+
+		img.SetFromPixbuf(p)
+		return nil
+	})
+	return err
 }
 
 // SetImageAsync is not cached.

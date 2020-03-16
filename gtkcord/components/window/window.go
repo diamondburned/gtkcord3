@@ -26,6 +26,8 @@ var Window struct {
 	CursorDefault *gdk.Cursor
 	CursorPointer *gdk.Cursor
 
+	Settings *gtk.Settings
+
 	done chan struct{}
 }
 
@@ -62,6 +64,13 @@ func Init() error {
 	if err := animations.LoadCSS(s); err != nil {
 		return errors.Wrap(err, "Failed to load animations CSS")
 	}
+
+	settings, err := gtk.SettingsGetDefault()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get settings")
+	}
+	overrideSettings(settings)
+	Window.Settings = settings
 
 	w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 	if err != nil {

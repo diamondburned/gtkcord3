@@ -197,7 +197,7 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	if len(messages) > 0 {
 		m.GuildID = messages[0].GuildID
 		if m.GuildID.Valid() {
-			go m.c.Subscribe(m.GuildID)
+			go m.c.Subscribe(m.GuildID, m.ChannelID, 0)
 		}
 
 	} else {

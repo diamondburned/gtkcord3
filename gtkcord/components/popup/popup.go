@@ -40,10 +40,16 @@ func NewPopover(relative gtk.IWidget) *Popover {
 
 	gtkutils.InjectCSSUnsafe(p, "user-info", "")
 
-	return &Popover{
+	popover := &Popover{
 		Popover: p,
 		Style:   style,
 	}
+	popover.Connect("closed", func() {
+		popover.Children.Destroy()
+		popover.Children = nil
+	})
+
+	return popover
 }
 
 func (p *Popover) SetChildren(children gtkutils.WidgetDestroyer) {
@@ -58,10 +64,6 @@ type PopoverCreator = func(p *gtk.Popover) gtkutils.WidgetDestroyer
 
 func NewDynamicPopover(relative gtkutils.WidgetConnector, create PopoverCreator) *Popover {
 	p := NewPopover(relative)
-	p.Connect("closed", func() {
-		p.Children.Destroy()
-		p.Children = nil
-	})
 	relative.Connect("clicked", func() {
 		if w := create(p.Popover); w != nil {
 			p.SetChildren(w)
@@ -189,17 +191,7 @@ func (b *UserPopupBody) Attach(w gtk.IWidget, row int) {
 }
 
 func (b *UserPopupBody) setAvatarClass(class string) {
-	if b.lastAvatarClass != "" {
-		b.AvatarStyle.RemoveClass(b.lastAvatarClass)
-		b.lastAvatarClass = ""
-	}
-
-	if class == "" {
-		return
-	}
-
-	b.lastAvatarClass = class
-	b.AvatarStyle.AddClass(class)
+	gtkutils.DiffClassUnsafe(&b.lastAvatarClass, class, b.AvatarStyle)
 }
 
 func (b *UserPopupBody) Update(u discord.User) {
@@ -244,7 +236,7 @@ func (b *UserPopupBody) updateAvatar(url string) {
 func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	if a == nil {
 		if b.Activity != nil {
-			semaphore.IdleMust(b.Grid.Remove, b.Activity)
+			b.Grid.Remove(b.Activity)
 			b.Activity = nil
 			// b.setClass("")
 		}
@@ -252,42 +244,37 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	}
 
 	if b.Activity == nil {
-		semaphore.IdleMust(func() {
-			b.Activity = NewUserPopupActivity()
-			b.Attach(b.Activity, 1)
-		})
+		b.Activity = NewUserPopupActivity()
+		b.Attach(b.Activity, 1)
 	}
 
-	b.Activity.Update(*a)
+	b.Activity.UpdateUnsafe(*a)
 
 	switch a.Type {
 	case discord.GameActivity, discord.ListeningActivity, discord.StreamingActivity:
 		b.setAvatarClass("unknown")
 	}
 
-	semaphore.IdleMust(b.Grid.ShowAll)
+	b.Grid.ShowAll()
 }
 
 func (b *UserPopupBody) UpdateStatus(status discord.Status) {
-	semaphore.IdleMust(func() {
-		switch status {
-		case discord.OnlineStatus:
-			b.Avatar.SetTooltipText("Online")
-			b.setAvatarClass("online")
-		case discord.DoNotDisturbStatus:
-			b.Avatar.SetTooltipText("Busy")
-			b.setAvatarClass("busy")
-		case discord.IdleStatus:
-			b.Avatar.SetTooltipText("Idle")
-			b.setAvatarClass("idle")
-		case discord.InvisibleStatus, discord.OfflineStatus:
-			b.Avatar.SetTooltipText("Offline")
-			b.setAvatarClass("offline")
-		case discord.UnknownStatus:
-			// b.Avatar.SetTooltipText("")
-			b.setAvatarClass("unknown")
-		}
-	})
+	switch status {
+	case discord.OnlineStatus:
+		b.Avatar.SetTooltipText("Online")
+		b.setAvatarClass("online")
+	case discord.DoNotDisturbStatus:
+		b.Avatar.SetTooltipText("Busy")
+		b.setAvatarClass("busy")
+	case discord.IdleStatus:
+		b.Avatar.SetTooltipText("Idle")
+		b.setAvatarClass("idle")
+	case discord.InvisibleStatus, discord.OfflineStatus:
+		b.Avatar.SetTooltipText("Offline")
+		b.setAvatarClass("offline")
+	case discord.UnknownStatus:
+		b.setAvatarClass("unknown")
+	}
 }
 
 type UserPopupRoles struct {

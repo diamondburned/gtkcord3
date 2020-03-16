@@ -55,55 +55,49 @@ func NewUserPopupActivity() *UserPopupActivity {
 }
 
 func (a *UserPopupActivity) Update(ac discord.Activity) {
+	semaphore.IdleMust(a.UpdateUnsafe, ac)
+}
+
+func (a *UserPopupActivity) UpdateUnsafe(ac discord.Activity) {
 	switch ac.Type {
 	case discord.GameActivity:
 		a.Custom = false
-		semaphore.IdleMust(func() {
-			a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
-			a.header("Playing " + ac.Name)
-		})
+		a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
+		a.header("Playing " + ac.Name)
 
 	case discord.ListeningActivity:
 		a.Custom = false
-		semaphore.IdleMust(func() {
-			a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
-			a.header("Listening to " + ac.Name)
-		})
+		a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
+		a.header("Listening to " + ac.Name)
 
 	case discord.StreamingActivity:
 		a.Custom = false
-		semaphore.IdleMust(func() {
-			a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
-			a.header("Streaming " + ac.Details)
-		})
+		a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
+		a.header("Streaming " + ac.Details)
 
 	case discord.CustomActivity:
 		a.Custom = true
-		semaphore.IdleMust(func() {
-			a.image(0, "", "")
-			a.header(ac.State)
-		})
+		a.image(0, "", "")
+		a.header(ac.State)
 
 		return
 	}
 
 	if a.Info == nil {
-		l := semaphore.IdleMust(gtk.LabelNew, "?").(*gtk.Label)
-		semaphore.IdleMust(func() {
-			l.SetMarginStart(SectionPadding)
-			l.SetMarginEnd(SectionPadding)
-			l.SetEllipsize(pango.ELLIPSIZE_END)
-			l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-			l.SetHAlign(gtk.ALIGN_START)
+		l, _ := gtk.LabelNew("?")
+		l.SetMarginStart(SectionPadding)
+		l.SetMarginEnd(SectionPadding)
+		l.SetEllipsize(pango.ELLIPSIZE_END)
+		l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+		l.SetHAlign(gtk.ALIGN_START)
 
-			a.Details.Add(l)
-		})
+		a.Details.Add(l)
 
 		a.Info = l
 	}
 
-	semaphore.IdleMust(a.Info.SetTooltipText, ac.Details+"\n"+ac.State)
-	semaphore.IdleMust(a.Info.SetMarkup, fmt.Sprintf(
+	a.Info.SetTooltipText(ac.Details + "\n" + ac.State)
+	a.Info.SetMarkup(fmt.Sprintf(
 		"<span weight=\"bold\">%s</span>\n<span size=\"smaller\">%s</span>",
 		html.EscapeString(ac.Details), html.EscapeString(ac.State),
 	))

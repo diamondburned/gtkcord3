@@ -46,13 +46,16 @@ type Channels struct {
 func NewChannels(state *ningen.State) (chs *Channels) {
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		main.Show()
 		// main.SetSizeRequest(ChannelsWidth, -1)
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
+		cs.Show()
 		// cs.SetSizeRequest(ChannelsWidth, -1)
 		cs.Add(main)
 
 		cl, _ := gtk.ListBoxNew()
+		cl.Show()
 		cl.SetVExpand(true)
 		cl.SetActivateOnSingleClick(true)
 		gtkutils.InjectCSSUnsafe(cl, "channels", "")
@@ -194,7 +197,7 @@ func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
 	return nil
 }
 
-func (chs *Channels) FirstID() discord.Snowflake {
+func (chs *Channels) First() *Channel {
 	chs.busy.RLock()
 	defer chs.busy.RUnlock()
 
@@ -202,9 +205,9 @@ func (chs *Channels) FirstID() discord.Snowflake {
 		if ch.Category {
 			continue
 		}
-		return ch.ID
+		return ch
 	}
-	return 0
+	return nil
 }
 
 func (chs *Channels) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {

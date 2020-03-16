@@ -36,17 +36,21 @@ type PrivateChannels struct {
 func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 	semaphore.IdleMust(func() {
 		l, _ := gtk.ListBoxNew()
+		l.Show()
 		gtkutils.InjectCSSUnsafe(l, "dmchannels", "")
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
+		cs.Show()
 		cs.SetSizeRequest(ChannelsWidth, -1)
 		cs.SetVExpand(true)
 		cs.Add(l)
 
 		e, _ := gtk.EntryNew()
+		e.Show()
 		e.SetPlaceholderText("Find conversation...")
 
 		b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		b.Show()
 		b.Add(e)
 		b.Add(cs)
 
@@ -123,21 +127,25 @@ func (pcs *PrivateChannels) LoadChannels(channels []discord.Channel) {
 
 			if channel.Type == discord.DirectMessage && len(channel.DMRecipients) == 1 {
 				user := channel.DMRecipients[0]
-				go w.updateAvatar(user.AvatarURL())
+				w.updateAvatar(user.AvatarURL())
 
 				if p, _ := pcs.state.Presence(0, user.ID); p != nil {
+					var game = p.Game
+					if game == nil && len(p.Activities) > 0 {
+						game = &p.Activities[0]
+					}
+
 					w.updateStatus(p.Status)
-					w.updateActivity(p.Game)
+					w.updateActivity(game)
 				}
+
 			} else if channel.Icon != "" {
-				go w.updateAvatar(channel.IconURL())
+				w.updateAvatar(channel.IconURL())
 			}
 
 			pcs.Channels[channel.ID.String()] = w
 			pcs.List.Insert(w, -1)
 		}
-
-		pcs.ShowAll()
 	})
 }
 
