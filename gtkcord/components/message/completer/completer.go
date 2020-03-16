@@ -34,11 +34,14 @@ type State struct {
 
 	state *ningen.State
 
-	RequestGuildMember func(prefix string)
-	InputBuf           *gtk.TextBuffer
+	// RequestGuildMember func(prefix string)
+	GetRecentAuthors func(limit int) []discord.Snowflake
+	InputBuf         *gtk.TextBuffer
 
-	guildID   *discord.Snowflake
-	channelID *discord.Snowflake
+	// guildID   *discord.Snowflake
+	// channelID *discord.Snowflake
+
+	container MessageContainer
 
 	start *gtk.TextIter
 	end   *gtk.TextIter
@@ -59,16 +62,21 @@ type Entry struct {
 	Text  string
 }
 
-func New(s *ningen.State, buf *gtk.TextBuffer, guild, channel *discord.Snowflake) *State {
+type MessageContainer interface {
+	GetChannelID() discord.Snowflake
+	GetGuildID() discord.Snowflake
+	GetRecentAuthors(limit int) []discord.Snowflake
+}
+
+func New(s *ningen.State, ibuf *gtk.TextBuffer, msgC MessageContainer) *State {
 	l, _ := gtk.ListBoxNew()
 	gtkutils.InjectCSSUnsafe(l, "completer", "")
 
 	state := &State{
 		ListBox:   l,
-		InputBuf:  buf,
 		state:     s,
-		guildID:   guild,
-		channelID: channel,
+		InputBuf:  ibuf,
+		container: msgC,
 	}
 	l.Connect("row-activated", state.ApplyCompletion)
 
@@ -149,7 +157,7 @@ func (c *State) Down() {
 func (c *State) Up() {
 	i := c.GetIndex()
 	i--
-	if i <= 0 {
+	if i < 0 {
 		i = len(c.Entries) - 1
 	}
 	c.Select(i)
@@ -255,11 +263,6 @@ func (c *State) ApplyCompletion() {
 }
 
 func (c *State) loadCompletion(word string) {
-	// We don't want to check with an empty string:
-	if len(word) < 2 {
-		return
-	}
-
 	switch word[0] {
 	case '@':
 		c.completeMentions(strings.ToLower(word[1:]))
@@ -322,6 +325,10 @@ func (c *State) addCompletionEntry(w gtkutils.ExtendedWidget, text string) bool 
 
 	c.ListBox.Insert(entry, -1)
 	entry.ShowAll()
+
+	if len(c.Entries) == 0 {
+		c.ListBox.SelectRow(entry.ListBoxRow)
+	}
 
 	c.Entries = append(c.Entries, entry)
 	return true

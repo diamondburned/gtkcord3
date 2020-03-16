@@ -147,6 +147,27 @@ func (m *Messages) GetGuildID() discord.Snowflake {
 	return m.GuildID
 }
 
+func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
+	ids := make([]discord.Snowflake, 0, limit)
+	added := make(map[discord.Snowflake]struct{}, limit)
+
+	m.guard.RLock()
+	defer m.guard.RUnlock()
+
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		message := m.messages[i]
+
+		if _, ok := added[message.AuthorID]; ok {
+			continue
+		}
+
+		ids = append(ids, message.AuthorID)
+		added[message.AuthorID] = struct{}{}
+	}
+
+	return ids
+}
+
 func (m *Messages) LastFromMe() *Message {
 	m.guard.RLock()
 	defer m.guard.RUnlock()

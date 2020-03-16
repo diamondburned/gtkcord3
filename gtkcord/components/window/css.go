@@ -35,7 +35,7 @@ const CSS = `
 	headerbar button { box-shadow: none; }
 	textview, textview > text { background-color: transparent; }
 
-	.guilds, .channels, .dmchannels {
+	.guilds, .channels, .dmchannels, .members {
 		background-color: @theme_bg_color;
 	}
 	.messages {

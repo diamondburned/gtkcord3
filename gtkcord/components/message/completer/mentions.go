@@ -9,14 +9,35 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
+func (c *State) completeRecentMentions() {
+	ids := c.container.GetRecentAuthors(MaxCompletionEntries)
+	guildID := c.container.GetGuildID()
+
+	for _, id := range ids {
+		m, err := c.state.Store.Member(guildID, id)
+		if err != nil {
+			continue
+		}
+
+		c.members = append(c.members, *m)
+	}
+
+	semaphore.IdleMust(c._completeMembers)
+}
+
 func (c *State) completeMentions(word string) {
-	guildID := *c.guildID
+	if word == "" {
+		c.completeRecentMentions()
+		return
+	}
+
+	guildID := c.container.GetGuildID()
 	if !guildID.Valid() {
 		c.completeMentionsDM(word)
 		return
 	}
 
-	members, err := c.state.Members(guildID)
+	members, err := c.state.Store.Members(guildID)
 	if err != nil {
 		log.Errorln("Failed to get members:", err)
 		return
@@ -38,30 +59,32 @@ func (c *State) completeMentions(word string) {
 		return
 	}
 
-	semaphore.IdleMust(func() {
-		for _, m := range c.members {
-			b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	semaphore.IdleMust(c._completeMembers)
+}
 
-			var name = m.Nick
-			if m.Nick == "" {
-				name = m.User.Username
-			}
+func (c *State) _completeMembers() {
+	for _, m := range c.members {
+		b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 
-			var url = m.User.AvatarURL()
-			if url != "" {
-				url += "?size=64"
-			}
-
-			b.Add(completerImage(url, cache.Round))
-			b.Add(completerLeftLabel(name))
-			b.Add(completerRightLabel(m.User.Username + "#" + m.User.Discriminator))
-			c.addCompletionEntry(b, m.User.Mention())
+		var name = m.Nick
+		if m.Nick == "" {
+			name = m.User.Username
 		}
-	})
+
+		var url = m.User.AvatarURL()
+		if url != "" {
+			url += "?size=64"
+		}
+
+		b.Add(completerImage(url, cache.Round))
+		b.Add(completerLeftLabel(name))
+		b.Add(completerRightLabel(m.User.Username + "#" + m.User.Discriminator))
+		c.addCompletionEntry(b, m.User.Mention())
+	}
 }
 
 func (c *State) completeMentionsDM(word string) {
-	ch, err := c.state.Channel(*c.channelID)
+	ch, err := c.state.Channel(c.container.GetChannelID())
 	if err != nil {
 		log.Errorln("Failed to get DM channel:", err)
 		return

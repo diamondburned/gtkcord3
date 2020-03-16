@@ -106,11 +106,7 @@ func NewInput(m *Messages) (i *Input) {
 
 func (i *Input) initCompleter() {
 	if i.Completer == nil {
-		i.Completer = completer.New(
-			i.Messages.c, i.InputBuf,
-			// Passing by reference to avoid having to update too many structs.
-			&i.Messages.GuildID, &i.Messages.ChannelID,
-		)
+		i.Completer = completer.New(i.Messages.c, i.InputBuf, i.Messages)
 	}
 }
 

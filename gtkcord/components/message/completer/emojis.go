@@ -8,7 +8,11 @@ import (
 )
 
 func (c *State) completeEmojis(word string) {
-	guildID := *c.guildID
+	if word == "" {
+		return
+	}
+
+	guildID := c.container.GetGuildID()
 	guildEmojis := c.state.SearchEmojis(guildID)
 
 	filtered := guildEmojis[:0]
