@@ -3,7 +3,6 @@ module github.com/diamondburned/gtkcord3
 go 1.13
 
 require (
-	github.com/ChimeraCoder/gojson v1.1.0 // indirect
 	github.com/Xuanwo/go-locale v0.1.0
 	github.com/alecthomas/chroma v0.7.1
 	github.com/davecgh/go-spew v1.1.1
