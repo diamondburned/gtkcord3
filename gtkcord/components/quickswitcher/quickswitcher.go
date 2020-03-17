@@ -237,38 +237,41 @@ func (d *Dialog) onEntryChange(word string) {
 		}
 
 		for _, c := range c {
-			switch c.Type {
-			case discord.DirectMessage: // treat as user
-				recip := c.DMRecipients[0]
-				entry := Entry{
-					PrimaryText:   recip.Username,
-					SecondaryText: "#" + recip.Discriminator,
-				}
-
-				if !entry.contains(word) {
-					continue
-				}
-
-				entry.IconURL = recip.AvatarURL()
-				entry.ChannelID = c.ID
-				d.addEntry(entry)
-
-			default:
-				entry := Entry{
-					PrimaryText: c.Name,
-					RightText:   g.Name,
-				}
-
-				if !entry.contains(word) {
-					continue
-				}
-
-				entry.IconChar = '#'
-				entry.ChannelID = c.ID
-				entry.GuildID = c.GuildID
-				d.addEntry(entry)
+			if c.Type != discord.GuildText {
+				continue
 			}
+
+			entry := Entry{
+				PrimaryText: c.Name,
+				RightText:   g.Name,
+			}
+
+			if !entry.contains(word) {
+				continue
+			}
+
+			entry.IconChar = '#'
+			entry.ChannelID = c.ID
+			entry.GuildID = c.GuildID
+			d.addEntry(entry)
 		}
+	}
+
+	dm, _ := d.state.Store.PrivateChannels()
+	for _, c := range dm {
+		recip := c.DMRecipients[0]
+		entry := Entry{
+			PrimaryText:   recip.Username,
+			SecondaryText: "#" + recip.Discriminator,
+		}
+
+		if !entry.contains(word) {
+			continue
+		}
+
+		entry.IconURL = recip.AvatarURL()
+		entry.ChannelID = c.ID
+		d.addEntry(entry)
 	}
 }
 
