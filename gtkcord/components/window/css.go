@@ -33,6 +33,8 @@ const CSS = `
 		background-color: #FFFFFF;
 	}
 
+	.quickswitcher list { background-color: transparent; }
+
 	@define-color color_pinged rgb(240, 71, 71);
 
 	headerbar { padding: 0; }

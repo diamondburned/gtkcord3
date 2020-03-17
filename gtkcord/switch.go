@@ -11,7 +11,16 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
+// func (a *Application)
+
 func (a *Application) SwitchGuild(g *guild.Guild) {
+	a.busy.Lock()
+	if a.Channels.GuildID == g.ID {
+		a.busy.Unlock()
+		return
+	}
+	a.busy.Unlock()
+
 	a.changeCol(columnChange{
 		Widget: a.Channels,
 		Width:  channel.ChannelsWidth,
@@ -32,18 +41,6 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 			return true
 		},
 		After: func() {
-			var lastCh *channel.Channel
-
-			var chID = a.lastAccess(g.ID, 0)
-			if !chID.Valid() {
-				lastCh = a.Channels.First()
-			} else {
-				lastCh = a.Channels.FindByID(chID)
-			}
-
-			if lastCh != nil {
-				semaphore.Async(a.Channels.ChList.SelectRow, lastCh.Row)
-			}
 
 			a.busy.Lock()
 			defer a.busy.Unlock()
@@ -52,9 +49,34 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 				log.Println("Can't load members:", err)
 				return
 			}
-			a.Grid.Attach(a.Members, 2, 0, 1, 1)
+			semaphore.IdleMust(a.Grid.Attach, a.Members, 2, 0, 1, 1)
 		},
 	})
+}
+
+// SwitchLastChannel, nil for DM.
+func (a *Application) SwitchLastChannel(g *guild.Guild) {
+	if g == nil {
+		c, ok := a.Privates.Channels[a.lastAccess(0, 0).String()]
+		if ok {
+			semaphore.IdleMust(a.Privates.List.SelectRow, c.ListBoxRow)
+		}
+
+		return
+	}
+
+	var lastCh *channel.Channel
+
+	var chID = a.lastAccess(g.ID, 0)
+	if !chID.Valid() {
+		lastCh = a.Channels.First()
+	} else {
+		lastCh = a.Channels.FindByID(chID)
+	}
+
+	if lastCh != nil {
+		semaphore.IdleMust(a.Channels.ChList.SelectRow, lastCh.Row)
+	}
 }
 
 func (a *Application) SwitchDM() {
@@ -74,12 +96,7 @@ func (a *Application) SwitchDM() {
 			a.Header.UpdateGuild("Private Messages")
 			return true
 		},
-		After: func() {
-			c, ok := a.Privates.Channels[a.lastAccess(0, 0).String()]
-			if ok {
-				semaphore.IdleMust(a.Privates.List.SelectRow, c.ListBoxRow)
-			}
-		},
+		After: func() {},
 	})
 }
 

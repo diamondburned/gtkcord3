@@ -205,6 +205,11 @@ func (pcs *PrivateChannels) TraverseReadState(_ *ningen.State, rs *gateway.ReadS
 	pc.setUnread(unread)
 }
 
+func (pcs *PrivateChannels) FindByID(id discord.Snowflake) *PrivateChannel {
+	ch, _ := pcs.Channels[id.String()]
+	return ch
+}
+
 // func (pcs *PrivateChannels) updatePresence(p discord.Presence) {
 // 	for _, ch := range pcs.Channels {
 // 		if ch.Recp == p.User.ID && !ch.Group {

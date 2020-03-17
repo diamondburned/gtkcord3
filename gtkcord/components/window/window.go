@@ -14,6 +14,8 @@ import (
 
 var Window struct {
 	*gtk.Window
+	Accel *gtk.AccelGroup
+
 	Root   *gdk.Window
 	Widget gtk.IWidget
 
@@ -89,6 +91,13 @@ func Init() error {
 		return errors.Wrap(err, "Failed to load logo")
 	}
 	w.SetIcon(l)
+
+	a, err := gtk.AccelGroupNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create accel group")
+	}
+	Window.Accel = a
+	w.AddAccelGroup(a)
 
 	// w.SetVAlign(gtk.ALIGN_CENTER)
 	// w.SetHAlign(gtk.ALIGN_CENTER)

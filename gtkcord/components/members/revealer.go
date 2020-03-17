@@ -15,8 +15,16 @@ type Revealer struct {
 }
 
 func NewRevealer(c *Container) *Revealer {
+	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	s.Show()
+
+	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b.Show()
+	b.Add(s)
+	b.Add(c)
+
 	r, _ := gtk.RevealerNew()
-	r.Add(c)
+	r.Add(b)
 	r.Show()
 	r.SetTransitionDuration(50)
 	r.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_LEFT)

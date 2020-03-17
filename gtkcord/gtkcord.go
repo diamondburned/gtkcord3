@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/members"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
@@ -151,8 +152,14 @@ func (a *Application) Ready(s *ningen.State) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to make guilds")
 	}
-	g.OnSelect = a.SwitchGuild
-	g.DMButton.OnClick = a.SwitchDM
+	g.OnSelect = func(g *guild.Guild) {
+		a.SwitchGuild(g)
+		a.SwitchLastChannel(g)
+	}
+	g.DMButton.OnClick = func() {
+		a.SwitchDM()
+		a.SwitchLastChannel(nil)
+	}
 
 	c := channel.NewChannels(s)
 	c.OnSelect = func(ch *channel.Channel) {
@@ -246,6 +253,30 @@ func (a *Application) Ready(s *ningen.State) error {
 		window.Display(a.Grid)
 		window.HeaderDisplay(h)
 		window.Show()
+
+		// Make a Quick switcher
+		quickswitcher.Bind(quickswitcher.Spawner{
+			State: s,
+			OnGuild: func(id discord.Snowflake) {
+				if g, _ := a.Guilds.FindByID(id); g != nil {
+					a.SwitchGuild(g)
+				}
+			},
+			OnChannel: func(ch, guild discord.Snowflake) {
+				var channel Channel
+				if g, _ := a.Guilds.FindByID(guild); g != nil {
+					a.SwitchGuild(g)
+					channel = a.Channels.FindByID(ch)
+				} else {
+					a.SwitchDM()
+					channel = a.Privates.FindByID(ch)
+				}
+
+				if channel != nil {
+					a.SwitchChannel(channel)
+				}
+			},
+		})
 	})
 
 	return nil

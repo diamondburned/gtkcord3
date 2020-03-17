@@ -170,7 +170,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 		// Update the avatar's status and avatar:
 		g.Avatar.CheckUpdate()
 
-		g.find(func(g *Guild) bool {
+		g.Find(func(g *Guild) bool {
 			g.UpdateImage()
 			return false
 		})
@@ -193,13 +193,13 @@ func (guilds *Guilds) onSelect(g *Guild) {
 	go guilds.OnSelect(g)
 }
 
-func (guilds *Guilds) findByID(guildID discord.Snowflake) (*Guild, *GuildFolder) {
-	return guilds.find(func(g *Guild) bool {
+func (guilds *Guilds) FindByID(guildID discord.Snowflake) (*Guild, *GuildFolder) {
+	return guilds.Find(func(g *Guild) bool {
 		return g.ID == guildID
 	})
 }
 
-func (guilds *Guilds) find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
+func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 	for _, v := range guilds.Guilds {
 		switch v := v.(type) {
 		case *Guild:
@@ -230,7 +230,7 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 		return
 	}
 
-	guild, _ := guilds.findByID(ch.GuildID)
+	guild, _ := guilds.FindByID(ch.GuildID)
 	if guild == nil {
 		return
 	}
