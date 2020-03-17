@@ -19,6 +19,7 @@ type DMButton struct {
 func NewPMButton() (dm *DMButton) {
 	semaphore.IdleMust(func() {
 		r, _ := gtk.ListBoxRowNew()
+		r.Show()
 		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
 		r.SetHAlign(gtk.ALIGN_FILL)
 		r.SetVAlign(gtk.ALIGN_CENTER)
@@ -27,12 +28,12 @@ func NewPMButton() (dm *DMButton) {
 
 		s, _ := r.GetStyleContext()
 		s.AddClass("dmbutton")
-		s.AddClass("guild")
 
 		i, _ := gtk.ImageNew()
-		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
+		i.Show()
 		i.SetHAlign(gtk.ALIGN_CENTER)
 		i.SetVAlign(gtk.ALIGN_CENTER)
+		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
 		r.Add(i)
 
 		dm = &DMButton{
@@ -45,9 +46,9 @@ func NewPMButton() (dm *DMButton) {
 }
 
 func (dm *DMButton) setUnread(unread bool) {
-	// var class string
-	// if unread {
-	// 	class = "pinged"
-	// }
-	// gtkutils.DiffClass(&dm.class, class, dm.Style)
+	var class string
+	if unread {
+		class = "pinged"
+	}
+	gtkutils.DiffClass(&dm.class, class, dm.Style)
 }

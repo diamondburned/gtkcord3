@@ -39,7 +39,8 @@ func HeaderDisplay(w gtkutils.ExtendedWidget) {
 	}
 
 	Window.Header.Widget = w
-	Window.Header.HeaderBar.PackStart(w)
+	Window.Header.HeaderBar.SetCustomTitle(w)
+	// Window.Header.HeaderBar.PackStart(w)
 }
 
 // func HeaderCenter(w gtkutils.ExtendedWidget) {

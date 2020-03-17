@@ -65,6 +65,7 @@ func New(s *ningen.State) (m *Container) {
 			}
 
 			p := popup.NewPopover(r)
+			p.SetPosition(gtk.POS_LEFT)
 
 			body := popup.NewStatefulPopupBody(m.state, rw.ID, m.GuildID)
 			body.ParentStyle, _ = p.GetStyleContext()
@@ -73,7 +74,7 @@ func New(s *ningen.State) (m *Container) {
 			})
 
 			p.SetChildren(body)
-			p.Show()
+			p.Popup()
 		})
 	})
 	return

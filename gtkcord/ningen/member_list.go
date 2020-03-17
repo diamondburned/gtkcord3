@@ -82,7 +82,7 @@ func (m *MemberListState) handle(ev *gateway.GuildMemberListUpdate) {
 			length := end + 1
 			growItems(&ml.Items, length)
 
-			for i := 0; i < length-start; i++ {
+			for i := 0; i < length-start && i < len(op.Items); i++ {
 				ml.Items[start+i] = &op.Items[i]
 			}
 

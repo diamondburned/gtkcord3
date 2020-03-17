@@ -76,8 +76,10 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 		})
 
 		l.SetFilterFunc(pcs.filter, 0)
-		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			if len(pcs.Channels) == 0 || pcs.OnSelect == nil {
+		l.Connect("selected-rows-changed", func(l *gtk.ListBox) {
+			var r = l.GetSelectedRow()
+
+			if len(pcs.Channels) == 0 || pcs.OnSelect == nil || r == nil {
 				return
 			}
 

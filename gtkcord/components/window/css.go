@@ -13,6 +13,10 @@ const CSS = `
 		padding: 2px;
 		border-radius: 9999px;
 	}
+	.guilds .status, .popup-user .status {
+		padding: 3px;
+	}
+
 	.status.online {
 		background-color: #43B581;
 	}
@@ -42,7 +46,7 @@ const CSS = `
 		background-color: @theme_base_color;
 	}
 
-	.guild-folder, .guild {
+	.guilds > * {
 		padding-left: 0;
 		padding-right: 0;
 	}
@@ -62,9 +66,12 @@ const CSS = `
 		background-color: alpha(@theme_selected_bg_color, 0.5);
 	}
 
-	.user-info, .popup-grid > *:not(.popup-user):not(.popup-activity) {
-		background-color: @theme_bg_color;
+	.user-info, .popup-grid > *:not(.popup-user):not(.activity) {
+		background-color: shade(@theme_base_color, 0.9);
 		color: @theme_fg_color;
+	}
+	.popup-grid > .activity {
+		background-color: rgba(0, 0, 0, 0.12);
 	}
 
 	.user-info {
@@ -110,7 +117,7 @@ const CSS = `
 	}
 	
 	.guild > image {
-	    box-shadow: 0px 0px 4px -1px rgba(0,0,0,0.5);
+	    /* box-shadow: 0px 0px 4px -1px rgba(0,0,0,0.5); */
 	    border-radius: 50%;
 	}
 	.guild.unread > image {

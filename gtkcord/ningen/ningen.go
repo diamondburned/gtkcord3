@@ -150,6 +150,12 @@ func Ningen(s *state.State) (*State, error) {
 
 				s.Store.MemberSet(ev.GuildID, &it.Member.Member)
 				s.Store.PresenceSet(ev.GuildID, &it.Member.Presence)
+
+				// If the user is the current user, then we store a copy with no
+				// guild. This is useful since popup.Hamburger reads this.
+				if it.Member.User.ID == s.Ready.User.ID {
+					s.Store.PresenceSet(0, &it.Member.Presence)
+				}
 			}
 		}
 	})

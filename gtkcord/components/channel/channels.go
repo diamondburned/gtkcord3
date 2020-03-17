@@ -70,8 +70,10 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 			state:          state,
 		}
 
-		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			if chs.OnSelect == nil || len(chs.Channels) == 0 {
+		cl.Connect("selected-rows-changed", func(l *gtk.ListBox) {
+			var r = l.GetSelectedRow()
+
+			if chs.OnSelect == nil || len(chs.Channels) == 0 || r == nil {
 				return
 			}
 

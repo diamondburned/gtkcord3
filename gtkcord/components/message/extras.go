@@ -241,7 +241,7 @@ func newNormalEmbed(
 			txtv.SetCursorVisible(false)
 			txtv.SetEditable(false)
 			txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-			txtv.SetSizeRequest(EmbedMaxWidth, -1)
+			txtv.SetSizeRequest(-1, -1)
 			embedSetMargin(txtv)
 
 			main.Add(txtv)

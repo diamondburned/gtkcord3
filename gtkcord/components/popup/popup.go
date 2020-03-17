@@ -45,6 +45,9 @@ func NewPopover(relative gtk.IWidget) *Popover {
 		Style:   style,
 	}
 	popover.Connect("closed", func() {
+		popover.Style.RemoveClass(popover.oldClass)
+		popover.oldClass = ""
+
 		popover.Children.Destroy()
 		popover.Children = nil
 	})
@@ -165,6 +168,7 @@ func NewUserPopupBody() *UserPopupBody {
 	l.SetMarginEnd(7)
 	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	l.SetMaxWidthChars(25)
 	b.Add(l)
 
 	return &UserPopupBody{

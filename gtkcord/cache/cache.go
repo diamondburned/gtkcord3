@@ -214,6 +214,9 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	_, err = semaphore.Idle(func() error {
 		p, err := gdk.PixbufNewFromFile(dst)
 		if err != nil {
+			// Cleanup the file:
+			os.Remove(dst)
+
 			return errors.Wrap(err, "Failed to get pixbuf")
 		}
 
@@ -247,38 +250,43 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 
 		if w > 0 && h > 0 {
 			l.Connect("size-prepared", func(_ *glib.Object, imgW, imgH int) {
-				l.SetSize(maxSize(imgW, imgH, w, h))
+				semaphore.IdleMust(func() {
+					l.SetSize(maxSize(imgW, imgH, w, h))
+				})
 			})
 		}
 
 		var p interface{}
 
 		l.Connect("area-prepared", func() {
-			if gif {
-				p, err = l.GetAnimation()
-				if err != nil || p == nil {
-					log.Errorln("Failed to get animation during area-prepared:", err)
-					return
+			semaphore.IdleMust(func() {
+				if gif {
+					p, err = l.GetAnimation()
+					if err != nil || p == nil {
+						log.Errorln("Failed to get animation during area-prepared:", err)
+						return
+					}
+				} else {
+					p, err = l.GetPixbuf()
+					if err != nil || p == nil {
+						log.Errorln("Failed to get pixbuf during area-prepared:", err)
+						return
+					}
 				}
-			} else {
-				p, err = l.GetPixbuf()
-				if err != nil || p == nil {
-					log.Errorln("Failed to get pixbuf during area-prepared:", err)
-					return
-				}
-			}
+			})
 		})
 
 		l.Connect("area-updated", func() {
-			if p == nil {
-				return
-			}
-
-			if gif {
-				semaphore.IdleMust(img.SetFromAnimation, p)
-			} else {
-				semaphore.IdleMust(img.SetFromPixbuf, p)
-			}
+			semaphore.IdleMust(func() {
+				switch {
+				case p == nil:
+					return
+				case gif:
+					img.SetFromAnimation(p.(*gdk.PixbufAnimation))
+				default:
+					img.SetFromPixbuf(p.(*gdk.Pixbuf))
+				}
+			})
 		})
 	})
 

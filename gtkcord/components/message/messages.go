@@ -32,7 +32,9 @@ type Messages struct {
 
 	Scroll      *gtk.ScrolledWindow
 	Viewport    *gtk.Viewport
+	viewAdj     *gtk.Adjustment
 	scrollDelta int32
+	lastHeight  int64
 
 	Messages *gtk.ListBox
 	messages []*Message
@@ -64,6 +66,8 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 		v, _ := gtk.ViewportNew(nil, nil)
 		m.Viewport = v
+		p, _ := v.GetVAdjustment()
+		m.viewAdj = p
 
 		s, _ := gtk.ScrolledWindowNew(nil, nil)
 		m.Scroll = s
@@ -295,14 +299,15 @@ func (m *Messages) Cleanup() {
 }
 
 func (m *Messages) onSizeAlloc() {
-	adj, _ := m.Viewport.GetVAdjustment()
-	// if err != nil {
-	// 	log.Errorln("Failed to get viewport:", err)
+	max := m.viewAdj.GetUpper()
+
+	// if max := int64(max); max == m.lastHeight {
 	// 	return
+	// } else {
+	// 	m.lastHeight = max
 	// }
 
-	max := adj.GetUpper()
-	cur := adj.GetValue() + adj.GetPageSize()
+	cur := m.viewAdj.GetValue() + m.viewAdj.GetPageSize()
 
 	delta := int32(max - cur)
 	atomic.StoreInt32(&m.scrollDelta, delta)
@@ -314,8 +319,7 @@ func (m *Messages) onSizeAlloc() {
 		return
 	}
 
-	adj.SetValue(max)
-	// m.Viewport.SetVAdjustment(adj)
+	m.viewAdj.SetValue(max)
 }
 
 // mainly used to mark something as read when scrolled to the bottom

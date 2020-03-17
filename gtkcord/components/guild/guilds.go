@@ -16,9 +16,10 @@ type Guilds struct {
 	gtkutils.ExtendedWidget
 
 	ListBox  *gtk.ListBox
+	Avatar   *Avatar
 	DMButton *DMButton
-	Guilds   []gtkutils.ExtendedWidget
 
+	Guilds   []gtkutils.ExtendedWidget
 	Current  *Guild
 	OnSelect func(g *Guild)
 }
@@ -101,38 +102,51 @@ func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 
 func initGuilds(g *Guilds, s *ningen.State) {
 	dm := NewPMButton()
-	g.DMButton = dm
 
 	semaphore.IdleMust(func() {
 		gw, _ := gtk.ScrolledWindowNew(nil, nil)
+		gw.Show()
 		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 		g.ExtendedWidget = gw
 
 		l, _ := gtk.ListBoxNew()
+		l.Show()
 		l.SetActivateOnSingleClick(true)
 		gtkutils.InjectCSSUnsafe(l, "guilds", "")
 
 		gw.Add(l)
 		g.ListBox = l
 
-		// Add the button to the first of the list:
-		l.Add(dm)
+		// Create the user button and add it first:
+		a := NewAvatar(s)
+		g.Avatar = a
+		l.Insert(a, -1)
+
+		// Add the button to the second of the list:
+		g.DMButton = dm
+		l.Insert(dm, -1)
 
 		// Add the rest:
 		for _, g := range g.Guilds {
-			l.Add(g)
+			l.Insert(g, -1)
 			g.ShowAll()
 		}
 
 		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			index := r.GetIndex()
-			if index == 0 {
-				go dm.OnClick()
+			var index = r.GetIndex()
+
+			switch {
+			case index < 1:
+				a.OnClick()
 				return
+			case index == 1:
+				go g.DMButton.OnClick()
+				return
+			default:
+				index -= 2
 			}
 
-			index--
-			row := g.Guilds[index]
+			var row = g.Guilds[index]
 
 			// Unselect all guild folders except the current one:
 			for i, r := range g.Guilds {
@@ -152,10 +166,15 @@ func initGuilds(g *Guilds, s *ningen.State) {
 		})
 	})
 
-	go g.find(func(g *Guild) bool {
-		g.UpdateImage()
-		return false
-	})
+	go func() {
+		// Update the avatar's status and avatar:
+		g.Avatar.CheckUpdate()
+
+		g.find(func(g *Guild) bool {
+			g.UpdateImage()
+			return false
+		})
+	}()
 
 	s.AddReadChange(g.TraverseReadState)
 }
@@ -206,6 +225,8 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 		return
 	}
 	if !ch.GuildID.Valid() {
+		// DM:
+		guilds.DMButton.setUnread(unread)
 		return
 	}
 

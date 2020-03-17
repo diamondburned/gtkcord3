@@ -34,7 +34,7 @@ func Pixbuf(sz int) (*gdk.Pixbuf, error) {
 	}
 
 	if sz > 0 {
-		l.SetSize(sz, sz*200/256)
+		l.SetSize(sz, sz)
 	}
 
 	p, err := l.WriteAndReturnPixbuf(b)

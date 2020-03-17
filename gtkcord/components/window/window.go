@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -83,6 +84,12 @@ func Init() error {
 		Window.Closer()
 	})
 
+	l, err := logo.Pixbuf(64)
+	if err != nil {
+		return errors.Wrap(err, "Failed to load logo")
+	}
+	w.SetIcon(l)
+
 	// w.SetVAlign(gtk.ALIGN_CENTER)
 	// w.SetHAlign(gtk.ALIGN_CENTER)
 	// w.SetDefaultSize(500, 250)
@@ -143,6 +150,9 @@ func Display(w gtk.IWidget) {
 	Window.Window.Add(w)
 }
 
+func Show() {
+	Window.Window.Show()
+}
 func ShowAll() {
 	Window.Window.ShowAll()
 }

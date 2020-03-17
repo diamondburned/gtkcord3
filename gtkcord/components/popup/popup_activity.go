@@ -37,15 +37,12 @@ func NewUserPopupActivity() *UserPopupActivity {
 	header.SetSingleLineMode(true)
 	header.SetEllipsize(pango.ELLIPSIZE_END)
 	header.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	header.SetMaxWidthChars(50)
 	gtkutils.Margin4(header, SectionPadding, SectionPadding-3, SectionPadding, SectionPadding)
 
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	main.Add(header)
-	gtkutils.InjectCSSUnsafe(main, "activity", `
-		.activity {
-			background-color: rgba(0, 0, 0, 0.12)
-		}
-	`)
+	gtkutils.InjectCSSUnsafe(main, "activity", "")
 
 	return &UserPopupActivity{
 		Box:     main,
@@ -87,9 +84,13 @@ func (a *UserPopupActivity) UpdateUnsafe(ac discord.Activity) {
 		l, _ := gtk.LabelNew("?")
 		l.SetMarginStart(SectionPadding)
 		l.SetMarginEnd(SectionPadding)
+		l.SetMarginBottom(SectionPadding)
+
 		l.SetEllipsize(pango.ELLIPSIZE_END)
 		l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 		l.SetHAlign(gtk.ALIGN_START)
+		l.SetVAlign(gtk.ALIGN_CENTER)
+		l.SetMaxWidthChars(25)
 
 		a.Details.Add(l)
 

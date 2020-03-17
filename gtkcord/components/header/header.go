@@ -3,6 +3,8 @@ package header
 import (
 	"html"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/controller"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -19,13 +21,16 @@ type Header struct {
 	Hamburger *Hamburger
 
 	// Grid 2, on top of channels
+
+	// Box that contains guild name and separators
+	GuildBox  *gtk.Box
 	GuildName *gtk.Label
-	// GuildButton TODO
 
 	// Grid 3, on top of messages
-	ChannelName *gtk.Label
-	// Separator ---
+	ChannelName  *gtk.Label
 	ChannelTopic *gtk.Label
+
+	Controller *controller.Container
 }
 
 func NewHeader(s *ningen.State) (*Header, error) {
@@ -41,6 +46,8 @@ func newHeader(s *ningen.State) (*Header, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create grid")
 	}
+	g.SetHExpand(true)
+	g.Show()
 
 	/*
 	 * Grid 1
@@ -61,13 +68,18 @@ func newHeader(s *ningen.State) (*Header, error) {
 	 * Grid 2
 	 */
 
+	gb, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	gb.Show()
+	gb.SetVExpand(true)
+	g.PackStart(gb, false, false, 0)
+
 	label, err := gtk.LabelNew("gtkcord3")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create guild name label")
 	}
 	label.SetXAlign(0.0)
 	label.SetMarginStart(15)
-	label.SetSizeRequest(HeaderWidth-15, -1)
+	label.SetSizeRequest(channel.ChannelsWidth-15, -1)
 	label.SetLines(1)
 	label.SetLineWrap(true)
 	label.SetEllipsize(pango.ELLIPSIZE_END)
@@ -75,8 +87,8 @@ func newHeader(s *ningen.State) (*Header, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create ham separator")
 	}
-	g.PackStart(label, false, false, 0)
-	g.PackStart(lblseparator, false, false, 0)
+	gb.PackStart(label, false, false, 0)
+	gb.PackStart(lblseparator, false, false, 0)
 
 	/*
 	 * Grid 3
@@ -105,13 +117,26 @@ func newHeader(s *ningen.State) (*Header, error) {
 	g.PackStart(chname, false, false, 0)
 	g.PackStart(chtopic, false, false, 0)
 
+	// Show all before adding the controller:
+	g.ShowAll()
+
+	/*
+	 * Grid 4
+	 */
+
+	// Button container for controls suck as Search, Members, etc.
+	cont := controller.New()
+	g.PackStart(cont, true, true, 0)
+
 	return &Header{
 		ExtendedWidget: g,
 		Main:           g,
 		Hamburger:      hamburger,
+		GuildBox:       gb,
 		GuildName:      label,
 		ChannelName:    chname,
 		ChannelTopic:   chtopic,
+		Controller:     cont,
 	}, nil
 }
 

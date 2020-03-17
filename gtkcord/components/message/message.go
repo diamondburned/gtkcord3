@@ -461,6 +461,7 @@ func (m *Message) assertContentUnsafe() {
 		m.content = msgTb
 
 		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
+		msgTv.SetHExpand(true)
 		msgTv.SetCursorVisible(false)
 		msgTv.SetEditable(false)
 		msgTv.SetCanFocus(false)

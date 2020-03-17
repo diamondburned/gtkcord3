@@ -22,13 +22,14 @@ func (m *Messages) userMentionPressed(ev md.PressedEvent, user discord.GuildUser
 
 	// Make a new popover relatively to TextView
 	p := popup.NewPopover(ev.TextView)
+	p.SetPosition(gtk.POS_RIGHT)
 	p.SetPointingTo(rect)
 
 	body := popup.NewStatefulPopupBody(m.c, user.ID, m.GuildID)
 	body.ParentStyle, _ = p.GetStyleContext()
 
 	p.SetChildren(body)
-	p.Show()
+	p.Popup()
 }
 
 func (m *Messages) onAvatarClick(msg *Message) {
@@ -38,12 +39,13 @@ func (m *Messages) onAvatarClick(msg *Message) {
 	}
 
 	p := popup.NewPopover(msg.avatar)
+	p.SetPosition(gtk.POS_RIGHT)
 
 	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GuildID)
 	body.ParentStyle, _ = p.GetStyleContext()
 
 	p.SetChildren(body)
-	p.Show()
+	p.Popup()
 }
 
 func (m *Messages) onRightClick(msg *Message, btn *gdk.EventButton) {

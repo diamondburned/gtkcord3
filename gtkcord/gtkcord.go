@@ -16,7 +16,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/members"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -60,6 +59,16 @@ type Application struct {
 	// Main Grid
 	Grid *gtk.Grid
 	cols map[int]gtk.IWidget
+	// <grid>        <item>       <item>
+	//  0            1             2
+	// | Left Grid   | Messages   | Members |
+
+	// Left Grid
+	LeftGrid *gtk.Grid
+	leftCols map[int]gtk.IWidget
+	// <item>     <item>
+	// | Guilds   | Channels
+
 	// <item> <separator> <item> <separator> <item> <separator> <item>
 	//   0      1           2      3           4      5           6
 	// | Guilds           | Channels         | Messages         | Members
@@ -70,19 +79,20 @@ type Application struct {
 	Privates *channel.PrivateChannels
 	Channels *channel.Channels
 	Messages *message.Messages
-	Members  *members.Container
+	Members  *members.Revealer
 
 	// GuildID -> ChannelID; if GuildID == 0 then DM
 	LastAccess map[discord.Snowflake]discord.Snowflake
 	lastAccMut sync.Mutex
 
-	busy sync.Mutex
+	busy sync.RWMutex
 }
 
 // New is not thread-safe.
 func New() (*Application, error) {
 	var a = &Application{
 		cols:       map[int]gtk.IWidget{},
+		leftCols:   map[int]gtk.IWidget{},
 		LastAccess: map[discord.Snowflake]discord.Snowflake{},
 	}
 
@@ -93,6 +103,7 @@ func New() (*Application, error) {
 	}
 	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
 	g.SetRowHomogeneous(true)
+	g.Show()
 	a.Grid = g
 
 	// Instead, use the spinner:
@@ -106,14 +117,6 @@ func New() (*Application, error) {
 	window.ShowAll()
 
 	return a, nil
-}
-
-func (a *Application) setCol(w gtk.IWidget, n int) {
-	if w, ok := a.cols[n]; ok {
-		a.Grid.Remove(w)
-	}
-	a.cols[n] = w
-	a.Grid.Attach(w, n, 0, 1, 1)
 }
 
 func (a *Application) Ready(s *ningen.State) error {
@@ -166,185 +169,86 @@ func (a *Application) Ready(s *ningen.State) error {
 		return errors.Wrap(err, "Failed to make messages")
 	}
 
-	members := members.New(s)
+	memberc := members.New(s)
+	var mrevealer *members.Revealer
+
+	semaphore.IdleMust(func() {
+		// TODO: settings
+		revealed := true
+
+		mrevealer = members.NewRevealer(memberc)
+		mrevealer.SetRevealChild(revealed)
+		mrevealer.BindController(h.Controller)
+	})
 
 	a.Header = h
 	a.Guilds = g
 	a.Channels = c
 	a.Privates = p
 	a.Messages = m
-	a.Members = members
+	a.Members = mrevealer
 
 	// jank shit
-	h.Hamburger.GuildID = &a.Channels.GuildID
+	// h.Hamburger.GuildID = &a.Channels.GuildID
 
 	semaphore.IdleMust(func() {
-		// Set the Guilds view to the grid
-		a.setCol(a.Guilds, 0)
-
 		// Set sizes
 		a.Channels.SetSizeRequest(ChannelWidth, -1)
 
-		// Add in separators
-		a.setCol(newSeparator(), 1)
-		a.setCol(newSeparator(), 3)
-		a.setCol(newSeparator(), 5)
+		// Guilds and Channels grid:
+		g1, _ := gtk.GridNew()
+		g1.Show()
+		g1.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
+		g1.SetRowHomogeneous(true)
+		a.LeftGrid = g1
+
+		// Guilds and Channels revealer:
+		r1, _ := gtk.RevealerNew()
+		r1.SetTransitionDuration(50)
+		r1.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
+		r1.Show()
+		r1.Add(g1)
+
+		// Bind the revealer:
+		h.Hamburger.OnClick = func() {
+			revealed := !r1.GetRevealChild()
+			r1.SetRevealChild(revealed)
+			h.Hamburger.Button.SetActive(revealed)
+
+			if revealed {
+				h.GuildBox.Show()
+			} else {
+				h.GuildBox.Hide()
+			}
+		}
+
+		// Force display the left panel, which toggles it to true:
+		h.Hamburger.OnClick()
+
+		// Add the guilds and the separator right and left of channels:
+		a.LeftGrid.Attach(a.Guilds, 0, 0, 1, 1)
+		a.LeftGrid.Attach(newSeparator(), 1, 0, 1, 1)
+		a.LeftGrid.Attach(newSeparator(), 3, 0, 1, 1)
+
+		// Set the left grid to the main grid:
+		a.Grid.Attach(r1, 0, 0, 1, 1)
 
 		// Message widget placeholder
 		b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		b.Show()
 		b.SetHExpand(true)
 		b.SetVExpand(true)
-		a.setCol(b, 4)
+
+		// Set the message placeholder to the main grid:
+		a.Grid.Attach(b, 1, 0, 1, 1)
 
 		// Display the grid and header
 		window.Display(a.Grid)
 		window.HeaderDisplay(h)
-
-		// Show everything
-		window.ShowAll()
+		window.Show()
 	})
 
 	return nil
-}
-
-func (a *Application) SwitchGuild(g *guild.Guild) {
-	// Load the channel sidebar
-
-	a.changeCol(a.Channels, 2, channel.ChannelsWidth, func() func() bool {
-		cleanup(a.Channels, a.Privates, a.Messages, a.Members)
-
-		return func() bool {
-			err := a.Channels.LoadGuild(g.ID)
-			if err != nil {
-				log.Errorln("Failed to load guild:", err)
-				return false
-			}
-
-			a.Header.UpdateGuild(g.Name)
-			return true
-		}
-	})
-
-	// Load the messages
-
-	var lastCh *channel.Channel
-
-	var chID = a.lastAccess(g.ID, 0)
-	if !chID.Valid() {
-		lastCh = a.Channels.First()
-
-	} else {
-		for _, ch := range a.Channels.Channels {
-			if ch.ID != chID {
-				continue
-			}
-
-			lastCh = ch
-			break
-		}
-	}
-
-	if lastCh != nil {
-		semaphore.Async(a.Channels.ChList.SelectRow, lastCh.Row)
-		a.SwitchChannel(lastCh)
-	}
-
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	// Load the members sidebar
-
-	if err := a.Members.LoadGuild(g.ID); err != nil {
-		log.Println("Can't load members:", err)
-		return
-	}
-	semaphore.IdleMust(a.setCol, a.Members, 6)
-}
-
-func (a *Application) SwitchDM() {
-	a.changeCol(a.Privates, 2, channel.ChannelsWidth, func() func() bool {
-		cleanup(a.Channels, a.Privates, a.Messages, a.Members)
-		semaphore.IdleMust(a.Grid.Remove, a.Members)
-
-		return func() bool {
-			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
-			a.Header.UpdateGuild("Private Messages")
-			return true
-		}
-	})
-
-	c, ok := a.Privates.Channels[a.lastAccess(0, 0).String()]
-	if ok {
-		semaphore.IdleMust(a.Privates.List.SelectRow, c.ListBoxRow)
-		a.SwitchChannel(c)
-	}
-}
-
-type Channel interface {
-	GuildID() discord.Snowflake
-	ChannelID() discord.Snowflake
-	ChannelInfo() (name, topic string)
-}
-
-func (a *Application) SwitchChannel(ch Channel) {
-	a.changeCol(a.Messages, 4, -1, func() func() bool {
-		a.Messages.Cleanup()
-
-		return func() bool {
-			err := a.Messages.Load(ch.ChannelID())
-			if err != nil {
-				log.Errorln("Failed to load messages:", err)
-				return false
-			}
-
-			a.lastAccess(ch.GuildID(), a.Messages.GetChannelID())
-			a.Header.UpdateChannel(ch.ChannelInfo())
-			return true
-		}
-	})
-
-	// Grab the message input's focus:
-	semaphore.IdleMust(a.Messages.Focus)
-}
-
-func (a *Application) changeCol(
-	w gtkutils.ExtendedWidget, n int,
-	spinnerWidth int,
-	cleanup func() func() bool) {
-
-	// Lock
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
-	// Clean up channels
-	fn := cleanup()
-
-	// Add a spinner here
-	semaphore.IdleMust(func() {
-		spinner, _ := animations.NewSizedSpinner(SpinnerSize)
-		spinner.SetSizeRequest(spinnerWidth, -1)
-		a.setCol(spinner, n)
-
-		// Blur the grid
-		a.Grid.SetSensitive(false)
-	})
-	defer semaphore.IdleMust(a.Grid.SetSensitive, true)
-
-	if !fn() {
-		semaphore.IdleMust(func() {
-			sadface, _ := animations.NewSizedSadFace()
-			sadface.SetSizeRequest(spinnerWidth, -1)
-			a.setCol(sadface, n)
-		})
-
-		return
-	}
-
-	// Replace the spinner with the actual channel:
-	semaphore.IdleMust(func() {
-		a.setCol(w, n)
-		w.Show()
-	})
 }
 
 func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake {
@@ -364,11 +268,14 @@ func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake 
 
 func newSeparator() *gtk.Separator {
 	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	s.Show()
 	return s
 }
 
-func cleanup(cleaners ...interface{ Cleanup() }) {
-	for _, cleaner := range cleaners {
-		cleaner.Cleanup()
+func setGridCol(grid *gtk.Grid, gridStore map[int]gtk.IWidget, w gtk.IWidget, n int) {
+	if w, ok := gridStore[n]; ok {
+		grid.Remove(w)
 	}
+	gridStore[n] = w
+	grid.Attach(w, n, 0, 1, 1)
 }
