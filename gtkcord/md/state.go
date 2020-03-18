@@ -9,7 +9,6 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/humanize"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gtk"
@@ -101,9 +100,7 @@ func (s *mdState) switchTree(i int) {
 			code = code[1:] // trim trailing newline
 		}
 
-		semaphore.IdleMust(func() {
-			s.buf.InsertMarkup(s.buf.GetEndIter(), code)
-		})
+		s.buf.InsertMarkup(s.buf.GetEndIter(), code)
 
 	case len(s.matches[i][3].str) > 0:
 		// blockquotes, greentext
@@ -118,7 +115,7 @@ func (s *mdState) switchTree(i int) {
 	case len(s.matches[i][5].str) > 0:
 		s.insertWithTag(
 			s.matches[i][5].str,
-			s.Hyperlink(string(s.matches[i][5].str)),
+			s.hyperlink(string(s.matches[i][5].str)),
 		)
 
 	case len(s.matches[i][9].str) > 0:
@@ -135,7 +132,7 @@ func (s *mdState) switchTreeMessage(i int) {
 	switch {
 	case len(s.matches[i][6].str) > 0:
 		// user mentions
-		s.InsertUserMention(s.matches[i][6].str)
+		s.insertUserMention(s.matches[i][6].str)
 
 	case len(s.matches[i][7].str) > 0:
 		// role mentions
@@ -144,7 +141,7 @@ func (s *mdState) switchTreeMessage(i int) {
 
 	case len(s.matches[i][8].str) > 0:
 		// channel mentions
-		s.InsertChannelMention(s.matches[i][8].str)
+		s.insertChannelMention(s.matches[i][8].str)
 
 	default:
 		s.switchTree(i)
@@ -152,24 +149,22 @@ func (s *mdState) switchTreeMessage(i int) {
 }
 
 func (s *mdState) addEditedStamp(date time.Time) {
-	semaphore.IdleMust(func() {
-		v, err := s.ttt.Lookup("timestamp")
+	v, err := s.ttt.Lookup("timestamp")
+	if err != nil {
+		v, err = gtk.TextTagNew("timestamp")
 		if err != nil {
-			v, err = gtk.TextTagNew("timestamp")
-			if err != nil {
-				log.Panicln("Failed to create a new timestamp tag:", err)
-			}
-
-			v.SetProperty("scale", 0.84)
-			v.SetProperty("scale-set", true)
-			v.SetProperty("foreground", "#808080")
-
-			s.ttt.Add(v)
+			log.Panicln("Failed to create a new timestamp tag:", err)
 		}
 
-		edited := "  (edited " + humanize.TimeAgo(date) + ")"
-		s.buf.InsertWithTag(s.buf.GetEndIter(), edited, v)
-	})
+		v.SetProperty("scale", 0.84)
+		v.SetProperty("scale-set", true)
+		v.SetProperty("foreground", "#808080")
+
+		s.ttt.Add(v)
+	}
+
+	edited := "  (edited " + humanize.TimeAgo(date) + ")"
+	s.buf.InsertWithTag(s.buf.GetEndIter(), edited, v)
 }
 
 func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
@@ -177,9 +172,7 @@ func (s *mdState) insertWithTag(content []byte, tag *gtk.TextTag) {
 		tag = s.tag
 	}
 
-	semaphore.IdleMust(func() {
-		s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
-	})
+	s.buf.InsertWithTag(s.buf.GetEndIter(), string(content), tag)
 }
 
 func (s *mdState) getLastIndex(currentIndex int) int32 {

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -108,9 +107,9 @@ func (s *mdState) setHandler(fn func(PressedEvent)) func(*gtk.TextTag, *gtk.Text
 	}
 }
 
-func (s *mdState) Hyperlink(url string) *gtk.TextTag {
-	return semaphore.IdleMust(s.hyperlink, url).(*gtk.TextTag)
-}
+// func (s *mdState) Hyperlink(url string) *gtk.TextTag {
+// 	return semaphore.IdleMust(s.hyperlink, url).(*gtk.TextTag)
+// }
 
 func (s *mdState) hyperlink(url string) *gtk.TextTag {
 	v, err := s.ttt.Lookup("link_" + url)
@@ -135,7 +134,7 @@ func (s *mdState) hyperlink(url string) *gtk.TextTag {
 	return t
 }
 
-func (s *mdState) InsertUserMention(id []byte) {
+func (s *mdState) insertUserMention(id []byte) {
 	d, err := discord.ParseSnowflake(string(id))
 	if err != nil {
 		s.insertWithTag(id, nil)
@@ -155,7 +154,7 @@ func (s *mdState) InsertUserMention(id []byte) {
 		return
 	}
 
-	t := s.MentionTag("@"+target.ID.String(), func(ev PressedEvent) {
+	t := s.mentionTag("@"+target.ID.String(), func(ev PressedEvent) {
 		if UserPressed != nil {
 			UserPressed(ev, target)
 		}
@@ -174,14 +173,14 @@ func (s *mdState) InsertUserMention(id []byte) {
 	s.insertWithTag([]byte("@"+name), t)
 }
 
-func (s *mdState) InsertChannelMention(id []byte) {
+func (s *mdState) insertChannelMention(id []byte) {
 	d, err := discord.ParseSnowflake(string(id))
 	if err != nil {
 		s.insertWithTag(id, nil)
 		return
 	}
 
-	c, err := s.d.Channel(d)
+	c, err := s.d.Store.Channel(d)
 	if err != nil {
 		s.insertWithTag(id, nil)
 		return
@@ -189,7 +188,7 @@ func (s *mdState) InsertChannelMention(id []byte) {
 
 	var channel = *c
 
-	t := s.MentionTag("#"+c.ID.String(), func(ev PressedEvent) {
+	t := s.mentionTag("#"+c.ID.String(), func(ev PressedEvent) {
 		if ChannelPressed != nil {
 			ChannelPressed(ev, channel)
 		}
@@ -198,9 +197,9 @@ func (s *mdState) InsertChannelMention(id []byte) {
 	s.insertWithTag([]byte("#"+c.Name), t)
 }
 
-func (s *mdState) MentionTag(key string, asyncH func(PressedEvent)) *gtk.TextTag {
-	return semaphore.IdleMust(s.mentionTag, key, asyncH).(*gtk.TextTag)
-}
+// func (s *mdState) MentionTag(key string, asyncH func(PressedEvent)) *gtk.TextTag {
+// 	return semaphore.IdleMust(s.mentionTag, key, asyncH).(*gtk.TextTag)
+// }
 
 func (s *mdState) mentionTag(key string, asyncH func(PressedEvent)) *gtk.TextTag {
 	v, err := s.ttt.Lookup(key)
@@ -219,9 +218,9 @@ func (s *mdState) mentionTag(key string, asyncH func(PressedEvent)) *gtk.TextTag
 	return t
 }
 
-func (s *mdState) InlineEmojiTag() *gtk.TextTag {
-	return semaphore.IdleMust(s.inlineEmojiTag).(*gtk.TextTag)
-}
+// func (s *mdState) InlineEmojiTag() *gtk.TextTag {
+// 	return semaphore.IdleMust(s.inlineEmojiTag).(*gtk.TextTag)
+// }
 
 func (s *mdState) inlineEmojiTag() *gtk.TextTag {
 	t, err := s.ttt.Lookup("emoji")
@@ -241,13 +240,13 @@ func (s *mdState) inlineEmojiTag() *gtk.TextTag {
 	return t
 }
 
-func (s *mdState) Tag(attr Attribute) *gtk.TextTag {
-	return s.ColorTag(attr, "")
-}
+// func (s *mdState) tag(attr Attribute) *gtk.TextTag {
+// 	return s.colorTag(attr, "")
+// }
 
-func (s *mdState) ColorTag(attr Attribute, color string) *gtk.TextTag {
-	return semaphore.IdleMust(s.colorTag, attr, color).(*gtk.TextTag)
-}
+// func (s *mdState) ColorTag(attr Attribute, color string) *gtk.TextTag {
+// 	return semaphore.IdleMust(s.colorTag, attr, color).(*gtk.TextTag)
+// }
 
 func (s *mdState) colorTag(attr Attribute, color string) *gtk.TextTag {
 	var key = attr.StringInt() + color
@@ -301,28 +300,28 @@ func (s *mdState) colorTag(attr Attribute, color string) *gtk.TextTag {
 func (s *mdState) tagAdd(attr Attribute) *gtk.TextTag {
 	if s.attr != s.attr|attr {
 		s.attr |= attr
-		s.tag = s.ColorTag(s.attr, s.color)
+		s.tag = s.colorTag(s.attr, s.color)
 	}
 	return s.tag
 }
 
 func (s *mdState) tagRemove(attr Attribute) *gtk.TextTag {
 	s.attr &= ^attr
-	s.tag = s.ColorTag(s.attr, s.color)
+	s.tag = s.colorTag(s.attr, s.color)
 	return s.tag
 }
 
 func (s *mdState) tagReset() *gtk.TextTag {
 	s.attr = 0
 	s.color = ""
-	s.tag = s.ColorTag(s.attr, s.color)
+	s.tag = s.colorTag(s.attr, s.color)
 	return s.tag
 }
 
 func (s *mdState) tagSetColor(color string) *gtk.TextTag {
 	if s.color != color {
 		s.color = color
-		s.tag = s.ColorTag(s.attr, s.color)
+		s.tag = s.colorTag(s.attr, s.color)
 	}
 	return s.tag
 }
@@ -330,14 +329,14 @@ func (s *mdState) tagSetColor(color string) *gtk.TextTag {
 func (s *mdState) tagSetAttrAndColor(attr Attribute, color string) *gtk.TextTag {
 	s.color = color
 	s.attr = attr
-	s.tag = s.ColorTag(s.attr, s.color)
+	s.tag = s.colorTag(s.attr, s.color)
 	return s.tag
 }
 
 func (s *mdState) tagWith(attr Attribute) *gtk.TextTag {
-	return s.ColorTag(s.attr|attr, s.color)
+	return s.colorTag(s.attr|attr, s.color)
 }
 
 func (s *mdState) tagWithColor(color string) *gtk.TextTag {
-	return s.ColorTag(s.attr, color)
+	return s.colorTag(s.attr, color)
 }

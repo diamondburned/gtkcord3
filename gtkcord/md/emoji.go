@@ -6,7 +6,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 func EmojiURL(emojiID string, animated bool) string {
@@ -30,14 +29,14 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 		sz = LargeSize
 	}
 
-	iter := semaphore.IdleMust(s.buf.GetEndIter).(*gtk.TextIter)
+	iter := s.buf.GetEndIter()
 
 	i := icons.GetIcon("image-missing", sz)
 	if i == nil {
 		e, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, sz, sz)
 		if err != nil {
 			log.Errorln("Markdown: Failed to make placeholder pixbuf:", err)
-			semaphore.IdleMust(s.buf.Insert, iter, "[?]")
+			s.buf.Insert(iter, "[?]")
 			return
 		}
 		// set the empty pixbuf
@@ -45,16 +44,16 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 	}
 
 	// Preserve position:
-	lastIndex := semaphore.IdleMust(iter.GetLineIndex).(int)
-	lastLine := semaphore.IdleMust(iter.GetLine).(int)
+	lastIndex := iter.GetLineIndex()
+	lastLine := iter.GetLine()
 
 	// Insert Pixbuf after s.prev:
-	semaphore.IdleMust(s.buf.InsertPixbuf, iter, i)
+	s.buf.InsertPixbuf(iter, i)
 
 	// Add to the waitgroup, so we know when to put the state back.
 	s.iterWg.Add(1)
 
-	emojiTag := s.InlineEmojiTag()
+	emojiTag := s.inlineEmojiTag()
 
 	go func() {
 		defer s.iterWg.Done()

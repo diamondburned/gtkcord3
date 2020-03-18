@@ -112,25 +112,24 @@ func ParseMessage(d *ningen.State, m *discord.Message, md []byte, buf *gtk.TextB
 
 		// Wipe the buffer clean
 		buf.Delete(buf.GetStartIter(), buf.GetEndIter())
+
+		for i := 0; i < len(s.matches); i++ {
+			s.prev = md[s.last:s.matches[i][0].from]
+			s.last = s.getLastIndex(i)
+
+			s.insertWithTag(s.prev, nil)
+			tree(i)
+		}
+
+		s.insertWithTag(md[s.last:], nil)
+
+		// Check if the message is edited:
+		if m != nil && content && m.EditedTimestamp.Valid() {
+			s.addEditedStamp(m.EditedTimestamp.Time())
+		}
 	})
 
-	for i := 0; i < len(s.matches); i++ {
-		s.prev = md[s.last:s.matches[i][0].from]
-		s.last = s.getLastIndex(i)
-
-		s.insertWithTag(s.prev, nil)
-		tree(i)
-	}
-
-	s.insertWithTag(md[s.last:], nil)
-
-	// Check if the message is edited:
-	if m != nil && content && m.EditedTimestamp.Valid() {
-		s.addEditedStamp(m.EditedTimestamp.Time())
-	}
-
 	s.iterMu.Unlock()
-
 	s.iterWg.Wait()
 
 	s.d = nil
