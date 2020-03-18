@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 )
 
 const (
@@ -241,7 +242,13 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 
 	message.author.SetMarkup(
 		`<span weight="bold">` + html.EscapeString(m.Author.Username) + `</span>`)
+	message.author.SetTooltipText(m.Author.Username)
 	message.author.SetSingleLineMode(true)
+	message.author.SetLineWrap(true)
+	message.author.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	message.author.SetMaxWidthChars(100)
+	message.author.SetEllipsize(pango.ELLIPSIZE_END)
+	message.author.SetXAlign(0.0)
 
 	message.rightTop.Add(message.author)
 	gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
@@ -389,6 +396,8 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 	if n.Nick != "" {
 		name = html.EscapeString(n.Nick)
 	}
+
+	m.author.SetTooltipMarkup(name)
 
 	if gID.Valid() {
 		if g, err := s.Store.Guild(gID); err == nil {

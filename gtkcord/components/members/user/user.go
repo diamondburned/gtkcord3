@@ -40,11 +40,14 @@ func New() *Container {
 	l, _ := gtk.LabelNew("")
 	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.Show()
+	l.SetXAlign(0.0)
 	l.SetHAlign(gtk.ALIGN_START)
 	labelBox.Add(l)
 
 	a, _ := gtk.ImageNew()
 	a.Show()
+	a.SetVAlign(gtk.ALIGN_CENTER)
+	a.SetHAlign(gtk.ALIGN_CENTER)
 	gtkutils.ImageSetIcon(a, "user-status-pending-symbolic", AvatarSize)
 	gtkutils.Margin4(a, 2, 2, 8, 0)
 
