@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/gtkcord3/keyring"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/pkg/errors"
+	"github.com/pkg/profile"
 )
 
 func init() {
@@ -87,7 +88,7 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
-	// defer profile.Start(profile.BlockProfile).Stop()
+	defer profile.Start(profile.BlockProfile).Stop()
 
 	// Spawn a new window:
 	if err := window.Init(); err != nil {

@@ -29,7 +29,7 @@ var Client = http.Client{
 
 // DO NOT TOUCH.
 const (
-	CacheHash   = "trapsarecute"
+	CacheHash   = "astolfo"
 	CachePrefix = "gtkcord3"
 )
 
@@ -65,9 +65,9 @@ func cleanUpCache() {
 	}
 }
 
-func TransformURL(s string, w, h int) string {
+func TransformURL(s string, w, h int, gif bool) string {
 	var sizeSuffix string
-	if w > 0 && h > 0 {
+	if w > 0 && h > 0 && gif {
 		sizeSuffix = "_sz" + strconv.Itoa(w) + "x" + strconv.Itoa(h)
 	}
 
@@ -99,11 +99,12 @@ func SanitizeString(str string) string {
 
 var fileIO sync.Mutex
 
-func download(url string, pp []Processor) ([]byte, error) {
+func download(url string, pp []Processor, gif bool) ([]byte, error) {
 	r, err := Client.Get(url)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to GET")
 	}
+	defer r.Body.Close()
 
 	if r.StatusCode < 200 || r.StatusCode > 299 {
 		return nil, fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
@@ -119,19 +120,23 @@ func download(url string, pp []Processor) ([]byte, error) {
 	}
 
 	if len(pp) > 0 {
-		b, err = Process(b, pp)
+		if gif {
+			b, err = ProcessAnimation(b, pp)
+		} else {
+			b, err = Process(b, pp)
+		}
 	}
 
-	return b, nil
+	return b, err
 }
 
 // get doesn't check if the file exists
-func get(url, dst string, pp []Processor) error {
+func get(url, dst string, pp []Processor, gif bool) error {
 	// Unlock FileIO mutex to allow concurrent requests.
 	fileIO.Unlock()
-	b, err := download(url, pp)
-	fileIO.Lock()
+	defer fileIO.Lock()
 
+	b, err := download(url, pp, gif)
 	if err != nil {
 		return err
 	}
@@ -149,28 +154,28 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
 	// Transform URL:
-	dst := TransformURL(url, w, h)
+	dst := TransformURL(url, w, h, false)
 
 	fileIO.Lock()
 	defer fileIO.Unlock()
 
 	// Try and get the Pixbuf from file:
-	p, err := gdk.PixbufNewFromFile(dst)
+	p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
 	if err == nil {
 		return p, nil
 	}
 
 	// If resize is requested, we resize using Go's instead.
-	if w > 0 && h > 0 {
-		pp = append(pp, Resize(w, h))
-	}
+	// if w > 0 && h > 0 {
+	// 	pp = append(pp, Resize(w, h))
+	// }
 
 	// Get the image into file (dst)
-	if err := get(url, dst, pp); err != nil {
+	if err := get(url, dst, pp, false); err != nil {
 		return nil, err
 	}
 
-	p, err = gdk.PixbufNewFromFile(dst)
+	p, err = gdk.PixbufNewFromFileAtSize(dst, w, h)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get pixbuf")
 	}
@@ -184,43 +189,60 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 
 func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
 	// Transform URL:
-	dst := TransformURL(url, w, h)
+	gif := strings.Contains(url, "gif")
+	dst := TransformURL(url, w, h, gif)
 
 	fileIO.Lock()
 	defer fileIO.Unlock()
 
 	// Try and get the Pixbuf from file:
 	_, err := semaphore.Idle(func() error {
-		p, err := gdk.PixbufNewFromFile(dst)
-		if err == nil {
-			img.SetFromPixbuf(p)
+		if !gif {
+			p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+			if err == nil {
+				img.SetFromPixbuf(p)
+			}
+			return errors.Wrap(err, "Failed to get pixbuf before downloading")
+		} else {
+			p, err := gdk.PixbufAnimationNewFromFile(dst)
+			if err == nil {
+				img.SetFromAnimation(p)
+			}
+			return errors.Wrap(err, "Failed to get animation before downloading")
 		}
-		return err
 	})
 	if err == nil {
 		return nil
 	}
 
 	// If resize is requested, we resize using Go's instead.
-	if w > 0 && h > 0 {
+	// Only use this for GIF animations.
+	if w > 0 && h > 0 && gif {
 		pp = append(pp, Resize(w, h))
 	}
 
 	// Get the image into file (dst)
-	if err := get(url, dst, pp); err != nil {
+	if err := get(url, dst, pp, gif); err != nil {
 		return err
 	}
 
 	_, err = semaphore.Idle(func() error {
-		p, err := gdk.PixbufNewFromFile(dst)
-		if err != nil {
-			// Cleanup the file:
-			os.Remove(dst)
-
-			return errors.Wrap(err, "Failed to get pixbuf")
+		if !gif {
+			p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+			if err != nil {
+				os.Remove(dst)
+				return errors.Wrap(err, "Failed to get pixbuf after downloading")
+			}
+			img.SetFromPixbuf(p)
+		} else {
+			p, err := gdk.PixbufAnimationNewFromFile(dst)
+			if err != nil {
+				os.Remove(dst)
+				return errors.Wrap(err, "Failed to get animation after downloading")
+			}
+			img.SetFromAnimation(p)
 		}
 
-		img.SetFromPixbuf(p)
 		return nil
 	})
 	return err

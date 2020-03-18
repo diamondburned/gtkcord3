@@ -7,27 +7,20 @@ import (
 	"image/gif"
 	"image/png"
 	"io"
-	"sync"
 
 	_ "image/jpeg"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/icons"
-	"github.com/diamondburned/gtkcord3/log"
 	"github.com/disintegration/imaging"
 	"github.com/pkg/errors"
 )
 
-var bufPool = sync.Pool{
-	New: func() interface{} { return new(bytes.Buffer) },
-}
-
 type Processor func(image.Image) image.Image
 
-func ProcessAnimation(data []byte, processors ...Processor) []byte {
+func ProcessAnimation(data []byte, processors []Processor) ([]byte, error) {
 	GIF, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
-		log.Errorln("Go: Failed to decode GIF:", err)
-		return data
+		return nil, errors.Wrap(err, "Failed to decode GIF")
 	}
 
 	// Encode the GIF frame-by-frame
@@ -46,16 +39,19 @@ func ProcessAnimation(data []byte, processors ...Processor) []byte {
 		}
 	}
 
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	defer buf.Reset()
-
-	if err := gif.EncodeAll(buf, GIF); err != nil {
-		log.Errorln("Go: Failed to encode GIF:", err)
-		return data
+	if len(GIF.Image) > 0 {
+		bounds := GIF.Image[0].Bounds()
+		GIF.Config.Width = bounds.Dx()
+		GIF.Config.Height = bounds.Dy()
 	}
 
-	return buf.Bytes()
+	var buf = new(bytes.Buffer)
+
+	if err := gif.EncodeAll(buf, GIF); err != nil {
+		return nil, errors.Wrap(err, "Failed to encode GIF")
+	}
+
+	return buf.Bytes(), nil
 }
 
 var pngEncoder = png.Encoder{
@@ -77,9 +73,7 @@ func ProcessStream(r io.Reader, processors []Processor) ([]byte, error) {
 		img = proc(img)
 	}
 
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	defer buf.Reset()
+	var buf = new(bytes.Buffer)
 
 	if err := pngEncoder.Encode(buf, img); err != nil {
 		return nil, errors.Wrap(err, "Failed to encode")
@@ -99,7 +93,7 @@ func Resize(maxW, maxH int) Processor {
 
 		w, h := maxSize(imgW, imgH, maxW, maxH)
 
-		return imaging.Resize(img, w, h, imaging.Linear)
+		return imaging.Resize(img, w, h, imaging.MitchellNetravali)
 	}
 }
 
@@ -108,7 +102,11 @@ func Round(img image.Image) image.Image {
 	oldbounds := img.Bounds()
 	const scale = 2
 
-	img = imaging.Resize(img, oldbounds.Dx()*scale, oldbounds.Dy()*scale, imaging.Lanczos)
+	// only bother anti-aliasing if it's not a paletted image.
+	var _, paletted = img.(*image.Paletted)
+	if !paletted {
+		img = imaging.Resize(img, oldbounds.Dx()*scale, oldbounds.Dy()*scale, imaging.MitchellNetravali)
+	}
 
 	r := img.Bounds().Dx() / 2
 
@@ -127,7 +125,11 @@ func Round(img image.Image) image.Image {
 
 	roundTo(img, dst, r)
 
-	return imaging.Resize(img, oldbounds.Dx(), oldbounds.Dy(), imaging.Lanczos)
+	if paletted {
+		return dst
+	}
+
+	return imaging.Resize(dst, oldbounds.Dx(), oldbounds.Dy(), imaging.MitchellNetravali)
 }
 
 // RoundTo round-crops an image
