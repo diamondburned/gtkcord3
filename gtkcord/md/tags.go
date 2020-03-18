@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -38,6 +39,8 @@ func TagAttribute(tag []byte) Attribute {
 		return AttrBold | AttrItalics
 	case bytes.Equal(tag, []byte("~~")):
 		return AttrStrikethrough
+	case bytes.Equal(tag, []byte("||")):
+		return AttrSpoiler
 	case bytes.Equal(tag, []byte("`")):
 		return AttrMonospace
 	}
@@ -268,6 +271,17 @@ func (s *mdState) colorTag(attr Attribute, color string) *gtk.TextTag {
 	}
 
 	// TODO: hidden unless on hover
+	if attr.Has(AttrSpoiler) {
+		t.SetProperty("foreground", "rgba(0, 0, 0, 0)") // transparent
+		t.SetProperty("background", "#202225")
+
+		t.Connect("event", func(t *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
+			if gtkutils.EventIsLeftClick(ev) {
+				t.SetProperty("foreground-set", false)
+				t.SetProperty("background-set", false)
+			}
+		})
+	}
 
 	if attr.Has(AttrBold) {
 		t.SetProperty("weight", pango.WEIGHT_BOLD)
