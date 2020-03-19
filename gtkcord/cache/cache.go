@@ -160,7 +160,7 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 	// defer fileIO.Unlock()
 
 	// Try and get the Pixbuf from file:
-	p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+	p, err := gdk.PixbufNewFromFileAtScale(dst, w, h, true)
 	if err == nil {
 		return p, nil
 	}
@@ -175,7 +175,7 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 		return nil, err
 	}
 
-	p, err = gdk.PixbufNewFromFileAtSize(dst, w, h)
+	p, err = gdk.PixbufNewFromFileAtScale(dst, w, h, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get pixbuf")
 	}
@@ -197,7 +197,7 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 
 	// Try and get the Pixbuf from file:
 	if !gif {
-		p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+		p, err := gdk.PixbufNewFromFileAtScale(dst, w, h, true)
 		if err == nil {
 			semaphore.IdleMust(img.SetFromPixbuf, p)
 			return nil
@@ -222,7 +222,7 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	}
 
 	if !gif {
-		p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+		p, err := gdk.PixbufNewFromFileAtScale(dst, w, h, true)
 		if err != nil {
 			os.Remove(dst)
 			return errors.Wrap(err, "Failed to get pixbuf after downloading")
