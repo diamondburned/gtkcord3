@@ -16,7 +16,6 @@ func init() {
 	gateway.Presence = &gateway.UpdateStatusData{
 		Status: discord.OnlineStatus,
 	}
-	gateway.WSRetries = 2
 	gateway.WSTimeout = 5 * time.Second
 	gateway.WSDebug = func(v ...interface{}) {
 		log.Debugln(v...)
@@ -255,13 +254,9 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 }
 
 func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
-	log.Println("Before ChannelMuted")
-
 	if s.ChannelMuted(channelID) {
 		return nil
 	}
-
-	log.Println("Before ReadMutex")
 
 	s.readMutex.RLock()
 	defer s.readMutex.RUnlock()

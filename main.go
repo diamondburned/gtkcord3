@@ -20,7 +20,11 @@ import (
 	_ "net/http/pprof"
 )
 
+var profile bool
+
 func init() {
+	flag.BoolVar(&profile, "prof", false, "Enable the profiler")
+
 	// AGGRESSIVE GC
 	debug.SetGCPercent(50)
 }
@@ -108,11 +112,11 @@ func main() {
 		log.Fatalln("Failed to login:", err)
 	}
 
-	if !log.Quiet {
+	if profile {
 		// Profiler
 		runtime.SetMutexProfileFraction(5)   // ???
 		runtime.SetBlockProfileRate(5000000) // 5ms
-		go log.Println(http.ListenAndServe("localhost:6969", nil))
+		go http.ListenAndServe("localhost:6969", nil)
 	}
 
 	// Block until gtkcord dies:

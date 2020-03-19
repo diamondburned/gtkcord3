@@ -83,7 +83,6 @@ func Init() error {
 
 	w.Connect("destroy", func() {
 		gtk.MainQuit()
-		Window.Closer()
 	})
 
 	l, err := logo.Pixbuf(64)
@@ -126,7 +125,8 @@ func Init() error {
 		runtime.LockOSThread()
 		gtk.Main()
 
-		close(Window.done)
+		Window.Closer()
+		Window.done <- struct{}{}
 	}()
 
 	return nil
