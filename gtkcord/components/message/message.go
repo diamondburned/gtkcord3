@@ -148,24 +148,8 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 
 	gtkutils.ImageSetIcon(avatar, "user-info", AvatarSize)
 
-	style, _ := row.GetStyleContext()
+	style, _ := main.GetStyleContext()
 	style.AddClass("message")
-	gtkutils.AddCSSUnsafe(style, `
-		.message {
-			padding: 0;
-		}
-	`)
-
-	// Set the message's underlying box style:
-	gtkutils.InjectCSSUnsafe(main, "", `
-		.message > box {
-			border-left: 2px solid transparent;
-		}
-		.message.mentioned > box {
-			border-left: 2px solid rgb(250, 166, 26);
-			background-color: rgba(250, 166, 26, 0.05);
-		}
-	`)
 
 	message = &Message{
 		Nonce:     m.Nonce,
@@ -195,11 +179,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.ListBoxRow.Add(mainEv)
 
 	// On message (which is in event box) right click:
-	mainEv.Connect("button_release_event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
-		if message.OnRightClick == nil {
-			return false
-		}
-
+	mainEv.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
 		btn := gdk.EventButtonNewFromEvent(ev)
 		if btn.Button() != gdk.BUTTON_SECONDARY {
 			return false
@@ -214,21 +194,17 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.rightBottom.SetHExpand(true)
 	message.rightBottom.SetMarginBottom(5)
 	message.rightBottom.SetMarginEnd(AvatarPadding * 2)
-	message.rightBottom.Connect("size-allocate", func() {
-		// Hack to force Gtk to recalculate size on changes
-		message.rightBottom.SetVExpand(true)
-		message.rightBottom.SetVExpand(false)
-	})
+	// message.rightBottom.Connect("size-allocate", func() {
+	// 	// Hack to force Gtk to recalculate size on changes
+	// 	message.rightBottom.SetVExpand(true)
+	// 	message.rightBottom.SetVExpand(false)
+	// })
 
 	message.avatarEv.SetMarginStart(AvatarPadding * 2)
 	message.avatarEv.SetMarginEnd(AvatarPadding)
 	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 	message.avatarEv.Add(message.avatar)
 	message.avatarEv.Connect("button_release_event", func(_ *gtk.EventBox, ev *gdk.Event) {
-		if message.OnUserClick == nil {
-			return
-		}
-
 		btn := gdk.EventButtonNewFromEvent(ev)
 		if btn.Button() != gdk.BUTTON_PRIMARY {
 			return
@@ -261,14 +237,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.timestamp.SetMarginTop(2)
 	message.timestamp.SetMarginStart(AvatarPadding)
 	message.timestamp.SetMarginEnd(AvatarPadding)
-	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", `
-		.message.condensed .timestamp {
-			opacity: 0;
-		}
-		.message.condensed:hover .timestamp {
-			opacity: 1;
-		}
-	`)
+	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", "")
 
 	message.right.Add(message.rightTop)
 

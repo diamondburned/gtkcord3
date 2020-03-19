@@ -30,7 +30,7 @@ type Container struct {
 	lastStatusClass string
 }
 
-// thread-safe
+// NOT thread-safe
 func New() *Container {
 	labelBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	labelBox.SetMarginStart(8)

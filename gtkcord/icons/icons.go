@@ -55,30 +55,27 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 	return pb
 }
 
-// func GetIconUnsafe(icon string, size int) *gdk.Pixbuf {
-// 	var key = icon + "#" + strconv.Itoa(size)
+func GetIconUnsafe(icon string, size int) *gdk.Pixbuf {
+	var key = icon + "#" + strconv.Itoa(size)
 
-// 	iconMu.Lock()
-// 	defer iconMu.Unlock()
+	if IconTheme == nil {
+		IconTheme, _ = gtk.IconThemeGetDefault()
+		iconMap = map[string]*gdk.Pixbuf{}
+	}
 
-// 	if IconTheme == nil {
-// 		IconTheme, _ = gtk.IconThemeGetDefault()
-// 		iconMap = map[string]*gdk.Pixbuf{}
-// 	}
+	if v, ok := iconMap[key]; ok {
+		p, _ := gdk.PixbufCopy(v)
+		return p
+	}
 
-// 	if v, ok := iconMap[key]; ok {
-// 		p, _ := gdk.PixbufCopy(v)
-// 		return p
-// 	}
+	pb, err := IconTheme.LoadIcon(icon, size, gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
+	if err != nil {
+		log.Fatalln("Failed to load icon", icon)
+	}
 
-// 	pb, err := IconTheme.LoadIcon(icon, size, gtk.IconLookupFlags(gtk.ICON_LOOKUP_FORCE_SIZE))
-// 	if err != nil {
-// 		log.Fatalln("Failed to load icon", icon)
-// 	}
-
-// 	iconMap[key] = pb
-// 	return pb
-// }
+	iconMap[key] = pb
+	return pb
+}
 
 func FromPNG(b64 string) image.Image {
 	b, err := base64.RawStdEncoding.DecodeString(b64)

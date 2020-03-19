@@ -248,6 +248,7 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 			message := &messages[i]
 
 			w := newMessageUnsafe(m.c, message)
+			w.updateAuthor(m.c, message.GuildID, message.Author)
 			m.insert(w)
 		}
 	})
@@ -256,15 +257,9 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	m.acked = false
 
 	// Iterate backwards, from latest to earliest.
-	semaphore.IdleMust(func() {
-		for i := len(m.messages) - 1; i >= 0; i-- {
-			w := m.messages[i]
-			message := &messages[i]
-
-			w.updateAuthor(m.c, message.GuildID, message.Author)
-			go w.UpdateExtras(m.c, message)
-		}
-	})
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		go m.messages[i].UpdateExtras(m.c, &messages[i])
+	}
 
 	m.resetting = false
 
@@ -378,6 +373,10 @@ func (m *Messages) fetchMore() {
 	defer m.fetchingMore.Set(false)
 	defer m.guard.Unlock()
 
+	if len(m.messages) < m.fetch {
+		return
+	}
+
 	// Grab the first ID
 	first := m.messages[0].ID
 
@@ -483,7 +482,7 @@ func (m *Messages) Insert(message *discord.Message) {
 		w.updateAuthor(m.c, message.GuildID, message.Author)
 	})
 
-	w.UpdateExtras(m.c, message)
+	go w.UpdateExtras(m.c, message)
 }
 
 // not thread safe

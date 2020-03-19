@@ -14,19 +14,16 @@ import (
 // func (a *Application)
 
 func (a *Application) SwitchGuild(g *guild.Guild) {
-	a.busy.Lock()
-	if a.Channels.GuildID == g.ID {
-		a.busy.Unlock()
-		return
-	}
-	a.busy.Unlock()
-
 	a.changeCol(columnChange{
 		Widget: a.Channels,
 		Width:  channel.ChannelsWidth,
-		Setter: func(wold, wnew gtk.IWidget) {
-			a.LeftGrid.Remove(wold)
-			a.LeftGrid.Attach(wnew, 2, 0, 1, 1)
+		Checker: func() bool {
+			// We just check if the guild ID matches that in Messages. It
+			// shouldn't.
+			return a.Messages.GuildID != g.ID
+		},
+		Setter: func(w gtk.IWidget) {
+			a.setLeftGridCol(w, 2)
 		},
 		Cleaner: func() {
 			cleanup(a.Channels, a.Privates, a.Messages, a.Members)
@@ -41,10 +38,6 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 			return true
 		},
 		After: func() {
-
-			a.busy.Lock()
-			defer a.busy.Unlock()
-
 			if err := a.Members.LoadGuild(g.ID); err != nil {
 				log.Println("Can't load members:", err)
 				return
@@ -83,9 +76,13 @@ func (a *Application) SwitchDM() {
 	a.changeCol(columnChange{
 		Widget: a.Privates,
 		Width:  channel.ChannelsWidth,
-		Setter: func(wold, wnew gtk.IWidget) {
-			a.LeftGrid.Remove(wold)
-			a.LeftGrid.Attach(wnew, 2, 0, 1, 1)
+		Checker: func() bool {
+			// If the guildID is valid, that means the channel does have a
+			// guild, so we're not in DMs.
+			return a.Messages.GuildID.Valid()
+		},
+		Setter: func(w gtk.IWidget) {
+			a.setLeftGridCol(w, 2)
 		},
 		Cleaner: func() {
 			cleanup(a.Channels, a.Privates, a.Messages, a.Members)
@@ -110,9 +107,11 @@ func (a *Application) SwitchChannel(ch Channel) {
 	a.changeCol(columnChange{
 		Widget: a.Messages,
 		Width:  -1,
-		Setter: func(wold, wnew gtk.IWidget) {
-			a.Grid.Remove(wold)
-			a.Grid.Attach(wnew, 1, 0, 1, 1)
+		Checker: func() bool {
+			return a.Messages.ChannelID != ch.ChannelID()
+		},
+		Setter: func(w gtk.IWidget) {
+			a.setGridCol(w, 1)
 		},
 		Cleaner: func() {
 			a.Messages.Cleanup()
@@ -137,38 +136,44 @@ func (a *Application) SwitchChannel(ch Channel) {
 type columnChange struct {
 	Widget  gtkutils.ExtendedWidget
 	Width   int
-	Setter  func(wold, wnew gtk.IWidget) // thread-safe
+	Checker func() bool            // true == switch
+	Setter  func(wnew gtk.IWidget) // thread-safe
 	Cleaner func()
 	Loader  func() bool
 	After   func() // only if succeed
 }
 
 func (a *Application) changeCol(c columnChange) {
+	// Blur the entire grid before the mutex, for the loading effects.
+	semaphore.IdleMust(a.Grid.SetSensitive, false)
+	defer semaphore.IdleMust(a.Grid.SetSensitive, true)
+
 	// Lock
 	a.busy.Lock()
 	defer a.busy.Unlock()
 
+	if !c.Checker() {
+		return
+	}
+
 	// Clean up channels
 	c.Cleaner()
 
-	// Add a spinner here
-	var spinner gtkutils.WidgetSizeRequester
+	// We're not adding a spinner anymore. The message view now loads so fast a
+	// spinner is practically useless and is more likely to induce epilepsy than
+	// looking cool.
 
-	semaphore.IdleMust(func() {
-		spinner, _ = animations.NewSizedSpinner(SpinnerSize)
-		spinner.SetSizeRequest(c.Width, -1)
-		c.Setter(c.Widget, spinner)
-
-		// Blur the grid
-		a.Grid.SetSensitive(false)
-	})
-	defer semaphore.IdleMust(a.Grid.SetSensitive, true)
+	// semaphore.IdleMust(func() {
+	// 	spinner, _ := animations.NewSizedSpinner(SpinnerSize)
+	// 	spinner.SetSizeRequest(c.Width, -1)
+	// 	c.Setter(spinner)
+	// })
 
 	if !c.Loader() {
 		semaphore.IdleMust(func() {
 			sadface, _ := animations.NewSizedSadFace()
 			sadface.SetSizeRequest(c.Width, -1)
-			c.Setter(spinner, sadface)
+			c.Setter(sadface)
 		})
 
 		return
@@ -176,11 +181,11 @@ func (a *Application) changeCol(c columnChange) {
 
 	// Replace the spinner with the actual channel:
 	semaphore.IdleMust(func() {
-		c.Setter(spinner, c.Widget)
+		c.Setter(c.Widget)
 		c.Widget.Show()
 	})
 
-	go c.After()
+	c.After()
 }
 
 func cleanup(cleaners ...interface{ Cleanup() }) {

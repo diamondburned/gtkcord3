@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
+	"runtime"
 	"runtime/debug"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
@@ -13,6 +15,9 @@ import (
 	"github.com/diamondburned/gtkcord3/keyring"
 	"github.com/diamondburned/gtkcord3/log"
 	"github.com/pkg/errors"
+
+	// Profiler
+	_ "net/http/pprof"
 )
 
 func init() {
@@ -87,8 +92,6 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
-	// defer profile.Start(profile.BlockProfile).Stop()
-
 	// Spawn a new window:
 	if err := window.Init(); err != nil {
 		log.Fatalln("Failed to initialize Gtk3 window:", err)
@@ -103,6 +106,13 @@ func main() {
 	// Try and log in:
 	if err := Login(Finish(a)); err != nil {
 		log.Fatalln("Failed to login:", err)
+	}
+
+	if !log.Quiet {
+		// Profiler
+		runtime.SetMutexProfileFraction(5)   // ???
+		runtime.SetBlockProfileRate(5000000) // 5ms
+		go log.Println(http.ListenAndServe("localhost:6969", nil))
 	}
 
 	// Block until gtkcord dies:

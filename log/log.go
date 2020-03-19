@@ -23,7 +23,7 @@ var (
 	PrefixDebug  = "Debug: "
 	DebugGreyLvl = uint8(11)
 
-	EnableDebug = true
+	Quiet = false
 
 	LogPath = filepath.Join(os.TempDir(), "gtkcord3.log")
 )
@@ -39,7 +39,8 @@ var (
 
 func init() {
 	// Hijack
-	flag.BoolVar(&EnableDebug, "debug", false, "Enable debug")
+	flag.BoolVar(&Quiet, "q", false, "Disable debug traces")
+	flag.BoolVar(&Quiet, "quiet", false, "Disable debug traces")
 
 	f, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0775)
 	if err != nil {
@@ -65,7 +66,7 @@ func ResetLoggers() {
 // Trace, n is the argument to skip callers. 0 shows the location of the Trace
 // function.
 func Trace(n int) string {
-	if !EnableDebug {
+	if Quiet {
 		return "<TRACE N/A>"
 	}
 
@@ -110,13 +111,13 @@ func Println(v ...interface{}) {
 }
 
 func Debugf(f string, v ...interface{}) {
-	if !EnableDebug {
+	if Quiet {
 		return
 	}
 	logDebug.Printf(f, v...)
 }
 func Debugln(v ...interface{}) {
-	if !EnableDebug {
+	if Quiet {
 		return
 	}
 	logDebug.Println(v...)

@@ -40,6 +40,7 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	}
 
 	body := user.New()
+	body.Show()
 	body.Name.SetText(name)
 
 	r, _ := gtk.ListBoxRowNew()

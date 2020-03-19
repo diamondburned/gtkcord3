@@ -26,11 +26,11 @@ func init() {
 type State struct {
 	*state.State
 
-	mutedMutex    sync.Mutex
+	mutedMutex    sync.RWMutex
 	MutedGuilds   map[discord.Snowflake]*Mute
 	MutedChannels map[discord.Snowflake]*Mute
 
-	readMutex sync.Mutex
+	readMutex sync.RWMutex
 	lastAck   api.Ack
 	LastRead  map[discord.Snowflake]*gateway.ReadState
 
@@ -255,12 +255,16 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 }
 
 func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
+	log.Println("Before ChannelMuted")
+
 	if s.ChannelMuted(channelID) {
 		return nil
 	}
 
-	s.readMutex.Lock()
-	defer s.readMutex.Unlock()
+	log.Println("Before ReadMutex")
+
+	s.readMutex.RLock()
+	defer s.readMutex.RUnlock()
 
 	if s, ok := s.LastRead[channelID]; ok {
 		return s
@@ -292,22 +296,25 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 		s.Store.ChannelSet(ch)
 	}
 
-	// Check if this is our message or not:
-	if m, err := s.Store.Message(chID, msgID); err == nil {
-		if m.Author.ID == s.Ready.User.ID {
-			// If it is, don't mark as unread.
-			return
+	go func() {
+		// Check if this is our message or not:
+		if m, err := s.Store.Message(chID, msgID); err == nil {
+			if m.Author.ID == s.Ready.User.ID {
+				// If it is, don't mark as unread.
+				return
+			}
 		}
-	}
 
-	// Announce that there's a read state change
-	for _, fn := range s.OnReadChange {
-		fn(s, st, true)
-	}
+		// Announce that there's a read state change
+		for _, fn := range s.OnReadChange {
+			fn(s, st, true)
+		}
+	}()
 }
 
 func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	s.readMutex.Lock()
+	defer s.readMutex.Unlock()
 	// log.Debugln(log.Trace(0), "MarkRead")
 
 	// Check for a ReadState
@@ -320,7 +327,6 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	}
 
 	if st.LastMessageID == msgID {
-		s.readMutex.Unlock()
 		return
 	}
 
@@ -333,20 +339,20 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 		fn(s, st, false)
 	}
 
-	s.readMutex.Unlock()
-
-	// Check if this is our message or not:
-	if m, err := s.Store.Message(chID, msgID); err == nil {
-		if m.Author.ID == s.Ready.User.ID {
-			// If it is, don't Ack.
-			return
+	go func() {
+		// Check if this is our message or not:
+		if m, err := s.Store.Message(chID, msgID); err == nil {
+			if m.Author.ID == s.Ready.User.ID {
+				// If it is, don't Ack.
+				return
+			}
 		}
-	}
 
-	// Send over Ack.
-	if err := s.Ack(chID, msgID, &s.lastAck); err != nil {
-		log.Errorln("Failed to ack message:", err)
-	}
+		// Send over Ack.
+		if err := s.Ack(chID, msgID, &s.lastAck); err != nil {
+			log.Errorln("Failed to ack message:", err)
+		}
+	}()
 }
 
 func (s *State) CategoryMuted(channelID discord.Snowflake) bool {
@@ -363,22 +369,20 @@ func (s *State) CategoryMuted(channelID discord.Snowflake) bool {
 }
 
 func (s *State) ChannelMuted(channelID discord.Snowflake) bool {
-	s.mutedMutex.Lock()
-	defer s.mutedMutex.Unlock()
+	s.mutedMutex.RLock()
+	defer s.mutedMutex.RUnlock()
 
 	if m, ok := s.MutedChannels[channelID]; ok {
 		// Channels don't have an @everyone mute.
-		if m.All {
-			return true
-		}
+		return m.All
 	}
 
 	return false
 }
 
 func (s *State) GuildMuted(guildID discord.Snowflake, everyone bool) bool {
-	s.mutedMutex.Lock()
-	defer s.mutedMutex.Unlock()
+	s.mutedMutex.RLock()
+	defer s.mutedMutex.RUnlock()
 
 	m, ok := s.MutedGuilds[guildID]
 	if ok {

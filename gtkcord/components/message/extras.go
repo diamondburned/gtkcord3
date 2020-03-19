@@ -166,6 +166,10 @@ func newEmbed(s *ningen.State, msg *discord.Message, embed discord.Embed) gtkuti
 }
 
 func newImageEmbed(embed discord.Embed) gtkutils.ExtendedWidget {
+	if embed.Thumbnail == nil {
+		return nil
+	}
+
 	w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
 	w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
 

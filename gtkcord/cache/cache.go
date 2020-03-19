@@ -97,7 +97,7 @@ func SanitizeString(str string) string {
 	}, str)
 }
 
-var fileIO sync.Mutex
+// var fileIO sync.Mutex
 
 func download(url string, pp []Processor, gif bool) ([]byte, error) {
 	r, err := Client.Get(url)
@@ -133,8 +133,8 @@ func download(url string, pp []Processor, gif bool) ([]byte, error) {
 // get doesn't check if the file exists
 func get(url, dst string, pp []Processor, gif bool) error {
 	// Unlock FileIO mutex to allow concurrent requests.
-	fileIO.Unlock()
-	defer fileIO.Lock()
+	// fileIO.Unlock()
+	// defer fileIO.Lock()
 
 	b, err := download(url, pp, gif)
 	if err != nil {
@@ -156,8 +156,8 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 	// Transform URL:
 	dst := TransformURL(url, w, h, false)
 
-	fileIO.Lock()
-	defer fileIO.Unlock()
+	// fileIO.Lock()
+	// defer fileIO.Unlock()
 
 	// Try and get the Pixbuf from file:
 	p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
@@ -192,27 +192,22 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	gif := strings.Contains(url, "gif")
 	dst := TransformURL(url, w, h, gif)
 
-	fileIO.Lock()
-	defer fileIO.Unlock()
+	// fileIO.Lock()
+	// defer fileIO.Unlock()
 
 	// Try and get the Pixbuf from file:
-	_, err := semaphore.Idle(func() error {
-		if !gif {
-			p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
-			if err == nil {
-				img.SetFromPixbuf(p)
-			}
-			return errors.Wrap(err, "Failed to get pixbuf before downloading")
-		} else {
-			p, err := gdk.PixbufAnimationNewFromFile(dst)
-			if err == nil {
-				img.SetFromAnimation(p)
-			}
-			return errors.Wrap(err, "Failed to get animation before downloading")
+	if !gif {
+		p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+		if err == nil {
+			semaphore.IdleMust(img.SetFromPixbuf, p)
+			return nil
 		}
-	})
-	if err == nil {
-		return nil
+	} else {
+		p, err := gdk.PixbufAnimationNewFromFile(dst)
+		if err == nil {
+			semaphore.IdleMust(img.SetFromAnimation, p)
+			return nil
+		}
 	}
 
 	// If resize is requested, we resize using Go's instead.
@@ -226,26 +221,23 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 		return err
 	}
 
-	_, err = semaphore.Idle(func() error {
-		if !gif {
-			p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
-			if err != nil {
-				os.Remove(dst)
-				return errors.Wrap(err, "Failed to get pixbuf after downloading")
-			}
-			img.SetFromPixbuf(p)
-		} else {
-			p, err := gdk.PixbufAnimationNewFromFile(dst)
-			if err != nil {
-				os.Remove(dst)
-				return errors.Wrap(err, "Failed to get animation after downloading")
-			}
-			img.SetFromAnimation(p)
+	if !gif {
+		p, err := gdk.PixbufNewFromFileAtSize(dst, w, h)
+		if err != nil {
+			os.Remove(dst)
+			return errors.Wrap(err, "Failed to get pixbuf after downloading")
 		}
+		semaphore.IdleMust(img.SetFromPixbuf, p)
+	} else {
+		p, err := gdk.PixbufAnimationNewFromFile(dst)
+		if err != nil {
+			os.Remove(dst)
+			return errors.Wrap(err, "Failed to get animation after downloading")
+		}
+		semaphore.IdleMust(img.SetFromAnimation, p)
+	}
 
-		return nil
-	})
-	return err
+	return nil
 }
 
 // SetImageAsync is not cached.
@@ -263,53 +255,51 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	var gif = strings.Contains(url, ".gif")
 	var l *gdk.PixbufLoader
 
-	semaphore.IdleMust(func() {
-		l, err = gdk.PixbufLoaderNew()
-		if err != nil {
-			err = errors.Wrap(err, "Failed to create a pixbuf_loader")
+	l, err = gdk.PixbufLoaderNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a pixbuf_loader")
+	}
+
+	if w > 0 && h > 0 {
+		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
+			l.SetSize(maxSize(imgW, imgH, w, h))
+		})
+	}
+
+	var p interface{}
+	var pMu sync.Mutex
+
+	gtkutils.Connect(l, "area-prepared", func() {
+		pMu.Lock()
+		defer pMu.Unlock()
+
+		if gif {
+			p, err = l.GetAnimation()
+			if err != nil || p == nil {
+				log.Errorln("Failed to get animation during area-prepared:", err)
+				return
+			}
+		} else {
+			p, err = l.GetPixbuf()
+			if err != nil || p == nil {
+				log.Errorln("Failed to get pixbuf during area-prepared:", err)
+				return
+			}
+		}
+	})
+
+	gtkutils.Connect(l, "area-updated", func() {
+		pMu.Lock()
+		defer pMu.Unlock()
+
+		switch {
+		case p == nil:
 			return
+		case gif:
+			semaphore.IdleMust(img.SetFromAnimation, p)
+		default:
+			semaphore.IdleMust(img.SetFromPixbuf, p)
 		}
-
-		if w > 0 && h > 0 {
-			l.Connect("size-prepared", func(_ *glib.Object, imgW, imgH int) {
-				semaphore.IdleMust(func() {
-					l.SetSize(maxSize(imgW, imgH, w, h))
-				})
-			})
-		}
-
-		var p interface{}
-
-		l.Connect("area-prepared", func() {
-			semaphore.IdleMust(func() {
-				if gif {
-					p, err = l.GetAnimation()
-					if err != nil || p == nil {
-						log.Errorln("Failed to get animation during area-prepared:", err)
-						return
-					}
-				} else {
-					p, err = l.GetPixbuf()
-					if err != nil || p == nil {
-						log.Errorln("Failed to get pixbuf during area-prepared:", err)
-						return
-					}
-				}
-			})
-		})
-
-		l.Connect("area-updated", func() {
-			semaphore.IdleMust(func() {
-				switch {
-				case p == nil:
-					return
-				case gif:
-					img.SetFromAnimation(p.(*gdk.PixbufAnimation))
-				default:
-					img.SetFromPixbuf(p.(*gdk.Pixbuf))
-				}
-			})
-		})
 	})
 
 	if err != nil {

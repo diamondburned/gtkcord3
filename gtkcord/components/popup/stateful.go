@@ -62,9 +62,9 @@ func (s *StatefulPopupBody) initialize() {
 		return
 	}
 
-	p, err := s.state.Store.Presence(s.Guild, u.ID)
+	p, err := s.state.Presence(s.Guild, u.ID)
 	if err != nil {
-		p, err = s.state.Store.Presence(0, u.ID)
+		p, err = s.state.Presence(0, u.ID)
 	}
 
 	if err == nil {
@@ -87,10 +87,9 @@ func (s *StatefulPopupBody) initialize() {
 	// fetch above presence if error not nil
 	if err != nil {
 		s.state.RequestMember(s.Guild, u.ID)
-		return
 	}
 
-	m, err := s.state.Store.Member(s.Guild, u.ID)
+	m, err := s.state.Member(s.Guild, u.ID)
 	if err != nil {
 		semaphore.IdleMust(func() {
 			s.UserPopupBody.Update(*u)

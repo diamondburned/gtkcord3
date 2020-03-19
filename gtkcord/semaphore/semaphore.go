@@ -12,7 +12,7 @@ import (
 // var MaxWorkers = runtime.GOMAXPROCS(0)
 // var sema = semaphore.NewWeighted(int64(MaxWorkers))
 
-var idleAdds = make(chan *idleCall, 1000)
+var idleAdds = make(chan *idleCall, 0)
 var recvPool = sync.Pool{
 	New: func() interface{} {
 		return make(chan []reflect.Value)
@@ -33,7 +33,7 @@ func init() {
 		for call := range idleAdds {
 			call := call
 
-			log.Debugln(call.trace, "adding into main thread")
+			// log.Debugln(call.trace, "adding into main thread")
 
 			glib.IdleAdd(func() {
 				// now := time.Now()
@@ -54,7 +54,7 @@ func init() {
 					call.done <- val
 				}
 
-				log.Debugln(call.trace, "main thread replied")
+				// log.Debugln(call.trace, "main thread replied")
 			})
 		}
 	}()
@@ -106,9 +106,7 @@ func Idle(fn interface{}, v ...interface{}) (interface{}, error) {
 }
 
 func Async(fn interface{}, v ...interface{}) {
-	// log.Println(log.Trace(1), "Async start")
 	idleAdd(log.Trace(1), true, fn, v...)
-	// log.Println(log.Trace(1), "Async done")
 }
 
 func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
@@ -139,7 +137,6 @@ func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
 }
 
 func IdleMust(fn interface{}, v ...interface{}) interface{} {
-	// log.Println(log.Trace(1), "IdleMust start")
 	var trace = log.Trace(1)
 
 	r, err := idle(trace, fn, v...)
@@ -147,10 +144,5 @@ func IdleMust(fn interface{}, v ...interface{}) interface{} {
 		log.Panicln(trace, "callback returned err != nil:", err)
 	}
 
-	// log.Println(log.Trace(1), "IdleMust done")
 	return r
-}
-
-func Go(fn func()) {
-	go fn()
 }

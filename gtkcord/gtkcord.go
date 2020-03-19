@@ -66,6 +66,7 @@ type Application struct {
 
 	// Left Grid
 	LeftGrid *gtk.Grid
+	LeftRev  *gtk.Revealer
 	leftCols map[int]gtk.IWidget
 	// <item>     <item>
 	// | Guilds   | Channels
@@ -86,7 +87,7 @@ type Application struct {
 	LastAccess map[discord.Snowflake]discord.Snowflake
 	lastAccMut sync.Mutex
 
-	busy sync.RWMutex
+	busy sync.Mutex
 }
 
 // New is not thread-safe.
@@ -233,12 +234,12 @@ func (a *Application) Ready(s *ningen.State) error {
 		h.Hamburger.OnClick()
 
 		// Add the guilds and the separator right and left of channels:
-		a.LeftGrid.Attach(a.Guilds, 0, 0, 1, 1)
-		a.LeftGrid.Attach(newSeparator(), 1, 0, 1, 1)
-		a.LeftGrid.Attach(newSeparator(), 3, 0, 1, 1)
+		a.setLeftGridCol(a.Guilds, 0)
+		a.setLeftGridCol(newSeparator(), 1)
+		a.setLeftGridCol(newSeparator(), 3)
 
 		// Set the left grid to the main grid:
-		a.Grid.Attach(r1, 0, 0, 1, 1)
+		a.setGridCol(r1, 0)
 
 		// Message widget placeholder
 		b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -247,7 +248,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		b.SetVExpand(true)
 
 		// Set the message placeholder to the main grid:
-		a.Grid.Attach(b, 1, 0, 1, 1)
+		a.setGridCol(b, 1)
 
 		// Display the grid and header
 		window.Display(a.Grid)
@@ -295,6 +296,13 @@ func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake 
 
 	a.LastAccess[guild] = ch
 	return ch
+}
+
+func (a *Application) setGridCol(w gtk.IWidget, n int) {
+	setGridCol(a.Grid, a.cols, w, n)
+}
+func (a *Application) setLeftGridCol(w gtk.IWidget, n int) {
+	setGridCol(a.LeftGrid, a.leftCols, w, n)
 }
 
 func newSeparator() *gtk.Separator {

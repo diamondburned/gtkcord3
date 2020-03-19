@@ -31,7 +31,7 @@ func (s *mdState) InsertAsyncPixbuf(url string) {
 
 	iter := s.buf.GetEndIter()
 
-	i := icons.GetIcon("image-missing", sz)
+	i := icons.GetIconUnsafe("image-missing", sz)
 	if i == nil {
 		e, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, sz, sz)
 		if err != nil {

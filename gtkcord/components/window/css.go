@@ -44,8 +44,26 @@ const CSS = `
 	.guilds, .channels, .dmchannels, .members {
 		background-color: @theme_bg_color;
 	}
+
 	.messages {
 		background-color: @theme_base_color;
+	}
+	.messages > row {
+		padding: 0;
+	}
+
+	.message {
+		border-left: 2px solid transparent;
+	}
+	.message.mentioned {
+		border-left: 2px solid rgb(250, 166, 26);
+		background-color: rgba(250, 166, 26, 0.05);
+	}
+	.message.condensed .timestamp {
+		opacity: 0;
+	}
+	.message.condensed:hover .timestamp {
+		opacity: 1;
 	}
 
 	.guilds > * {

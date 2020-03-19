@@ -33,15 +33,21 @@ type Channel struct {
 func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 	w = newChannel(ch)
 
+	log.Println("Created channel", ch.Name)
+
 	if ch.Type == discord.GuildCategory {
 		return
 	}
+
+	log.Println("Before ChannelMuted")
 
 	if s.ChannelMuted(ch.ID) {
 		w.stateClass = "muted"
 		w.Style.AddClass("muted")
 		return
 	}
+
+	log.Println("Before FindLastRead")
 
 	if rs := s.FindLastRead(ch.ID); rs != nil {
 		w.unread = ch.LastMessageID != rs.LastMessageID
@@ -62,6 +68,8 @@ func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 			w.Style.AddClass(w.stateClass)
 		}
 	}
+
+	log.Println("After FindLastRead")
 
 	return
 }

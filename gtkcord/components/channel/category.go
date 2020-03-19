@@ -102,8 +102,8 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 	var channels = make([]*Channel, 0, len(chs))
 
 	semaphore.IdleMust(func() {
-		for _, sch := range list {
-			sch := sch
+		for i := range list {
+			sch := list[i]
 
 			if sch.parent.ID.Valid() {
 				channels = append(channels, createChannelRead(&sch.parent, s))
