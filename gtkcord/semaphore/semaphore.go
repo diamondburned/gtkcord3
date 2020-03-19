@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/glib"
 )
 

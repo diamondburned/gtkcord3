@@ -1,7 +1,7 @@
 package keyring
 
 import (
-	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/zalando/go-keyring"
 )
 

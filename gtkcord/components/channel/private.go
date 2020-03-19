@@ -4,8 +4,8 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/members/user"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/humanize"
-	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/internal/humanize"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 

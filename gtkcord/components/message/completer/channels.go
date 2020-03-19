@@ -5,7 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
 func (c *State) completeChannels(word string) {

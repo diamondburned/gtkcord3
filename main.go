@@ -12,8 +12,8 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/keyring"
-	"github.com/diamondburned/gtkcord3/log"
+	"github.com/diamondburned/gtkcord3/internal/keyring"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/pkg/errors"
 
 	// Profiler
