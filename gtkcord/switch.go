@@ -114,6 +114,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 			a.setGridCol(w, 1)
 		},
 		Cleaner: func() {
+
 			a.Messages.Cleanup()
 		},
 		Loader: func() bool {
@@ -144,10 +145,6 @@ type columnChange struct {
 }
 
 func (a *Application) changeCol(c columnChange) {
-	// Blur the entire grid before the mutex, for the loading effects.
-	semaphore.IdleMust(a.Grid.SetSensitive, false)
-	defer semaphore.IdleMust(a.Grid.SetSensitive, true)
-
 	// Lock
 	a.busy.Lock()
 	defer a.busy.Unlock()
@@ -155,6 +152,10 @@ func (a *Application) changeCol(c columnChange) {
 	if !c.Checker() {
 		return
 	}
+
+	// Blur the entire left grid, which includes guilds and channels.
+	semaphore.IdleMust(a.LeftGrid.SetSensitive, false)
+	defer semaphore.IdleMust(a.LeftGrid.SetSensitive, true)
 
 	// Clean up channels
 	c.Cleaner()

@@ -85,6 +85,9 @@ const CSS = `
 	.guild:selected {
 		background-color: alpha(@theme_selected_bg_color, 0.5);
 	}
+	.guild:hover image {
+		-gtk-icon-effect: highlight;
+	}
 
 	.user-info, .popup-grid > *:not(.popup-user):not(.activity) {
 		background-color: shade(@theme_base_color, 0.9);

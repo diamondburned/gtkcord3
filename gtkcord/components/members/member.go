@@ -23,6 +23,7 @@ type Section struct {
 func NewSection(name string, count uint64) *Section {
 	r, _ := gtk.ListBoxRowNew()
 	r.Show()
+	r.SetSelectable(false)
 	r.SetActivatable(false)
 	gtkutils.InjectCSSUnsafe(r, "section", "")
 
