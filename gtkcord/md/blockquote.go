@@ -11,28 +11,52 @@ type blockquote struct{}
 
 // process the line
 func (b blockquote) process(reader text.Reader) bool {
+	// line, _ := reader.PeekLine()
+	// w, pos := util.IndentWidth(line, reader.LineOffset())
+
+	// // If line doesn't start with >
+	// if w > 3 || pos >= len(line) || line[pos] != '>' {
+	// 	return false
+	// }
+
+	// pos++
+
+	// // What the fuck is this?
+	// // if pos >= len(line) || line[pos] == '\n' {
+	// // 	reader.Advance(pos)
+	// // 	return true
+	// // }
+
+	// // Invalid behavior: >Thing
+	// if !util.IsSpace(line[pos]) {
+	// 	return false
+	// }
+
+	// reader.Advance(pos + 1)
+
+	// if line[pos-1] == '\t' {
+	// 	reader.SetPadding(2)
+	// }
+
+	// return true
+
 	line, _ := reader.PeekLine()
 	w, pos := util.IndentWidth(line, reader.LineOffset())
-
-	// If line doesn't start with >
 	if w > 3 || pos >= len(line) || line[pos] != '>' {
 		return false
 	}
-
 	pos++
-
-	// What the fuck is this?
 	if pos >= len(line) || line[pos] == '\n' {
 		reader.Advance(pos)
 		return true
 	}
-
-	// Valid behavior: >(space)Thing
-	if util.IsSpace(line[pos]) {
+	if line[pos] == ' ' || line[pos] == '\t' {
 		pos++
 	}
-
 	reader.Advance(pos)
+	if line[pos-1] == '\t' {
+		reader.SetPadding(2)
+	}
 	return true
 }
 
@@ -42,16 +66,13 @@ func (b blockquote) Trigger() []byte {
 
 func (b blockquote) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
 	if b.process(r) {
-		_, seg := r.PeekLine()
-
 		node := ast.NewBlockquote()
 
-		para := ast.NewParagraph()
-		para.Lines().Append(seg)
-
+		// SO UGLY AAAAAAAAAAAAA
+		para, state := _paragraph.Open(node, r, pc)
 		node.AppendChild(node, para)
 
-		return node, parser.NoChildren
+		return node, state
 	}
 
 	return nil, parser.NoChildren
@@ -59,13 +80,22 @@ func (b blockquote) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node
 
 func (b blockquote) Continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	if b.process(r) {
-		_, seg := r.PeekLine()
-
 		para := node.FirstChild().(*ast.Paragraph)
-		para.Lines().Append(seg)
-
-		return parser.Continue
+		return _paragraph.Continue(para, r, pc)
 	}
+
+	// TODO: bug
+	// This would not render:
+	//
+	//    Seriously.
+	//    > be __discord__
+	//    > die
+	//    > tfw
+	//
+	//    	asdasdasdasdasdas
+	//
+	//    yup. ***lolmao*** ` + "`" + `echo "yeet $HOME"` + "`" + `
+	//
 
 	return parser.Close
 }

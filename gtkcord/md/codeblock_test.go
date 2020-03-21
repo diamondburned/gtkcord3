@@ -32,7 +32,7 @@ const _fencedBroken = "`````go" + `
 package main
 ` + "````"
 const _fencedBrokenHTML = `<pre><code class="language-go">package main
-` + "`" + `</code></pre>
+</code></pre>
 `
 
 func TestFenced(t *testing.T) {

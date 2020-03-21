@@ -64,24 +64,25 @@ func (n *State) RequestMember(guildID, memID discord.Snowflake) {
 		return
 	}
 
-	// temp unlock
-	n.gmu.Unlock()
-
-	err := n.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-		GuildID:   []discord.Snowflake{guildID},
-		UserIDs:   []discord.Snowflake{memID},
-		Presences: true,
-	})
-
-	// relock
-	n.gmu.Lock()
-
-	if err != nil {
-		log.Errorln("Failed to request guild members:", err)
-	}
-
 	gd.requestingMembers[memID] = struct{}{}
-	return
+
+	go func() {
+		err := n.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+			GuildID:   []discord.Snowflake{guildID},
+			UserIDs:   []discord.Snowflake{memID},
+			Presences: true,
+		})
+
+		if err != nil {
+			log.Errorln("Failed to request guild members:", err)
+
+			// relock
+			n.gmu.Lock()
+			defer n.gmu.Unlock()
+
+			delete(gd.requestingMembers, memID)
+		}
+	}()
 }
 
 func (n *State) Subscribe(guildID discord.Snowflake, chID discord.Snowflake, chunk int) {

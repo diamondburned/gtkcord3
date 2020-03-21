@@ -57,7 +57,7 @@ type Message struct {
 	rightBottom *gtk.Box
 	textView    *gtk.TextView
 	content     *gtk.TextBuffer
-	extras      []gtkutils.ExtendedWidget // embeds, images, etc
+	extras      []gtk.IWidget // embeds, images, etc
 
 	Condensed      bool
 	CondenseOffset time.Duration
@@ -73,7 +73,7 @@ func newMessage(s *ningen.State, m *discord.Message) *Message {
 }
 
 func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
-	defer log.Benchmark("newMessage")()
+	// defer log.Benchmark("newMessage")()
 
 	message := newMessageCustomUnsafe(m)
 	defer message.markBusy()()
@@ -112,9 +112,9 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 	}
 
 	if messageText == "" {
-		go message.UpdateContent(s, m)
+		message.UpdateContentUnsafe(s, m)
 	} else {
-		message.updateContentUnsafe(`<i>` + messageText + `</i>`)
+		message.customContentUnsafe(`<i>` + messageText + `</i>`)
 		message.setAvailableUnsafe(false)
 	}
 
@@ -401,7 +401,7 @@ func (m *Message) UpdateAvatar(url string) {
 	}()
 }
 
-func (m *Message) updateContentUnsafe(s string) {
+func (m *Message) customContentUnsafe(s string) {
 	m.assertContentUnsafe()
 
 	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
@@ -409,25 +409,23 @@ func (m *Message) updateContentUnsafe(s string) {
 }
 
 func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
+	semaphore.IdleMust(m.UpdateContentUnsafe, s, update)
+}
+
+func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
 	defer m.markBusy()()
 
 	if update.Content != "" {
-		semaphore.IdleMust(m.assertContentUnsafe)
-		md.ParseMessage(s, update, nil, m.content)
+		m.assertContentUnsafe()
+		md.ParseMessageContent(m.content, s.Store, update)
 	}
 
 	for _, mention := range update.Mentions {
 		if mention.ID == s.Ready.User.ID {
-			semaphore.IdleMust(m.style.AddClass, "mentioned")
+			m.style.AddClass("mentioned")
 			return
 		}
 	}
-
-	// We only try this if we know the message is edited. If it's new, there
-	// wouldn't be a .mentioned class to remove.
-	// if update.EditedTimestamp.Valid() {
-	// 	semaphore.IdleMust(m.style.RemoveClass, "mentioned")
-	// }
 }
 
 func (m *Message) assertContentUnsafe() {
@@ -455,14 +453,12 @@ func (m *Message) UpdateExtras(s *ningen.State, update *discord.Message) {
 		for _, extra := range m.extras {
 			m.rightBottom.Remove(extra)
 		}
-	})
 
-	// set to nil so the old slice can be GC'd
-	m.extras = nil
-	m.extras = append(m.extras, NewEmbed(s, update)...)
-	m.extras = append(m.extras, NewAttachment(update)...)
+		// set to nil so the old slice can be GC'd
+		m.extras = nil
+		m.extras = append(m.extras, NewEmbedUnsafe(s, update)...)
+		m.extras = append(m.extras, NewAttachmentUnsafe(update)...)
 
-	semaphore.IdleMust(func() {
 		for _, extra := range m.extras {
 			m.rightBottom.Add(extra)
 		}

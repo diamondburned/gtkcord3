@@ -11,15 +11,29 @@ import (
 
 const _md = `Discord sucks.
 Seriously.
-> be discord
+> be __discord__
 > die
 > tfw
 
-   asdasdasdasd
+	asdasdasdasdasdas
 
-yup.
+yup. ***lolmao*** ` + "`" + `echo "yeet $HOME"` + "`" + `
 
 https://google.com/joe_mama
+
+` + "```" + `gO
+package main
+
+func main() {
+	fmt.Println("Hello, 世界!")
+}
+` + "```" + `
+meh.
+
+<:Thonk:456835728559702052>
+
+joe mama <a:Thonk:456835728559702052> lol!!
+
 `
 
 func TestGtk(t *testing.T) {
@@ -41,10 +55,18 @@ func TestGtk(t *testing.T) {
 	tv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 
 	tb, _ := tv.GetBuffer()
+	Parse([]byte(_md), tb)
 
-	if err := Parse([]byte(_md), tb); err != nil {
-		t.Fatal("Failed to parse:", err)
-	}
+	// md := goldmark.New(
+	// 	goldmark.WithParser(parser.NewParser(
+	// 		parser.WithBlockParsers(BlockParsers()...),
+	// 		parser.WithInlineParsers(InlineParsers()...),
+	// 	)),
+	// )
+	// var buf bytes.Buffer
+	// err = md.Convert([]byte(_md), &buf)
+
+	// log.Println(err, buf.String())
 
 	s, _ := gtk.ScrolledWindowNew(nil, nil)
 	s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)

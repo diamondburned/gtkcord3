@@ -10,7 +10,6 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
-	"github.com/skratchdot/open-golang/open"
 )
 
 type Attribute uint16
@@ -148,13 +147,28 @@ func ColorTag(table *gtk.TextTagTable, attr Attribute, color string) *gtk.TextTa
 type TagState struct {
 	table *gtk.TextTagTable
 
-	tag   *gtk.TextTag
-	attr  Attribute
-	color string
+	tag *gtk.TextTag
+	Tag
 }
 
-func (s *TagState) colorTag(attr Attribute, color string) *gtk.TextTag {
-	return ColorTag(s.table, attr, color)
+var EmptyTag = Tag{}
+
+type Tag struct {
+	Attr  Attribute
+	Color string
+}
+
+func (t Tag) Combine(tag Tag) Tag {
+	attr := t.Attr | tag.Attr
+	if tag.Color != "" {
+		return Tag{attr, tag.Color}
+	}
+
+	return Tag{attr, t.Color}
+}
+
+func (s *TagState) colorTag(tag Tag) *gtk.TextTag {
+	return ColorTag(s.table, tag.Attr, tag.Color)
 }
 
 func (s *TagState) tagSet(attr Attribute, enter bool) *gtk.TextTag {
@@ -166,57 +180,73 @@ func (s *TagState) tagSet(attr Attribute, enter bool) *gtk.TextTag {
 }
 
 func (s *TagState) tagAdd(attr Attribute) *gtk.TextTag {
-	if s.attr != s.attr|attr {
-		s.attr |= attr
-		s.tag = s.colorTag(s.attr, s.color)
+	if s.Attr != s.Attr|attr {
+		s.Attr |= attr
+		s.tag = s.colorTag(s.Tag)
 	}
 	return s.tag
 }
 
 func (s *TagState) tagRemove(attr Attribute) *gtk.TextTag {
-	s.attr &= ^attr
-	s.tag = s.colorTag(s.attr, s.color)
+	s.Attr &= ^attr
+	s.tag = s.colorTag(s.Tag)
 	return s.tag
 }
 
 func (s *TagState) tagReset() *gtk.TextTag {
-	s.attr = 0
-	s.color = ""
-	s.tag = s.colorTag(s.attr, s.color)
+	s.Attr = 0
+	s.Color = ""
+	s.tag = s.colorTag(s.Tag)
 	return s.tag
 }
 
 func (s *TagState) tagSetColor(color string) *gtk.TextTag {
-	if s.color != color {
-		s.color = color
-		s.tag = s.colorTag(s.attr, s.color)
+	if s.Color != color {
+		s.Color = color
+		s.tag = s.colorTag(s.Tag)
 	}
 	return s.tag
 }
 
 func (s *TagState) tagSetAttrAndColor(attr Attribute, color string) *gtk.TextTag {
-	s.color = color
-	s.attr = attr
-	s.tag = s.colorTag(s.attr, s.color)
+	s.Color = color
+	s.Attr = attr
+	s.tag = s.colorTag(s.Tag)
 	return s.tag
 }
 
 func (s *TagState) injectTag(tag *gtk.TextTag) {
-	s.attr.tag(tag, s.color)
+	s.Attr.tag(tag, s.Color)
 }
 
 func (s *TagState) tagWith(attr Attribute) *gtk.TextTag {
-	return s.colorTag(s.attr|attr, s.color)
+	return ColorTag(s.table, s.Attr|attr, s.Color)
 }
 
 func (s *TagState) tagWithColor(color string) *gtk.TextTag {
-	return s.colorTag(s.attr, color)
+	return ColorTag(s.table, s.Attr, color)
 }
 
-// does not change state
-func (s *TagState) hyperlink(url string) *gtk.TextTag {
-	key := "link_" + url
+func (s *TagState) timestamp() *gtk.TextTag {
+	v, err := s.table.Lookup("timestamp")
+	if err == nil {
+		return v
+	}
 
+	v, err = gtk.TextTagNew("timestamp")
+	if err != nil {
+		log.Panicln("Failed to create a new timestamp tag:", err)
+	}
+
+	v.SetProperty("scale", 0.84)
+	v.SetProperty("scale-set", true)
+	v.SetProperty("foreground", "#808080")
+
+	s.table.Add(v)
+	return v
+}
+
+func (s *TagState) addHandler(key string, handler func(PressedEvent)) *gtk.TextTag {
 	v, err := s.table.Lookup(key)
 	if err == nil {
 		return v
@@ -226,14 +256,8 @@ func (s *TagState) hyperlink(url string) *gtk.TextTag {
 	if err != nil {
 		log.Panicln("Failed to create new hyperlink tag:", err)
 	}
-
-	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
-	t.SetProperty("foreground", "#3F7CE0")
-	t.Connect("event", setHandler(func(PressedEvent) {
-		if err := open.Start(url); err != nil {
-			log.Errorln("Failed to open image URL:", err)
-		}
-	}))
+	t.SetProperty("foreground", "#7289DA")
+	t.Connect("event", setHandler(handler))
 
 	s.table.Add(t)
 	return t

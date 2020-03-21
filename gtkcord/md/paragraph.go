@@ -8,6 +8,8 @@ import (
 
 type paragraph struct{}
 
+var _paragraph = paragraph{}
+
 func (b paragraph) Trigger() []byte {
 	return nil
 }
