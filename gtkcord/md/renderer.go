@@ -4,7 +4,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -162,11 +161,6 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 				r.insertWithTag([]byte("> "), nil)
 			}
 		}
-
-		// Iterate
-
-	default:
-		panic("Unknown node: " + spew.Sdump(n))
 	}
 
 	return ast.WalkContinue, nil
