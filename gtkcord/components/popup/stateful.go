@@ -22,6 +22,8 @@ type StatefulPopupBody struct {
 	User  discord.Snowflake
 	Guild discord.Snowflake
 
+	Prefetch *discord.User
+
 	unhandlers []func()
 	mutex      sync.Mutex
 }
@@ -47,6 +49,28 @@ func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *State
 	return body
 }
 
+func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.Snowflake) *StatefulPopupBody {
+	b := NewUserPopupBody()
+
+	body := &StatefulPopupBody{
+		UserPopupBody: b,
+
+		state:    s,
+		User:     user.ID,
+		Guild:    guild,
+		Prefetch: &user,
+	}
+
+	b.Connect("destroy", func() {
+		log.Infoln("Destroying stateful popup body")
+		body.Destroy()
+		log.Infoln("Destroyed")
+	})
+
+	go body.initialize()
+	return body
+}
+
 // must be thread-safe, function is running in a goroutine
 func (s *StatefulPopupBody) initialize() {
 	if !s.User.Valid() {
@@ -56,15 +80,25 @@ func (s *StatefulPopupBody) initialize() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	u, err := s.state.User(s.User)
-	if err != nil {
-		log.Errorln("Failed to get user:", err)
-		return
+	if s.Prefetch == nil {
+		u, err := s.state.User(s.User)
+		if err != nil {
+			log.Errorln("Failed to get user:", err)
+			return
+		}
+
+		s.Prefetch = u
 	}
 
-	p, err := s.state.Presence(s.Guild, u.ID)
+	// Update user first:
+	semaphore.IdleMust(func() {
+		s.UserPopupBody.Update(*s.Prefetch)
+		s.UserPopupBody.Grid.ShowAll()
+	})
+
+	p, err := s.state.Presence(s.Guild, s.Prefetch.ID)
 	if err != nil {
-		p, err = s.state.Presence(0, u.ID)
+		p, err = s.state.Presence(0, s.Prefetch.ID)
 	}
 
 	if err == nil {
@@ -76,25 +110,14 @@ func (s *StatefulPopupBody) initialize() {
 
 	s.injectHandlers()
 
-	if !s.Guild.Valid() {
-		semaphore.IdleMust(func() {
-			s.UserPopupBody.Update(*u)
-			s.UserPopupBody.Grid.ShowAll()
-		})
-		return
-	}
-
 	// fetch above presence if error not nil
 	if err != nil {
-		s.state.RequestMember(s.Guild, u.ID)
+		s.state.RequestMember(s.Guild, s.Prefetch.ID)
 	}
 
-	m, err := s.state.Member(s.Guild, u.ID)
+	m, err := s.state.Store.Member(s.Guild, s.Prefetch.ID)
 	if err != nil {
-		semaphore.IdleMust(func() {
-			s.UserPopupBody.Update(*u)
-			s.UserPopupBody.Grid.ShowAll()
-		})
+		// If no member:
 		return
 	}
 

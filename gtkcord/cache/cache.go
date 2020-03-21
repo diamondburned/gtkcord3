@@ -316,7 +316,13 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 }
 
 func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
-	semaphore.IdleMust(gtkutils.ImageSetIcon, img, "image-missing", 24)
+	semaphore.IdleMust(func() {
+		AsyncFetchUnsafe(url, img, w, h, pp...)
+	})
+}
+
+func AsyncFetchUnsafe(url string, img *gtk.Image, w, h int, pp ...Processor) {
+	gtkutils.ImageSetIcon(img, "image-missing", 24)
 
 	go func() {
 		var err error

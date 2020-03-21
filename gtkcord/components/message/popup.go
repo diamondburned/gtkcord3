@@ -14,7 +14,7 @@ func (m *Messages) injectPopup() {
 
 // thread-safe functions
 
-func (m *Messages) userMentionPressed(ev md.PressedEvent, user discord.GuildUser) {
+func (m *Messages) userMentionPressed(ev md.PressedEvent, user *discord.GuildUser) {
 	// Get the relative position to ev.TextView
 	var rect gdk.Rectangle
 	rect.SetX(int(ev.X()))
@@ -26,6 +26,7 @@ func (m *Messages) userMentionPressed(ev md.PressedEvent, user discord.GuildUser
 	p.SetPointingTo(rect)
 
 	body := popup.NewStatefulPopupBody(m.c, user.ID, m.GuildID)
+	body.Prefetch = &user.User
 	body.ParentStyle, _ = p.GetStyleContext()
 
 	p.SetChildren(body)
