@@ -9,7 +9,6 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
@@ -96,16 +95,13 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
-	// Spawn a new window:
-	if err := window.Init(); err != nil {
-		log.Fatalln("Failed to initialize Gtk3 window:", err)
+	a, err := gtkcord.New()
+	if err != nil {
+		log.Fatalln("Failed to start gtkcord:", err)
 	}
 
-	v, err := semaphore.Idle(gtkcord.New)
-	if err != nil {
-		log.Fatalln("Can't create a Gtk3 window:", err)
-	}
-	a := v.(*gtkcord.Application)
+	a.Start()
+	defer a.Wait()
 
 	// Try and log in:
 	if err := Login(Finish(a)); err != nil {
@@ -118,7 +114,4 @@ func main() {
 		runtime.SetBlockProfileRate(5000000) // 5ms
 		go http.ListenAndServe("localhost:6969", nil)
 	}
-
-	// Block until gtkcord dies:
-	window.Wait()
 }

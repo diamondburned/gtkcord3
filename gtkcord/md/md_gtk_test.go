@@ -15,26 +15,25 @@ Seriously.
 > die
 > tfw
 
-	asdasdasdasdasdas
+asdasdasdasdasdas
 
 yup. ***lolmao*** ` + "`" + `echo "yeet $HOME"` + "`" + `
 
-https://google.com/joe_mama
+https://google.com/joe_mama and <https://google.com/joe_mama> is bruh.
 
-` + "```" + `gO
+` + "```" + `go
 package main
 
 func main() {
 	fmt.Println("Hello, 世界!")
 }
-` + "```" + `
-meh.
+` + "```" + ` meh.
 
-<:Thonk:456835728559702052>
+asdasd <@456835728559702052>
 
 joe mama <a:Thonk:456835728559702052> lol!!
 
-`
+dasdas: https://www.youtube.com/watch?v=W5eCr-_rl9I`
 
 func TestGtk(t *testing.T) {
 	gtk.Init(nil)

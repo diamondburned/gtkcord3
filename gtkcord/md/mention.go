@@ -4,6 +4,7 @@ import (
 	"regexp"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/state"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
@@ -88,14 +89,19 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 			}
 		}
 
-		// If we can't find the user mentioned, then it's a bad mention.
+		// If we can't find the mention, then it's likely the message was
+		// fetched from the API, which wouldn't have these fields.
 		if target == nil {
+			target = searchMember(state, msg.GuildID, d)
+		}
+
+		if target == nil {
+			// Don't try.
 			return nil
 		}
 
-		// Fill up the Member field if we can:
-		if msg.GuildID.Valid() && msg.Member == nil {
-			m, err := state.Member(msg.GuildID, target.ID)
+		if msg.GuildID.Valid() && target.Member == nil {
+			m, err := state.Member(msg.GuildID, d)
 			if err == nil {
 				target.Member = m
 			}
@@ -109,6 +115,26 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	case "@&": // role
 		// TODO
 		return nil
+	}
+
+	return nil
+}
+
+func searchMember(state state.Store, guild, user discord.Snowflake) *discord.GuildUser {
+	m, err := state.Member(guild, user)
+	if err == nil {
+		return &discord.GuildUser{
+			User:   m.User,
+			Member: m,
+		}
+	}
+
+	// Maybe?
+	p, err := state.Presence(guild, user)
+	if err == nil {
+		return &discord.GuildUser{
+			User: p.User,
+		}
 	}
 
 	return nil

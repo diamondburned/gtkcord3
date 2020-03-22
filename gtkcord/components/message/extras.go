@@ -12,7 +12,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -171,7 +170,7 @@ func newImageEmbedUnsafe(embed discord.Embed) gtkutils.ExtendedWidget {
 
 	img := newExtraImageUnsafe(embed.Thumbnail.Proxy, embed.Thumbnail.URL, w, h)
 	if img, ok := img.(gtkutils.Marginator); ok {
-		semaphore.IdleMust(img.SetMarginStart, 0)
+		img.SetMarginStart(0)
 	}
 	return img
 }

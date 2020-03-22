@@ -34,17 +34,15 @@ func matchInline(r text.Reader, open, close byte) []byte {
 	for ; stop < len(line) && line[stop] != close; stop++ {
 	}
 
-	// Advance total distance:
-	r.Advance(stop)
-
-	stop++ // add the '>'
-
 	// This would be true if there's no closure.
-	if stop == len(line) {
+	if stop >= len(line) || line[stop] != close {
 		return nil
 	}
 
-	r.Advance(1)
+	stop++ // add the '>'
+
+	// Advance total distance:
+	r.Advance(stop)
 
 	return line[start:stop]
 }
