@@ -2,23 +2,22 @@ package main
 
 import (
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gtkcord3/gtkcord"
 )
 
 type PluginHook struct {
-	window *gtk.Window
+	Application *gtkcord.Application
 }
 
-func (h PluginHook) SetWindow(window *gtk.Window) {
-	h.window = window
+func (h PluginHook) Init(a *gtkcord.Application) {
+	h.Application = a
+	h.Application.State.AddHandler(onTypingStart)
 }
 
-func (h PluginHook) TypingStart(t *gateway.TypingStartEvent) {
-	log.Printf("some dude with id %v is typing in channel %v", t.UserID, t.ChannelID)
-	h.window.Fullscreen()
+func onTypingStart(t *gateway.TypingStartEvent) {
+	Hook.Application.Header.Destroy()
 }
 
 var Hook = PluginHook{
-	window:nil,
+	Application: nil,
 }

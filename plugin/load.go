@@ -1,10 +1,8 @@
 package plugin
 
 import (
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
 	"io/ioutil"
 	"os"
 	"path"
@@ -15,14 +13,13 @@ import (
 
 // Hook is the structure for the plugins event handlers
 type Hook interface {
-	TypingStart(t *gateway.TypingStartEvent)
-	SetWindow(window *gtk.Window)
+	Init(gtkcord *gtkcord.Application)
 }
 
 var Plugins []Hook
 
 // LoadPlugins loads shared object files that add modularity to GTKCord.
-func LoadPlugins() {
+func LoadPlugins(a *gtkcord.Application) {
 	if _, err := os.Stat("plugins"); os.IsNotExist(err) {
 		_ = os.Mkdir("plugins", 0777)
 	}
@@ -48,7 +45,7 @@ func LoadPlugins() {
 		if !ok {
 			log.Errorf("invalid plugin : %v", err)
 		}
-		hook.SetWindow(window.Window.Window)
+		hook.Init(a)
 		Plugins = append(Plugins, hook)
 	}
 }

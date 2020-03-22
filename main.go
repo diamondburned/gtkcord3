@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/diamondburned/gtkcord3/gtkcord/plugin"
+	"github.com/diamondburned/gtkcord3/plugin"
 	"net/http"
 	"os"
 	"runtime"
@@ -101,13 +101,12 @@ func main() {
 	if err := window.Init(); err != nil {
 		log.Fatalln("Failed to initialize Gtk3 window:", err)
 	}
-	plugin.LoadPlugins()
 	v, err := semaphore.Idle(gtkcord.New)
 	if err != nil {
 		log.Fatalln("Can't create a Gtk3 window:", err)
 	}
 	a := v.(*gtkcord.Application)
-
+	plugin.LoadPlugins(a)
 	// Try and log in:
 	if err := Login(Finish(a)); err != nil {
 		log.Fatalln("Failed to login:", err)
