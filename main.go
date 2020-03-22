@@ -93,6 +93,7 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 		if err := a.Ready(s); err != nil {
 			log.Fatalln("Failed to get gtkcord ready:", err)
 		}
+		plugin.LoadPlugins(a)
 	}
 }
 
@@ -106,7 +107,6 @@ func main() {
 		log.Fatalln("Can't create a Gtk3 window:", err)
 	}
 	a := v.(*gtkcord.Application)
-	plugin.LoadPlugins(a)
 	// Try and log in:
 	if err := Login(Finish(a)); err != nil {
 		log.Fatalln("Failed to login:", err)

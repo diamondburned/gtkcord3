@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord"
+	"log"
 )
 
 type PluginHook struct {
@@ -10,6 +11,9 @@ type PluginHook struct {
 }
 
 func (h PluginHook) Init(a *gtkcord.Application) {
+	if a == nil {
+		log.Println("bruh gtkcord is NIL!")
+	}
 	h.Application = a
 	h.Application.State.AddHandler(onTypingStart)
 }
