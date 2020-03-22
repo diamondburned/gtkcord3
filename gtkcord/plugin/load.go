@@ -1,21 +1,27 @@
 package plugin
 
 import (
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"io/ioutil"
+	"os"
 	"path"
 	"plugin"
 )
 
 // TODO add functions in here to have plugins handle
+// PluginHook is the structure for the plugins event handlers
 type PluginHook struct {
-
+	typingStart func(t *gateway.TypingStartEvent)
 }
 
 var Plugins []PluginHook
 
 // LoadPlugins loads shared object files that add modularity to GTKCord.
 func LoadPlugins() {
+	if _, err := os.Stat("plugins"); os.IsNotExist(err) {
+		_ = os.Mkdir("plugins", 0777)
+	}
 	files, err := ioutil.ReadDir("plugins")
 	if err != nil {
 		log.Panicln("Error loading plugins : plugins folder not available!")
@@ -29,7 +35,7 @@ func LoadPlugins() {
 			log.Errorf("error loading plugin : %v", err)
 			continue // we dont want the whole app dying because of a shitty plugin
 		}
-		s, err := pl.Lookup("PluginHook")
+		s, err := pl.Lookup("Hook")
 		if err != nil {
 			log.Errorf("invalid plugin : %v", err)
 		}
