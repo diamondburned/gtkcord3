@@ -19,7 +19,7 @@ func (h PluginHook) Init(a *gtkcord.Application) {
 }
 
 func onTypingStart(t *gateway.TypingStartEvent) {
-	Hook.Application.Header.Destroy()
+	Hook.Application.Window.ApplicationWindow.Close()
 }
 
 var Hook = PluginHook{

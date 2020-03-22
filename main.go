@@ -101,10 +101,8 @@ func main() {
 	if err != nil {
 		log.Fatalln("Failed to start gtkcord:", err)
 	}
-
 	a.Start()
 	defer a.Wait()
-
 	// Try and log in:
 	if err := Login(Finish(a)); err != nil {
 		log.Fatalln("Failed to login:", err)
