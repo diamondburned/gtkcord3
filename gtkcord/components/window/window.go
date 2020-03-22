@@ -1,10 +1,6 @@
 package window
 
 import (
-	"os"
-	"os/signal"
-	"runtime"
-
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
 	"github.com/gotk3/gotk3/gdk"
@@ -12,8 +8,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-var Window struct {
-	*gtk.Window
+var Window *Container
+
+type Container struct {
+	*gtk.ApplicationWindow
 	Accel *gtk.AccelGroup
 
 	Root   *gdk.Window
@@ -24,26 +22,42 @@ var Window struct {
 	CSS       *gtk.CssProvider
 	Clipboard *gtk.Clipboard
 
-	Closer func()
-
 	CursorDefault *gdk.Cursor
 	CursorPointer *gdk.Cursor
 
 	Settings *gtk.Settings
-
-	done chan struct{}
 }
 
-func Init() error {
-	if Window.Window != nil {
+func WithApplication(app *gtk.Application) error {
+	if Window != nil {
 		return nil
 	}
 
-	runtime.LockOSThread()
-	gtk.Init(nil)
+	Window = &Container{}
 
-	Window.Closer = func() {}
-	Window.done = make(chan struct{})
+	w, err := gtk.ApplicationWindowNew(app)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create window")
+	}
+	Window.ApplicationWindow = w
+
+	w.Show()
+	w.Connect("destroy", func() {
+		gtk.MainQuit()
+	})
+
+	l, err := logo.Pixbuf(64)
+	if err != nil {
+		return errors.Wrap(err, "Failed to load logo")
+	}
+	w.SetIcon(l)
+
+	a, err := gtk.AccelGroupNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create accel group")
+	}
+	Window.Accel = a
+	w.AddAccelGroup(a)
 
 	d, err := gdk.DisplayGetDefault()
 	if err != nil {
@@ -75,29 +89,6 @@ func Init() error {
 	overrideSettings(settings)
 	Window.Settings = settings
 
-	w, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create window")
-	}
-	Window.Window = w
-
-	w.Connect("destroy", func() {
-		gtk.MainQuit()
-	})
-
-	l, err := logo.Pixbuf(64)
-	if err != nil {
-		return errors.Wrap(err, "Failed to load logo")
-	}
-	w.SetIcon(l)
-
-	a, err := gtk.AccelGroupNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create accel group")
-	}
-	Window.Accel = a
-	w.AddAccelGroup(a)
-
 	// w.SetVAlign(gtk.ALIGN_CENTER)
 	// w.SetHAlign(gtk.ALIGN_CENTER)
 	// w.SetDefaultSize(500, 250)
@@ -120,14 +111,6 @@ func Init() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to create a pointer cursor")
 	}
-
-	go func() {
-		runtime.LockOSThread()
-		gtk.Main()
-
-		Window.Closer()
-		Window.done <- struct{}{}
-	}()
 
 	return nil
 }
@@ -166,12 +149,6 @@ func ShowAll() {
 	Window.Window.ShowAll()
 }
 
-func Wait() {
-	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt)
-
-	select {
-	case <-Window.done:
-	case <-sig:
-	}
+func SetTitle(title string) {
+	Window.ApplicationWindow.SetTitle(title)
 }

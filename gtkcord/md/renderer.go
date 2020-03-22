@@ -51,24 +51,27 @@ func (r *Renderer) Render(_ io.Writer, source []byte, n ast.Node) error {
 		close(r.setEmojis)
 	}()
 
-	// Start setting emojis in the background. This can be ran inside a normal
-	// IdleMust loop.
-	semaphore.Async(func() {
+	go func() {
 		// Emoji tag that slightly offsets the emoji vertically.
 		emojiTag := r.tags.inlineEmojiTag()
 
 		for set := range r.setEmojis {
-			last := r.Buffer.GetIterAtLineIndex(set.line, set.index)
-			fwdi := r.Buffer.GetIterAtLineIndex(set.line, set.index)
-			fwdi.ForwardChar()
+			set := set
 
-			r.Buffer.Delete(last, fwdi)
-			r.Buffer.InsertPixbuf(last, set.pb)
+			// Start setting emojis in the background.
+			semaphore.Async(func() {
+				last := r.Buffer.GetIterAtLineIndex(set.line, set.index)
+				fwdi := r.Buffer.GetIterAtLineIndex(set.line, set.index)
+				fwdi.ForwardChar()
 
-			first := r.Buffer.GetIterAtLineIndex(set.line, set.index)
-			r.Buffer.ApplyTag(emojiTag, first, last)
+				r.Buffer.Delete(last, fwdi)
+				r.Buffer.InsertPixbuf(last, set.pb)
+
+				first := r.Buffer.GetIterAtLineIndex(set.line, set.index)
+				r.Buffer.ApplyTag(emojiTag, first, last)
+			})
 		}
-	})
+	}()
 
 	return nil
 }

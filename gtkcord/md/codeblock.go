@@ -304,7 +304,7 @@ func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser
 	var start, stop = segment.Start + pos, segment.Start + i
 
 	// If there's text:
-	if start != stop {
+	if start < stop {
 		seg := text.NewSegmentPadding(start, stop, padding)
 		node.Lines().Append(seg)
 		r.AdvanceAndSetPadding(stop-start-1, padding)
@@ -315,15 +315,8 @@ func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser
 		for ; i < len(line) && line[i] == '`'; i++ {
 		}
 
-		length := i - pos
-		if length >= fdata.length && util.IsBlank(line[i:]) {
-			// var newline = 1
-			// if line[len(line)-1] != '\n' {
-			// 	newline = 0
-			// }
-
+		if length := i - pos; length >= fdata.length {
 			r.Advance(length)
-			// r.Advance(segment.Stop - segment.Start - newline - segment.Padding)
 			return parser.Close
 		}
 	}

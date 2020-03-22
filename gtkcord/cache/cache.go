@@ -29,7 +29,7 @@ var Client = http.Client{
 
 // DO NOT TOUCH.
 const (
-	CacheHash   = "astolfo"
+	CacheHash   = "trapscute"
 	CachePrefix = "gtkcord3"
 )
 

@@ -11,52 +11,29 @@ type blockquote struct{}
 
 // process the line
 func (b blockquote) process(reader text.Reader) bool {
-	// line, _ := reader.PeekLine()
-	// w, pos := util.IndentWidth(line, reader.LineOffset())
-
-	// // If line doesn't start with >
-	// if w > 3 || pos >= len(line) || line[pos] != '>' {
-	// 	return false
-	// }
-
-	// pos++
-
-	// // What the fuck is this?
-	// // if pos >= len(line) || line[pos] == '\n' {
-	// // 	reader.Advance(pos)
-	// // 	return true
-	// // }
-
-	// // Invalid behavior: >Thing
-	// if !util.IsSpace(line[pos]) {
-	// 	return false
-	// }
-
-	// reader.Advance(pos + 1)
-
-	// if line[pos-1] == '\t' {
-	// 	reader.SetPadding(2)
-	// }
-
-	// return true
-
 	line, _ := reader.PeekLine()
 	w, pos := util.IndentWidth(line, reader.LineOffset())
+
+	// If line doesn't start with >
 	if w > 3 || pos >= len(line) || line[pos] != '>' {
 		return false
 	}
+
 	pos++
-	if pos >= len(line) || line[pos] == '\n' {
-		reader.Advance(pos)
-		return true
+
+	// What the fuck is this?
+	// if pos >= len(line) || line[pos] == '\n' {
+	// 	reader.Advance(pos)
+	// 	return true
+	// }
+
+	// Invalid behavior: >Thing
+	if !util.IsSpace(line[pos]) {
+		return false
 	}
-	if line[pos] == ' ' || line[pos] == '\t' {
-		pos++
-	}
-	reader.Advance(pos)
-	if line[pos-1] == '\t' {
-		reader.SetPadding(2)
-	}
+
+	reader.Advance(pos + 1)
+
 	return true
 }
 
