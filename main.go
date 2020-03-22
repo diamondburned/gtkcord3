@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/diamondburned/gtkcord3/gtkcord/plugin"
 	"net/http"
 	"os"
 	"runtime"
@@ -96,6 +97,7 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
+	plugin.LoadPlugins()
 	// Spawn a new window:
 	if err := window.Init(); err != nil {
 		log.Fatalln("Failed to initialize Gtk3 window:", err)
