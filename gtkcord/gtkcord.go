@@ -127,7 +127,9 @@ func (a *Application) Wait() {
 	}
 
 	// Close session on exit:
-	a.State.Close()
+	if a.State != nil {
+		a.State.Close()
+	}
 }
 
 func (a *Application) activate() {
