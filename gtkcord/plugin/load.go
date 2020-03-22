@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/gotk3/gotk3/gtk"
 	"io/ioutil"
 	"os"
 	"path"
@@ -11,8 +13,9 @@ import (
 
 // TODO add functions in here to have plugins handle
 // PluginHook is the structure for the plugins event handlers
-type PluginHook struct {
-	typingStart func(t *gateway.TypingStartEvent)
+type PluginHook interface {
+	typingStart(t *gateway.TypingStartEvent)
+	setWindow(window *gtk.Window)
 }
 
 var Plugins []PluginHook
@@ -44,6 +47,7 @@ func LoadPlugins() {
 		if !ok {
 			log.Errorf("invalid plugin : %v", err)
 		}
+		hook.setWindow(window.Window.Window)
 		Plugins = append(Plugins, hook)
 	}
 }
