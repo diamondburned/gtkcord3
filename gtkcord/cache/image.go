@@ -93,7 +93,7 @@ func Resize(maxW, maxH int) Processor {
 
 		w, h := maxSize(imgW, imgH, maxW, maxH)
 
-		return imaging.Resize(img, w, h, imaging.MitchellNetravali)
+		return imaging.Resize(img, w, h, imaging.Lanczos)
 	}
 }
 
@@ -105,7 +105,7 @@ func Round(img image.Image) image.Image {
 	// only bother anti-aliasing if it's not a paletted image.
 	var _, paletted = img.(*image.Paletted)
 	if !paletted {
-		img = imaging.Resize(img, oldbounds.Dx()*scale, oldbounds.Dy()*scale, imaging.MitchellNetravali)
+		img = imaging.Resize(img, oldbounds.Dx()*scale, oldbounds.Dy()*scale, imaging.Lanczos)
 	}
 
 	r := img.Bounds().Dx() / 2
@@ -129,7 +129,7 @@ func Round(img image.Image) image.Image {
 		return dst
 	}
 
-	return imaging.Resize(dst, oldbounds.Dx(), oldbounds.Dy(), imaging.MitchellNetravali)
+	return imaging.Resize(dst, oldbounds.Dx(), oldbounds.Dy(), imaging.Lanczos)
 }
 
 // RoundTo round-crops an image

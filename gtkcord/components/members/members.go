@@ -34,49 +34,48 @@ type Container struct {
 
 // thread-safe
 func New(s *ningen.State) (m *Container) {
-	semaphore.IdleMust(func() {
-		sw, _ := gtk.ScrolledWindowNew(nil, nil)
-		sw.Show()
-		sw.SetSizeRequest(Width, -1)
-		gtkutils.InjectCSSUnsafe(sw, "membercontainer", "")
+	sw, _ := gtk.ScrolledWindowNew(nil, nil)
+	sw.Show()
+	sw.SetSizeRequest(Width, -1)
+	gtkutils.InjectCSSUnsafe(sw, "membercontainer", "")
 
-		list, _ := gtk.ListBoxNew()
-		list.Show()
-		gtkutils.InjectCSSUnsafe(list, "members", "")
-		sw.Add(list)
+	list, _ := gtk.ListBoxNew()
+	list.Show()
+	gtkutils.InjectCSSUnsafe(list, "members", "")
+	sw.Add(list)
 
-		m = &Container{
-			ScrolledWindow: sw,
-			List:           list,
-			state:          s,
+	m = &Container{
+		ScrolledWindow: sw,
+		List:           list,
+		state:          s,
 
-			Rows: []gtkutils.ExtendedWidget{},
+		Rows: []gtkutils.ExtendedWidget{},
+	}
+	s.MemberList.OnOP = m.handle
+	s.MemberList.OnSync = m.handleSync
+
+	list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		i := r.GetIndex()
+		w := m.Rows[i]
+
+		rw, ok := w.(*Member)
+		if !ok {
+			return
 		}
-		s.MemberList.OnOP = m.handle
-		s.MemberList.OnSync = m.handleSync
 
-		list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			i := r.GetIndex()
-			w := m.Rows[i]
+		p := popup.NewPopover(r)
+		p.SetPosition(gtk.POS_LEFT)
 
-			rw, ok := w.(*Member)
-			if !ok {
-				return
-			}
-
-			p := popup.NewPopover(r)
-			p.SetPosition(gtk.POS_LEFT)
-
-			body := popup.NewStatefulPopupBody(m.state, rw.ID, m.GuildID)
-			body.ParentStyle, _ = p.GetStyleContext()
-			body.AddUnhandler(func() {
-				l.SelectRow(nil)
-			})
-
-			p.SetChildren(body)
-			p.Popup()
+		body := popup.NewStatefulPopupBody(m.state, rw.ID, m.GuildID)
+		body.ParentStyle, _ = p.GetStyleContext()
+		body.AddUnhandler(func() {
+			l.SelectRow(nil)
 		})
+
+		p.SetChildren(body)
+		p.Popup()
 	})
+
 	return
 }
 

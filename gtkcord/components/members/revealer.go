@@ -40,10 +40,13 @@ func (r *Revealer) BindController(c *controller.Container) {
 	r.button.Hide()
 }
 
+func (r *Revealer) SetRevealChild(reveal bool) {
+	r.Revealer.SetRevealChild(reveal)
+	r.button.SetActive(reveal)
+}
+
 func (r *Revealer) OnClick(b *controller.Button) {
-	revealed := !r.GetRevealChild()
-	r.SetRevealChild(revealed)
-	b.SetActive(revealed)
+	r.SetRevealChild(!r.GetRevealChild())
 }
 
 func (r *Revealer) Cleanup() {

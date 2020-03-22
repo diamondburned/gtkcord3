@@ -88,11 +88,13 @@ func (attr Attribute) tag(t *gtk.TextTag, color string) {
 
 	// TODO: hidden unless on hover
 	if attr.Has(AttrSpoiler) {
-		t.SetProperty("foreground", "rgba(0, 0, 0, 0)") // transparent
+		// Same color, so text appears invisible.
+		t.SetProperty("foreground", "#202225")
 		t.SetProperty("background", "#202225")
 
 		t.Connect("event", func(t *gtk.TextTag, _ *gtk.TextView, ev *gdk.Event) {
 			if gtkutils.EventIsLeftClick(ev) {
+				// Show text:
 				t.SetProperty("foreground-set", false)
 				t.SetProperty("background-set", false)
 			}

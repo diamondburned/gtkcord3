@@ -3,6 +3,8 @@ package gtkcord
 import (
 	"math/rand"
 	"net/http"
+	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -55,6 +58,9 @@ const (
 )
 
 type Application struct {
+	*gtk.Application
+	Window *window.Container
+
 	State *ningen.State
 
 	// Main Grid
@@ -88,37 +94,67 @@ type Application struct {
 	lastAccMut sync.Mutex
 
 	busy sync.Mutex
+	done chan int // exit code
 }
 
 // New is not thread-safe.
 func New() (*Application, error) {
-	var a = &Application{
-		cols:       map[int]gtk.IWidget{},
-		leftCols:   map[int]gtk.IWidget{},
-		LastAccess: map[discord.Snowflake]discord.Snowflake{},
+	a, err := gtk.ApplicationNew("org.diamondburned.gtkcord", glib.APPLICATION_FLAGS_NONE)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create a new *gtk.Application")
 	}
 
-	// Pre-make the grid but don't use it:
-	g, err := gtk.GridNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create grid")
+	app := &Application{
+		Application: a,
 	}
+	a.Connect("activate", app.activate)
+
+	return app, nil
+}
+
+func (a *Application) Start() {
+	a.done = make(chan int)
+
+	go func() {
+		runtime.LockOSThread()
+		a.done <- a.Application.Run(nil)
+	}()
+}
+
+func (a *Application) Wait() {
+	if sig := <-a.done; sig != 0 {
+		os.Exit(sig)
+	}
+
+	// Close session on exit:
+	a.State.Close()
+}
+
+func (a *Application) activate() {
+	// Activate the window singleton:
+	if err := window.WithApplication(a.Application); err != nil {
+		log.Fatalln("Failed to initialize the window:", err)
+	}
+	a.Window = window.Window
+
+	a.cols = map[int]gtk.IWidget{}
+	a.leftCols = map[int]gtk.IWidget{}
+	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
+
+	// Pre-make the grid but don't use it:
+	g, _ := gtk.GridNew()
 	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
 	g.SetRowHomogeneous(true)
 	g.Show()
 	a.Grid = g
 
 	// Instead, use the spinner:
-	s, err := animations.NewSpinner(75)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create spinner")
-	}
+	s, _ := animations.NewSpinner(75)
 
 	window.Display(s)
 	window.Resize(1200, 850)
+	window.SetTitle("gtkcord")
 	window.ShowAll()
-
-	return a, nil
 }
 
 func (a *Application) Ready(s *ningen.State) error {
@@ -130,11 +166,6 @@ func (a *Application) Ready(s *ningen.State) error {
 	}
 
 	semaphore.IdleMust(window.Resize, 1200, 850)
-	window.Window.Closer = func() {
-		if err := s.Close(); err != nil {
-			log.Fatalln("Failed to close:", err)
-		}
-	}
 
 	// Set Markdown's highlighting theme
 	switch s.Ready.Settings.Theme {
@@ -179,24 +210,25 @@ func (a *Application) Ready(s *ningen.State) error {
 		return errors.Wrap(err, "Failed to make messages")
 	}
 
-	memberc := members.New(s)
-	var mrevealer *members.Revealer
-
-	semaphore.IdleMust(func() {
-		// TODO: settings
-		revealed := true
-
-		mrevealer = members.NewRevealer(memberc)
-		mrevealer.SetRevealChild(revealed)
-		mrevealer.BindController(h.Controller)
-	})
-
 	a.Header = h
 	a.Guilds = g
 	a.Channels = c
 	a.Privates = p
 	a.Messages = m
-	a.Members = mrevealer
+
+	semaphore.IdleMust(func() {
+		memberc := members.New(s)
+		var mrevealer *members.Revealer
+
+		// TODO: settings
+		revealed := true
+
+		mrevealer = members.NewRevealer(memberc)
+		mrevealer.BindController(h.Controller)
+		mrevealer.SetRevealChild(revealed)
+
+		a.Members = mrevealer
+	})
 
 	// jank shit
 	// h.Hamburger.GuildID = &a.Channels.GuildID
