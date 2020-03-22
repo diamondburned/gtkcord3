@@ -97,12 +97,11 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
-	plugin.LoadPlugins()
 	// Spawn a new window:
 	if err := window.Init(); err != nil {
 		log.Fatalln("Failed to initialize Gtk3 window:", err)
 	}
-
+	plugin.LoadPlugins()
 	v, err := semaphore.Idle(gtkcord.New)
 	if err != nil {
 		log.Fatalln("Can't create a Gtk3 window:", err)

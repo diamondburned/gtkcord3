@@ -12,13 +12,14 @@ import (
 )
 
 // TODO add functions in here to have plugins handle
-// PluginHook is the structure for the plugins event handlers
-type PluginHook interface {
-	typingStart(t *gateway.TypingStartEvent)
-	setWindow(window *gtk.Window)
+
+// Hook is the structure for the plugins event handlers
+type Hook interface {
+	TypingStart(t *gateway.TypingStartEvent)
+	SetWindow(window *gtk.Window)
 }
 
-var Plugins []PluginHook
+var Plugins []Hook
 
 // LoadPlugins loads shared object files that add modularity to GTKCord.
 func LoadPlugins() {
@@ -42,12 +43,12 @@ func LoadPlugins() {
 		if err != nil {
 			log.Errorf("invalid plugin : %v", err)
 		}
-		var hook PluginHook
-		hook, ok := s.(PluginHook)
+		var hook Hook
+		hook, ok := s.(Hook)
 		if !ok {
 			log.Errorf("invalid plugin : %v", err)
 		}
-		hook.setWindow(window.Window.Window)
+		hook.SetWindow(window.Window.Window)
 		Plugins = append(Plugins, hook)
 	}
 }
