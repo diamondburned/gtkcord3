@@ -20,6 +20,8 @@ github.com/diamondburned/arikawa v0.1.6-0.20200316055545-8899462ff06b h1:0CbY1El
 github.com/diamondburned/arikawa v0.1.6-0.20200316055545-8899462ff06b/go.mod h1:zRmqlYNI5xHFIEKWb8P/xU0iOsEjhCQW+zOR0jtCrcc=
 github.com/diamondburned/arikawa v0.1.6-0.20200317012923-b59d9bfed778 h1:DZFjQvRkey+s1lB3NKlV1UoLl6SIdH3gme2WXgAQdjg=
 github.com/diamondburned/arikawa v0.1.6-0.20200317012923-b59d9bfed778/go.mod h1:jsdb1Uah8c0sD5/WjeYzjW5C1wWLhHtdg3rjXto53Uk=
+github.com/diamondburned/handy v0.0.0-20200323032954-59a7f405f43e h1:T0+QbeWWN8D3j5U/BW05IRT+53Nnyjt8syrhAvujdQE=
+github.com/diamondburned/handy v0.0.0-20200323032954-59a7f405f43e/go.mod h1:v7LYkOUfrXr7xNbJt1y4rUgLR3F9kaj5I4IcUMQLNuM=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
 github.com/dlclark/regexp2 v1.1.6 h1:CqB4MjHw0MFCDj+PHHjiESmHX+N7t0tJzKvC6M97BRg=
@@ -50,6 +52,8 @@ github.com/gorilla/websocket v1.4.1 h1:q7AeDBpnBk8AogcD4DSag/Ukw/KV+YhzLj2bP5HvK
 github.com/gorilla/websocket v1.4.1/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gotk3/gotk3 v0.4.1-0.20200303201101-011cec6a2372 h1:USQvH1WPtg7NSoq9sSyp7+4FNujz1MGfdKrT4TSFGbA=
 github.com/gotk3/gotk3 v0.4.1-0.20200303201101-011cec6a2372/go.mod h1:Eew3QBwAOBTrfFFDmsDE5wZWbcagBL1NUslj1GhRveo=
+github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd h1:A6vDe3XuMv5pB3Pxrq5xv4AuVVkjMTp95GpYJ+f9izE=
+github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd/go.mod h1:Eew3QBwAOBTrfFFDmsDE5wZWbcagBL1NUslj1GhRveo=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=

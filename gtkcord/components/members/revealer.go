@@ -3,6 +3,7 @@ package members
 import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/controller"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -60,8 +61,11 @@ func (r *Revealer) Cleanup() {
 }
 
 func (r *Revealer) LoadGuild(id discord.Snowflake) error {
-	r.button.Show()
-	r.button.SetActive(r.lastRev)
-	r.SetRevealChild(r.lastRev)
+	semaphore.IdleMust(func() {
+		r.button.Show()
+		r.button.SetActive(r.lastRev)
+		r.SetRevealChild(r.lastRev)
+	})
+
 	return r.Container.LoadGuild(id)
 }

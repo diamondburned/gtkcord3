@@ -16,6 +16,8 @@ import (
 
 type PreviewDialog struct {
 	*gtk.Dialog
+	Content *gtk.Box
+
 	Image *gtk.Image
 
 	OpenOriginal *gtk.Button
@@ -82,8 +84,10 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	d.ShowAll()
 
 	pd := PreviewDialog{
-		Dialog: d,
-		Image:  i,
+		Dialog:  d,
+		Content: c,
+
+		Image: i,
 
 		OpenOriginal: bOriginal,
 		ImageView:    s,
@@ -125,7 +129,7 @@ func (pd *PreviewDialog) Fetch(w, h int) {
 		l, _ := gtk.LabelNew("")
 		l.SetMarkup(errText)
 
-		pd.Dialog.Remove(pd.ImageView)
-		pd.Dialog.Add(l)
+		pd.Content.Remove(pd.Image)
+		pd.Content.Add(l)
 	})
 }

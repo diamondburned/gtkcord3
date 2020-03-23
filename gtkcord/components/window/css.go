@@ -45,6 +45,9 @@ const CSS = `
 		background-color: @theme_bg_color;
 	}
 
+	.messagecontainer {
+		background-color: @theme_base_color;
+	}
 	.messages {
 		background-color: @theme_base_color;
 	}
@@ -59,10 +62,10 @@ const CSS = `
 		border-left: 2px solid rgb(250, 166, 26);
 		background-color: rgba(250, 166, 26, 0.05);
 	}
-	.message.condensed .timestamp {
+	.messages > row       .message.condensed .timestamp {
 		opacity: 0;
 	}
-	.message.condensed:hover .timestamp {
+	.messages > row:hover .message.condensed .timestamp {
 		opacity: 1;
 	}
 

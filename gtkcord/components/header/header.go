@@ -5,120 +5,98 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/controller"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
 )
 
 type Header struct {
-	gtkutils.ExtendedWidget
-	Main *gtk.Box
+	*handy.Leaflet
 
-	// Grid 1, on top of guilds
+	// Left: hamburger and guild name:
+	LeftSide  *gtk.HeaderBar
 	Hamburger *Hamburger
-
-	// Grid 2, on top of channels
-
-	// Box that contains guild name and separators
-	GuildBox  *gtk.Box
 	GuildName *gtk.Label
 
-	// Grid 3, on top of messages
-	ChannelName  *gtk.Label
-	ChannelTopic *gtk.Label
-
-	Controller *controller.Container
+	// Right: channel name only.
+	RightSide   *gtk.HeaderBar
+	ChannelName *gtk.Label
+	Controller  *controller.Container
 }
 
-func NewHeader(s *ningen.State) (*Header, error) {
-	v, err := semaphore.Idle(newHeader, s)
-	if err != nil {
-		return nil, err
-	}
-	return v.(*Header), nil
-}
-
-func newHeader(s *ningen.State) (*Header, error) {
-	g, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create grid")
-	}
-	g.SetHExpand(true)
-	g.Show()
+func NewHeader() (*Header, error) {
+	l := handy.LeafletNew()
+	l.SetTransitionType(handy.LEAFLET_TRANSITION_TYPE_SLIDE)
+	l.SetModeTransitionDuration(150)
+	l.SetHExpand(true)
+	l.Show()
 
 	/*
-	 * Grid 1
+	 * Left side
 	 */
 
-	hamburger, err := NewHeaderMenu(s)
+	left, _ := gtk.HeaderBarNew()
+	left.SetShowCloseButton(false)
+	left.SetProperty("spacing", 0)
+	left.Show()
+	left.SetCustomTitle(empty())
+	l.Add(left)
+
+	hamburger, err := NewHeaderMenu()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create hamburger")
 	}
+	left.Add(hamburger)
+
 	hamseparator, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create ham separator")
 	}
-	g.PackStart(hamburger, false, false, 0)
-	g.PackStart(hamseparator, false, false, 0)
-
-	/*
-	 * Grid 2
-	 */
-
-	gb, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	gb.Show()
-	gb.SetVExpand(true)
-	g.PackStart(gb, false, false, 0)
+	hamseparator.Show()
+	left.Add(hamseparator)
 
 	label, err := gtk.LabelNew("gtkcord3")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create guild name label")
 	}
+	label.Show()
 	label.SetXAlign(0.0)
 	label.SetMarginStart(15)
 	label.SetSizeRequest(channel.ChannelsWidth-15, -1)
 	label.SetLines(1)
 	label.SetLineWrap(true)
 	label.SetEllipsize(pango.ELLIPSIZE_END)
+	left.Add(label)
+
 	lblseparator, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create ham separator")
 	}
-	gb.PackStart(label, false, false, 0)
-	gb.PackStart(lblseparator, false, false, 0)
+	lblseparator.Show()
+	left.Add(lblseparator)
 
 	/*
-	 * Grid 3
+	 * Right side
 	 */
 
-	chname, err := gtk.LabelNew("")
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create channel name")
-	}
+	right, _ := gtk.HeaderBarNew()
+	right.Show()
+	right.SetHExpand(true)
+	right.SetShowCloseButton(true)
+	right.SetProperty("spacing", 0)
+	right.SetCustomTitle(empty())
+	l.Add(right)
+
+	chname, _ := gtk.LabelNew("")
+	chname.Show()
 	chname.SetLines(1)
 	chname.SetLineWrap(true)
 	chname.SetEllipsize(pango.ELLIPSIZE_END)
 	chname.SetXAlign(0.0)
 	chname.SetMarginStart(20)
-	chtopic, err := gtk.LabelNew("")
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create channel topic")
-	}
-	chtopic.SetLines(1)
-	chtopic.SetLineWrap(true)
-	chtopic.SetEllipsize(pango.ELLIPSIZE_END)
-	chtopic.SetXAlign(0.0)
-	chtopic.SetMarginStart(20)
-	chtopic.SetSingleLineMode(true)
-
-	g.PackStart(chname, false, false, 0)
-	g.PackStart(chtopic, false, false, 0)
-
-	// Show all before adding the controller:
-	g.ShowAll()
+	right.Add(chname)
 
 	/*
 	 * Grid 4
@@ -126,17 +104,16 @@ func newHeader(s *ningen.State) (*Header, error) {
 
 	// Button container for controls suck as Search, Members, etc.
 	cont := controller.New()
-	g.PackStart(cont, true, true, 0)
+	right.Add(cont)
 
 	return &Header{
-		ExtendedWidget: g,
-		Main:           g,
-		Hamburger:      hamburger,
-		GuildBox:       gb,
-		GuildName:      label,
-		ChannelName:    chname,
-		ChannelTopic:   chtopic,
-		Controller:     cont,
+		Leaflet:     l,
+		LeftSide:    left,
+		Hamburger:   hamburger,
+		GuildName:   label,
+		RightSide:   right,
+		ChannelName: chname,
+		Controller:  cont,
 	}, nil
 }
 
@@ -145,13 +122,15 @@ func (h *Header) UpdateGuild(name string) {
 		`<span weight="bold">`+html.EscapeString(name)+`</span>`)
 }
 
-func (h *Header) UpdateChannel(name, topic string) {
+func (h *Header) UpdateChannel(name string) {
 	if name != "" {
 		name = `<span weight="bold">` + "#" + html.EscapeString(name) + `</span>`
 	}
 
-	semaphore.IdleMust(func() {
-		h.ChannelName.SetMarkup(name)
-		h.ChannelTopic.SetText(topic)
-	})
+	semaphore.IdleMust(h.ChannelName.SetMarkup, name)
+}
+
+func empty() *gtk.Box {
+	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	return b
 }

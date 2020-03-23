@@ -3,7 +3,6 @@ package header
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -14,7 +13,7 @@ type Hamburger struct {
 	OnClick func()
 }
 
-func NewHeaderMenu(s *ningen.State) (*Hamburger, error) {
+func NewHeaderMenu() (*Hamburger, error) {
 	b, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to make hamburger box")

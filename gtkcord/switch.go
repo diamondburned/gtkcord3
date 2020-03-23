@@ -42,7 +42,7 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 				log.Println("Can't load members:", err)
 				return
 			}
-			semaphore.IdleMust(a.Grid.Attach, a.Members, 2, 0, 1, 1)
+			semaphore.IdleMust(a.Right.Add, a.Members)
 		},
 	})
 }
@@ -86,7 +86,7 @@ func (a *Application) SwitchDM() {
 		},
 		Cleaner: func() {
 			cleanup(a.Channels, a.Privates, a.Messages, a.Members)
-			semaphore.IdleMust(a.Grid.Remove, a.Members)
+			semaphore.IdleMust(a.Right.Clear)
 		},
 		Loader: func() bool {
 			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
@@ -111,10 +111,9 @@ func (a *Application) SwitchChannel(ch Channel) {
 			return a.Messages.ChannelID != ch.ChannelID()
 		},
 		Setter: func(w gtk.IWidget) {
-			a.setGridCol(w, 1)
+			a.Middle.Add(w)
 		},
 		Cleaner: func() {
-
 			a.Messages.Cleanup()
 		},
 		Loader: func() bool {
@@ -124,12 +123,19 @@ func (a *Application) SwitchChannel(ch Channel) {
 			}
 
 			a.lastAccess(ch.GuildID(), a.Messages.GetChannelID())
-			a.Header.UpdateChannel(ch.ChannelInfo())
+
+			name, _ := ch.ChannelInfo()
+			a.Header.UpdateChannel(name)
 			return true
 		},
 		After: func() {
-			// Grab the message input's focus:
-			semaphore.IdleMust(a.Messages.Focus)
+			semaphore.IdleMust(func() {
+				// Set the default visible widget to messages:
+				a.Main.SetVisibleChild(a.Middle)
+
+				// Grab the message input's focus:
+				a.Messages.Focus()
+			})
 		},
 	})
 }
