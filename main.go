@@ -13,7 +13,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/pkg/errors"
 
 	// Profiler
 	_ "net/http/pprof"
@@ -28,8 +27,6 @@ func init() {
 	debug.SetGCPercent(50)
 }
 
-var ErrTokenNotProvided = errors.New("Token not in -t, $TOKEN, or keyring")
-
 func LoadToken() string {
 	var token = os.Getenv("TOKEN")
 	if token != "" {
@@ -42,42 +39,39 @@ func LoadToken() string {
 	return token
 }
 
-func LoadKeyring() (*ningen.State, error) {
-	// Check if env vars or flags are set:
-	token := LoadToken()
-
-	// If it is, override it in the keyring and use it:
-	if token != "" {
-		return ningen.Connect(token)
+func LoadKeyring() string {
+	// If $TOKEN or -t is provided, override it in the keyring and use it:
+	if token := LoadToken(); token != "" {
+		return token
 	}
 
-	// Does the keyring have the token?
-	token = keyring.Get()
-
-	// Yes.
-	if token != "" {
-		return ningen.Connect(token)
-	}
-
-	// No.
-	return nil, ErrTokenNotProvided
+	// Does the keyring have the token? Maybe.
+	return keyring.Get()
 }
 
 func Login(finish func(s *ningen.State)) error {
-	s, err := LoadKeyring()
-	if err == nil {
-		go finish(s)
-		return nil
+	var lastErr error
+	var token = LoadKeyring()
+
+	if token != "" {
+		s, err := ningen.Connect(token)
+		if err == nil {
+			go finish(s)
+			return nil
+		}
+
+		log.Errorln("Failed to re-use token:", err)
+		lastErr = err
 	}
 
 	// No, so we need to display the login window:
 	log.Println("Summoning the Login window")
 	semaphore.IdleMust(func() {
-		var l = login.NewLogin(finish)
-		if err != ErrTokenNotProvided {
-			l.LastError = err
-		}
-		l.Display()
+		l := login.NewLogin(finish)
+		l.LastError = lastErr
+		l.LastToken = token
+
+		l.Run()
 	})
 
 	return nil

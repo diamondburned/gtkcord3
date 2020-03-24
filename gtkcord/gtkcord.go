@@ -15,7 +15,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/members"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
@@ -66,12 +65,11 @@ type Application struct {
 	State *ningen.State
 
 	// Main Grid, left is always LeftGrid - *gtk.Grid
-	Main   *handy.Leaflet
-	Middle *singlebox.Box
-	Right  *singlebox.Box
+	Main  *handy.Leaflet // LeftGrid -- Right
+	Right *singlebox.Box // Stack of Messages or full screen server details TODO
 	// <grid>        <item>       <item>
-	// | Left        | Middle     | Right
-	// | Left Grid   | Messages   | Members |
+	// | Left        | Right    |
+	// | Left Grid   | Messages |
 
 	// Left Grid
 	LeftGrid *gtk.Grid
@@ -79,17 +77,12 @@ type Application struct {
 	// <item>     <item>
 	// | Guilds   | Channels
 
-	// <item> <separator> <item> <separator> <item> <separator> <item>
-	// | 0      1         | 2      3         | 4      5         | 6
-	// | Guilds           | Channels         | Messages         | Members
-
 	// Application states
 	Header   *header.Header
 	Guilds   *guild.Guilds
 	Privates *channel.PrivateChannels
 	Channels *channel.Channels
 	Messages *message.Messages
-	Members  *members.Container
 
 	// GuildID -> ChannelID; if GuildID == 0 then DM
 	LastAccess map[discord.Snowflake]discord.Snowflake
@@ -129,7 +122,9 @@ func (a *Application) Wait() {
 	}
 
 	// Close session on exit:
-	a.State.Close()
+	if a.State != nil {
+		a.State.Close()
+	}
 }
 
 func (a *Application) activate() {
@@ -144,8 +139,10 @@ func (a *Application) activate() {
 
 	// Pre-make the leaflet but don't use it:
 	l := handy.LeafletNew()
-	l.SetTransitionType(handy.LEAFLET_TRANSITION_TYPE_SLIDE)
 	l.SetModeTransitionDuration(150)
+	l.SetTransitionType(handy.LEAFLET_TRANSITION_TYPE_SLIDE)
+	l.SetInterpolateSize(true)
+	l.SetCanSwipeBack(true)
 	l.Show()
 	a.Main = l
 
@@ -215,16 +212,25 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.Privates = p
 	a.Messages = m
 
-	semaphore.IdleMust(func() {
-		a.Members = members.New(s)
-	})
+	// Bind the back button:
+	a.Header.Back.OnClick = a.GoBack
+	a.Header.OnFold = func(folded bool) {
+		// If folded, we expand those panels:
+		a.Channels.SetHExpand(folded)
+		a.Privates.SetHExpand(folded)
+	}
+
+	// semaphore.IdleMust(func() {
+	// 	a.Members = members.New(s)
+	// })
 
 	// jank shit
 	// h.Hamburger.GuildID = &a.Channels.GuildID
 
 	semaphore.IdleMust(func() {
-		// Set sizes
+		// Set widths:
 		a.Channels.SetSizeRequest(ChannelWidth, -1)
+		a.Privates.SetSizeRequest(ChannelWidth, -1)
 
 		// Guilds and Channels grid:
 		g1, _ := gtk.GridNew()
@@ -250,18 +256,9 @@ func (a *Application) Ready(s *ningen.State) error {
 		c.SetHExpand(true)
 		c.SetVExpand(true)
 
-		// Set the message container to the main grid:
-		a.Middle = c
+		// Set the message container to the main container:
+		a.Right = c
 		a.Main.Add(c)
-
-		// Members container:
-		m, _ := singlebox.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		m.Show()
-		m.SetVExpand(true)
-
-		// Set the members container:
-		a.Right = m
-		a.Main.Add(m)
 
 		// Display the grid and header
 		window.Display(a.Main)
@@ -310,14 +307,14 @@ func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake 
 	return ch
 }
 
-func (a *Application) setLeftGridCol(w gtk.IWidget, n int) {
-	setGridCol(a.LeftGrid, a.leftCols, w, n)
-}
-
 func newSeparator() *gtk.Separator {
 	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	s.Show()
 	return s
+}
+
+func (a *Application) setLeftGridCol(w gtk.IWidget, n int) {
+	setGridCol(a.LeftGrid, a.leftCols, w, n)
 }
 
 func setGridCol(grid *gtk.Grid, gridStore map[int]gtk.IWidget, w gtk.IWidget, n int) {

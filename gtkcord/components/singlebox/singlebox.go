@@ -1,13 +1,13 @@
 package singlebox
 
 import (
-	"github.com/diamondburned/handy"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
 type Box struct {
 	*gtk.Box
-	Container
+	Children gtk.IWidget
 }
 
 func BoxNew(o gtk.Orientation, spacing int) (*Box, error) {
@@ -22,53 +22,25 @@ func BoxNew(o gtk.Orientation, spacing int) (*Box, error) {
 func WrapBox(box *gtk.Box) *Box {
 	return &Box{
 		Box: box,
-		Container: Container{
-			parent: box,
-		},
 	}
 }
 
-type Column struct {
-	*handy.Column
-	Container
-}
-
-func ColumnNew() *Column {
-	return WrapColumn(handy.ColumnNew())
-}
-
-func WrapColumn(col *handy.Column) *Column {
-	return &Column{
-		Column: col,
-		Container: Container{
-			parent: col,
-		},
-	}
-}
-
-type Container struct {
-	Children gtk.IWidget
-
-	parent interface {
-		Remove(gtk.IWidget)
-		Add(gtk.IWidget)
-	}
-}
-
-func (b *Container) Clear() {
+func (b *Box) Clear() {
 	b.Add(nil)
 }
 
-func (b *Container) Add(w gtk.IWidget) {
+func (b *Box) Add(w gtk.IWidget) {
 	if b.Children != nil {
-		b.parent.Remove(b.Children)
+		log.Println("Removing children")
+		b.Box.Remove(b.Children)
 	}
 
 	b.Children = w
 
 	if w == nil {
+		log.Println("Given widget is nil")
 		return
 	}
 
-	b.parent.Add(w)
+	b.Box.Add(w)
 }

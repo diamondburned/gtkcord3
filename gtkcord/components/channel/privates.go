@@ -15,7 +15,7 @@ import (
 )
 
 type PrivateChannels struct {
-	gtkutils.ExtendedWidget
+	*gtk.Box
 
 	List   *gtk.ListBox
 	Scroll *gtk.ScrolledWindow
@@ -41,7 +41,6 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
 		cs.Show()
-		cs.SetSizeRequest(ChannelsWidth, -1)
 		cs.SetVExpand(true)
 		cs.Add(l)
 
@@ -55,8 +54,7 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 		b.Add(cs)
 
 		pcs = &PrivateChannels{
-			ExtendedWidget: b,
-
+			Box:    b,
 			List:   l,
 			Scroll: cs,
 			Search: e,
@@ -76,9 +74,7 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 		})
 
 		l.SetFilterFunc(pcs.filter, 0)
-		l.Connect("selected-rows-changed", func(l *gtk.ListBox) {
-			var r = l.GetSelectedRow()
-
+		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 			if len(pcs.Channels) == 0 || pcs.OnSelect == nil || r == nil {
 				return
 			}

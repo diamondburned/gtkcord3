@@ -25,19 +25,21 @@ type Login struct {
 	Error  *gtk.Label
 
 	// Button that opens discordlogin
-	InfoButton *gtk.Button
+	DLogin *gtk.Button
 
 	LastError error
+	LastToken string
 
 	displayed bool
 	finish    func(s *ningen.State)
 }
 
 func NewHeader() gtkutils.ExtendedWidget {
-	l, _ := gtk.LabelNew("")
-	l.SetMarkup(`<span weight="bold">gtkcord3 Login</span>`)
-	l.SetMarginStart(50)
-	return l
+	h, _ := gtk.HeaderBarNew()
+	h.SetShowCloseButton(true)
+	h.SetTitle("Login to Discord")
+
+	return h
 }
 
 func NewLogin(finish func(s *ningen.State)) *Login {
@@ -48,6 +50,7 @@ func NewLogin(finish func(s *ningen.State)) *Login {
 	main.SetMarginEnd(35)
 	main.SetSizeRequest(250, -1)
 	main.SetVAlign(gtk.ALIGN_CENTER)
+	gtkutils.InjectCSSUnsafe(main, "login", "")
 
 	err, _ := gtk.LabelNew("")
 	err.SetSingleLineMode(false)
@@ -74,32 +77,40 @@ func NewLogin(finish func(s *ningen.State)) *Login {
 		}
 	`)
 
-	info, _ := gtk.ButtonNewWithLabel("Use DiscordLogin")
-	gtkutils.InjectCSSUnsafe(info, "discordlogin", "")
+	retry, _ := gtk.ButtonNewWithLabel("Retry")
+	gtkutils.InjectCSSUnsafe(retry, "retry", "")
+
+	dlogin, _ := gtk.ButtonNewWithLabel("Use DiscordLogin")
+	gtkutils.InjectCSSUnsafe(dlogin, "discordlogin", "")
 
 	l := &Login{
-		Box:        main,
-		Token:      token,
-		Submit:     submit,
-		Error:      err,
-		InfoButton: info,
+		Box:    main,
+		Token:  token,
+		Submit: submit,
+		Error:  err,
+		DLogin: dlogin,
 
 		finish: finish,
 	}
 
 	token.Connect("activate", l.Login)
 	submit.Connect("clicked", l.Login)
-	info.Connect("clicked", l.DiscordLogin)
+	dlogin.Connect("clicked", l.DiscordLogin)
+
+	subbtn, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 15)
+	subbtn.SetHomogeneous(true)
+	subbtn.Add(retry)
+	subbtn.Add(dlogin)
 
 	main.Add(err)
 	main.Add(token)
 	main.Add(submit)
-	main.Add(info)
+	main.Add(subbtn)
 
 	return l
 }
 
-func (l *Login) Display() {
+func (l *Login) Run() {
 	// Display the error if there's any:
 	if l.LastError != nil {
 		l.error(l.LastError)
@@ -124,6 +135,13 @@ func (l *Login) error(err error) {
 	))
 }
 
+func (l *Login) Retry() {
+	if err := l.tryLoggingIn(); err != nil {
+		log.Errorln("Failed to login:", err)
+		l.error(err)
+	}
+}
+
 func (l *Login) Login() {
 	l.Box.SetSensitive(false)
 	defer l.Box.SetSensitive(true)
@@ -141,7 +159,8 @@ func (l *Login) login() error {
 		return errors.Wrap(err, "Failed to get text")
 	}
 
-	return l.tryLoggingIn(token)
+	l.LastToken = token
+	return l.tryLoggingIn()
 }
 
 func (l *Login) DiscordLogin() {
@@ -178,12 +197,13 @@ func (l *Login) discordLogin() error {
 		return errors.New("DiscordLogin returned nothing, check Console.")
 	}
 
-	return l.tryLoggingIn(string(b))
+	l.LastToken = string(b)
+	return l.tryLoggingIn()
 }
 
 // endgame function
-func (l *Login) tryLoggingIn(token string) error {
-	s, err := CreateState(token)
+func (l *Login) tryLoggingIn() error {
+	s, err := CreateState(l.LastToken)
 	if err != nil {
 		return err
 	}

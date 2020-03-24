@@ -64,9 +64,7 @@ func (p *inlineDelimiterProcessor) OnMatch(consumes int) ast.Node {
 	case p.char == '`' && consumes == 1:
 		node.Attr = AttrMonospace
 	}
-	if node.Attr == 0 {
-		return nil
-	}
+
 	return node
 }
 

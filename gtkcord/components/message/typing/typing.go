@@ -34,10 +34,10 @@ func handler() {
 
 	for {
 		// First, catch a TypingState
-		// for tOld == nil {
-		// 	tOld = <-typingHandler
-		// 	// stop until we get something
-		// }
+		for tOld == nil {
+			tOld = <-typingHandler
+			// stop until we get something
+		}
 
 		// Block until a tick or a typing state
 		select {

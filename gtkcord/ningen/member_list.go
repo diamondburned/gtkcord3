@@ -131,7 +131,7 @@ func (m *MemberListState) handle(ev *gateway.GuildMemberListUpdate) {
 		}
 	}
 
-	if synced {
+	if synced && m.OnSync != nil {
 		m.OnSync(ml, ev.GuildID)
 	}
 }

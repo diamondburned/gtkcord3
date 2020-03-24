@@ -86,10 +86,13 @@ func NewInput(m *Messages) (i *Input) {
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
 	upload.SetVAlign(gtk.ALIGN_START)
+	upload.SetRelief(gtk.RELIEF_NONE)
 	upload.Connect("clicked", func() {
 		go SpawnUploader(i.upload)
 	})
+
 	emoji.SetVAlign(gtk.ALIGN_START)
+	emoji.SetRelief(gtk.RELIEF_NONE)
 
 	gtkutils.Margin2(input, 4, 10)
 	input.AddEvents(int(gdk.KEY_PRESS_MASK))

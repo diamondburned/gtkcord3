@@ -5,6 +5,7 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/controller"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
@@ -20,10 +21,16 @@ type Header struct {
 	Hamburger *Hamburger
 	GuildName *gtk.Label
 
+	Separator *gtk.Separator
+
 	// Right: channel name only.
 	RightSide   *gtk.HeaderBar
+	Back        *Back
 	ChannelName *gtk.Label
 	Controller  *controller.Container
+
+	folded bool
+	OnFold func(folded bool)
 }
 
 func NewHeader() (*Header, error) {
@@ -87,15 +94,21 @@ func NewHeader() (*Header, error) {
 	right.SetShowCloseButton(true)
 	right.SetProperty("spacing", 0)
 	right.SetCustomTitle(empty())
+	right.SetSizeRequest(message.MaxMessageWidth, -1) // so collapse works
 	l.Add(right)
 
+	// Back button:
+	back := NewBack()
+
+	// Channel name:
 	chname, _ := gtk.LabelNew("")
 	chname.Show()
 	chname.SetLines(1)
 	chname.SetLineWrap(true)
 	chname.SetEllipsize(pango.ELLIPSIZE_END)
 	chname.SetXAlign(0.0)
-	chname.SetMarginStart(20)
+
+	right.Add(back)
 	right.Add(chname)
 
 	/*
@@ -106,15 +119,47 @@ func NewHeader() (*Header, error) {
 	cont := controller.New()
 	right.Add(cont)
 
-	return &Header{
+	h := &Header{
 		Leaflet:     l,
 		LeftSide:    left,
 		Hamburger:   hamburger,
 		GuildName:   label,
+		Separator:   lblseparator,
 		RightSide:   right,
+		Back:        back,
 		ChannelName: chname,
 		Controller:  cont,
-	}, nil
+	}
+	l.Connect("size-allocate", func() {
+		h.onFold(l.GetFold() == handy.FOLD_FOLDED)
+	})
+
+	return h, nil
+}
+
+func (h *Header) onFold(folded bool) {
+	if h.folded == folded {
+		return
+	}
+	h.folded = folded
+
+	// If folded, we reveal the back button.
+	h.Back.SetRevealChild(folded)
+
+	// Fold the title:
+	if folded {
+		h.GuildName.SetSizeRequest(-1, -1)
+		h.Separator.Hide()
+		h.LeftSide.SetShowCloseButton(true)
+	} else {
+		h.GuildName.SetSizeRequest(channel.ChannelsWidth-15, -1)
+		h.Separator.Show()
+		h.LeftSide.SetShowCloseButton(false)
+	}
+
+	if h.OnFold != nil {
+		h.OnFold(folded)
+	}
 }
 
 func (h *Header) UpdateGuild(name string) {

@@ -11,7 +11,11 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-// func (a *Application)
+// GoBack is used for the mobile UI's back button.
+func (a *Application) GoBack() {
+	a.Main.SetVisibleChild(a.LeftGrid)
+	a.Header.SetVisibleChild(a.Header.LeftSide)
+}
 
 func (a *Application) SwitchGuild(g *guild.Guild) {
 	a.changeCol(columnChange{
@@ -26,7 +30,7 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 			a.setLeftGridCol(w, 2)
 		},
 		Cleaner: func() {
-			cleanup(a.Channels, a.Privates, a.Messages, a.Members)
+			cleanup(a.Channels, a.Privates, a.Messages)
 		},
 		Loader: func() bool {
 			if err := a.Channels.LoadGuild(g.ID); err != nil {
@@ -38,11 +42,11 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 			return true
 		},
 		After: func() {
-			if err := a.Members.LoadGuild(g.ID); err != nil {
-				log.Println("Can't load members:", err)
-				return
-			}
-			semaphore.IdleMust(a.Right.Add, a.Members)
+			// if err := a.Members.LoadGuild(g.ID); err != nil {
+			// 	log.Println("Can't load members:", err)
+			// 	return
+			// }
+			// semaphore.IdleMust(a.Right.Add, a.Members)
 		},
 	})
 }
@@ -85,8 +89,7 @@ func (a *Application) SwitchDM() {
 			a.setLeftGridCol(w, 2)
 		},
 		Cleaner: func() {
-			cleanup(a.Channels, a.Privates, a.Messages, a.Members)
-			semaphore.IdleMust(a.Right.Clear)
+			cleanup(a.Channels, a.Privates, a.Messages)
 		},
 		Loader: func() bool {
 			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
@@ -111,7 +114,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 			return a.Messages.ChannelID != ch.ChannelID()
 		},
 		Setter: func(w gtk.IWidget) {
-			a.Middle.Add(w)
+			a.Right.Add(w)
 		},
 		Cleaner: func() {
 			a.Messages.Cleanup()
@@ -121,17 +124,18 @@ func (a *Application) SwitchChannel(ch Channel) {
 				log.Errorln("Failed to load messages:", err)
 				return false
 			}
-
+			return true
+		},
+		After: func() {
 			a.lastAccess(ch.GuildID(), a.Messages.GetChannelID())
 
 			name, _ := ch.ChannelInfo()
 			a.Header.UpdateChannel(name)
-			return true
-		},
-		After: func() {
+
 			semaphore.IdleMust(func() {
-				// Set the default visible widget to messages:
-				a.Main.SetVisibleChild(a.Middle)
+				// Set the default visible widget to the right container:
+				a.Main.SetVisibleChild(a.Right)
+				a.Header.SetVisibleChild(a.Header.RightSide)
 
 				// Grab the message input's focus:
 				a.Messages.Focus()
@@ -156,6 +160,7 @@ func (a *Application) changeCol(c columnChange) {
 	defer a.busy.Unlock()
 
 	if !c.Checker() {
+		c.After()
 		return
 	}
 
@@ -188,7 +193,9 @@ func (a *Application) changeCol(c columnChange) {
 
 	// Replace the spinner with the actual channel:
 	semaphore.IdleMust(func() {
+		log.Println("Running setter.")
 		c.Setter(c.Widget)
+		log.Println("Setter ran.")
 		c.Widget.Show()
 	})
 
