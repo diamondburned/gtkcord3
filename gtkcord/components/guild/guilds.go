@@ -16,7 +16,6 @@ type Guilds struct {
 	gtkutils.ExtendedWidget
 
 	ListBox  *gtk.ListBox
-	Avatar   *Avatar
 	DMButton *DMButton
 
 	Guilds   []gtkutils.ExtendedWidget
@@ -117,11 +116,6 @@ func initGuilds(g *Guilds, s *ningen.State) {
 		gw.Add(l)
 		g.ListBox = l
 
-		// Create the user button and add it first:
-		a := NewAvatar(s)
-		g.Avatar = a
-		l.Insert(a, -1)
-
 		// Add the button to the second of the list:
 		g.DMButton = dm
 		l.Insert(dm, -1)
@@ -137,13 +131,10 @@ func initGuilds(g *Guilds, s *ningen.State) {
 
 			switch {
 			case index < 1:
-				a.OnClick()
-				return
-			case index == 1:
 				go g.DMButton.OnClick()
 				return
 			default:
-				index -= 2
+				index--
 			}
 
 			var row = g.Guilds[index]
@@ -166,15 +157,10 @@ func initGuilds(g *Guilds, s *ningen.State) {
 		})
 	})
 
-	go func() {
-		// Update the avatar's status and avatar:
-		g.Avatar.CheckUpdate()
-
-		g.Find(func(g *Guild) bool {
-			g.UpdateImage()
-			return false
-		})
-	}()
+	go g.Find(func(g *Guild) bool {
+		g.UpdateImage()
+		return false
+	})
 
 	s.AddReadChange(g.TraverseReadState)
 }

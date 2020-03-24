@@ -18,8 +18,6 @@ const (
 	ChannelsWidth = 240
 	BannerHeight  = 135
 	LabelHeight   = 48
-
-	ChannelHash = "# "
 )
 
 type Channels struct {

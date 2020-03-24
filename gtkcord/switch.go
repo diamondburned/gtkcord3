@@ -5,9 +5,11 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -35,13 +37,7 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 			a.Header.UpdateGuild(g.Name)
 			return true
 		},
-		After: func() {
-			// if err := a.Members.LoadGuild(g.ID); err != nil {
-			// 	log.Println("Can't load members:", err)
-			// 	return
-			// }
-			// semaphore.IdleMust(a.Right.Add, a.Members)
-		},
+		After: func() {},
 	})
 }
 
@@ -50,7 +46,12 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	if g == nil {
 		c, ok := a.Privates.Channels[a.lastAccess(0, 0).String()]
 		if ok {
-			semaphore.IdleMust(a.Privates.List.SelectRow, c.ListBoxRow)
+			semaphore.IdleMust(func() {
+				a.Privates.List.SelectRow(c.ListBoxRow)
+				if a.Main.GetFold() != handy.FOLD_FOLDED {
+					c.ListBoxRow.Activate()
+				}
+			})
 		}
 
 		return
@@ -66,7 +67,12 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	}
 
 	if lastCh != nil {
-		semaphore.IdleMust(a.Channels.ChList.SelectRow, lastCh.Row)
+		semaphore.IdleMust(func() {
+			a.Channels.ChList.SelectRow(lastCh.Row)
+			if a.Main.GetFold() != handy.FOLD_FOLDED {
+				lastCh.Row.Activate()
+			}
+		})
 	}
 }
 
@@ -125,6 +131,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 
 			name, _ := ch.ChannelInfo()
 			a.Header.UpdateChannel(name)
+			window.SetTitle("#" + name + " - gtkcord")
 
 			semaphore.IdleMust(func() {
 				// Set the default visible widget to the right container:
@@ -133,6 +140,9 @@ func (a *Application) SwitchChannel(ch Channel) {
 
 				// Grab the message input's focus:
 				a.Messages.Focus()
+
+				// Scroll to bottom:
+				a.Messages.ScrollToBottom()
 			})
 		},
 	})

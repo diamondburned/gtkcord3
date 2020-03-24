@@ -20,6 +20,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const InputIconSize = gtk.ICON_SIZE_LARGE_TOOLBAR
+
 type Input struct {
 	*handy.Column
 	Messages *Messages
@@ -33,7 +35,7 @@ type Input struct {
 	Input    *gtk.TextView
 	InputBuf *gtk.TextBuffer
 	Upload   *gtk.Button
-	Emoji    *gtk.Button
+	Send     *gtk.Button
 
 	Editing *discord.Message
 
@@ -54,10 +56,8 @@ func NewInput(m *Messages) (i *Input) {
 
 	ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 
-	upload, _ := gtk.ButtonNewFromIconName(
-		"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	emoji, _ := gtk.ButtonNewFromIconName(
-		"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", InputIconSize)
+	send, _ := gtk.ButtonNewFromIconName("mail-send", InputIconSize)
 
 	input, _ := gtk.TextViewNew()
 	ibuf, _ := input.GetBuffer()
@@ -69,7 +69,7 @@ func NewInput(m *Messages) (i *Input) {
 		Style:    style,
 		InputBox: ibox,
 		Upload:   upload,
-		Emoji:    emoji,
+		Send:     send,
 		Input:    input,
 		InputBuf: ibuf,
 	}
@@ -91,8 +91,17 @@ func NewInput(m *Messages) (i *Input) {
 		go SpawnUploader(i.upload)
 	})
 
-	emoji.SetVAlign(gtk.ALIGN_START)
-	emoji.SetRelief(gtk.RELIEF_NONE)
+	send.SetVAlign(gtk.ALIGN_START)
+	send.SetRelief(gtk.RELIEF_NONE)
+	send.Connect("clicked", func() {
+		text := i.popContent()
+
+		go func() {
+			if err := i.send(text); err != nil {
+				log.Errorln("Failed to send message:", err)
+			}
+		}()
+	})
 
 	gtkutils.Margin2(input, 4, 10)
 	input.AddEvents(int(gdk.KEY_PRESS_MASK))
@@ -110,11 +119,11 @@ func NewInput(m *Messages) (i *Input) {
 	s1, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	s2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 
-	ibox.PackEnd(upload, false, false, 0)
-	ibox.PackEnd(s1, false, false, 2)
-	ibox.PackEnd(input, true, true, 0)
-	ibox.PackEnd(s2, false, false, 2)
-	ibox.PackEnd(emoji, false, false, 0)
+	ibox.PackStart(upload, false, false, 0)
+	ibox.PackStart(s1, false, false, 2)
+	ibox.PackStart(input, true, true, 0)
+	ibox.PackStart(s2, false, false, 2)
+	ibox.PackStart(send, false, false, 0)
 
 	i.Main.ShowAll()
 

@@ -3,7 +3,6 @@ package message
 import (
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -21,7 +20,7 @@ import (
 
 const scrollMinDelta = 500
 
-var MaxMessageWidth = 750
+var MaxMessageWidth = 800
 
 type Messages struct {
 	gtkutils.ExtendedWidget
@@ -33,11 +32,9 @@ type Messages struct {
 
 	Main *gtk.Box
 
-	Scroll      *gtk.ScrolledWindow
-	Viewport    *gtk.Viewport
-	viewAdj     *gtk.Adjustment
-	scrollDelta int32
-	lastHeight  int64
+	Scroll   *gtk.ScrolledWindow
+	Viewport *gtk.Viewport
+	atBottom bool
 
 	Messages *gtk.ListBox
 	messages []*Message
@@ -74,8 +71,8 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 		v, _ := gtk.ViewportNew(nil, nil)
 		m.Viewport = v
-		p, _ := v.GetVAdjustment()
-		m.viewAdj = p
+		// p, _ := v.GetVAdjustment()
+		// m.viewAdj = p
 
 		s, _ := gtk.ScrolledWindowNew(nil, nil)
 		m.Scroll = s
@@ -99,21 +96,36 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 		s.Connect("edge-reached", m.onEdgeReached)
 		s.Connect("edge-overshot", m.onEdgeOvershot)
+		s.SetCanFocus(true)
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
+		s.SetProperty("min-content-width", 300)
+		s.SetProperty("min-content-height", 300)
+		s.SetProperty("window-placement", gtk.CORNER_BOTTOM_LEFT)
 		s.Show()
 
 		// Column actually contains the list:
 		c.SetMaximumWidth(MaxMessageWidth)
+		c.SetLinearGrowthWidth(MaxMessageWidth * 100 / 75) // 800 -> 600
+		c.SetHExpand(true)
+		c.SetVExpand(true)
 		c.Add(b)
 		c.Show()
 
 		// List should fill:
-		b.SetSizeRequest(MaxMessageWidth, -1)
+		// b.SetSizeRequest(MaxMessageWidth, -1)
 
 		// Causes resize bugs:
-		v.Connect("size-allocate", m.onSizeAlloc)
+		v.SetCanFocus(false)
+		v.SetVAlign(gtk.ALIGN_END)
+		v.SetProperty("vscroll-policy", gtkutils.SCROLL_NATURAL)
+		v.SetShadowType(gtk.SHADOW_NONE)
 		v.Add(c) // add col instead of list
 		v.Show()
+
+		// Fractal does this, but Go is superior.
+		adj := s.GetVAdjustment()
+		adj.Connect("value-changed", m.onScroll)
+		v.SetFocusVAdjustment(adj)
 
 		s.Add(v)
 		s.Show()
@@ -305,28 +317,48 @@ func (m *Messages) Cleanup() {
 	m.messages = nil
 }
 
-func (m *Messages) onSizeAlloc() {
-	max := m.viewAdj.GetUpper()
+func (m *Messages) ScrollToBottom() {
+	// Set scroll:
+	vAdj := m.Scroll.GetVAdjustment()
+	to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
+	log.Println("scrolling to:", to)
+	vAdj.SetValue(to)
+}
 
-	// if max := int64(max); max == m.lastHeight {
-	// 	return
-	// } else {
-	// 	m.lastHeight = max
-	// }
+// func (m *Messages) onSizeAlloc() {
+// 	log.Println("Child notify")
 
-	cur := m.viewAdj.GetValue() + m.viewAdj.GetPageSize()
+// 	adj, _ := m.Viewport.GetVAdjustment()
 
-	delta := int32(max - cur)
-	atomic.StoreInt32(&m.scrollDelta, delta)
+// 	max := adj.GetUpper()
 
-	// If the scroll is not close to the bottom and we're not loading messages:
-	if delta > scrollMinDelta {
-		// Then we don't scroll.
-		// log.Println("Not scrolling. Loading:", loading)
-		return
+// 	// if max := int64(max); max == m.lastHeight {
+// 	// 	return
+// 	// } else {
+// 	// 	m.lastHeight = max
+// 	// }
+
+// 	cur := adj.GetValue() + adj.GetPageSize()
+
+// 	delta := int32(max - cur)
+// 	atomic.StoreInt32(&m.scrollDelta, delta)
+
+// 	// If the scroll is not close to the bottom and we're not loading messages:
+// 	if delta > scrollMinDelta {
+// 		// Then we don't scroll.
+// 		// log.Println("Not scrolling. Loading:", loading)
+// 		return
+// 	}
+
+// 	adj.SetValue(max)
+// }
+
+func (m *Messages) onScroll(adj *gtk.Adjustment) {
+	if adj.GetUpper()-adj.GetPageSize() == adj.GetValue() {
+		m.atBottom = true
+	} else {
+		m.atBottom = false
 	}
-
-	m.viewAdj.SetValue(max)
 }
 
 // mainly used to mark something as read when scrolled to the bottom
@@ -384,6 +416,9 @@ func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 func (m *Messages) fetchMore() {
 	defer m.fetchingMore.Set(false)
 	defer m.guard.Unlock()
+
+	semaphore.IdleMust(m.Scroll.SetSensitive, false)
+	defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
 
 	if len(m.messages) < m.fetch {
 		return
@@ -444,7 +479,8 @@ func (m *Messages) fetchMore() {
 
 func (m *Messages) cleanOldMessages() {
 	// Check the scrolling
-	if atomic.LoadInt32(&m.scrollDelta) > scrollMinDelta {
+
+	if !m.atBottom {
 		return
 	}
 

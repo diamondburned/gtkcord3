@@ -9,6 +9,7 @@ import (
 func injectMessage(m *Messages, w *Message) {
 	w.OnUserClick = m.onAvatarClick
 	w.OnRightClick = m.onRightClick
+	w.ListBoxRow.SetFocusVAdjustment(m.Messages.GetFocusVAdjustment())
 }
 
 func shouldCondense(msgs []*Message, msg *Message) bool {

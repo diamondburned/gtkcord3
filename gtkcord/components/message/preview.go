@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 	"github.com/skratchdot/open-golang/open"
@@ -43,9 +44,10 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	d.SetDefaultSize(w, h)
 
 	// Hack for close button
-	d.Connect("response", func(_ *gtk.Dialog, resp gtk.ResponseType) {
+	d.Connect("response", func(_ *glib.Object, resp gtk.ResponseType) {
 		if resp == gtk.RESPONSE_DELETE_EVENT {
 			d.Hide()
+			d.Destroy()
 		}
 	})
 

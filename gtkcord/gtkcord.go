@@ -179,6 +179,11 @@ func (a *Application) Ready(s *ningen.State) error {
 		md.ChangeStyle("monokailight")
 	}
 
+	// Have Hamburger use the state:
+	a.Header.Hamburger.UseState(s)
+
+	// Guilds
+
 	g, err := guild.NewGuilds(s)
 	if err != nil {
 		return errors.Wrap(err, "Failed to make guilds")
@@ -192,6 +197,8 @@ func (a *Application) Ready(s *ningen.State) error {
 		a.SwitchLastChannel(nil)
 	}
 
+	// Channels and DMs
+
 	c := channel.NewChannels(s)
 	c.OnSelect = func(ch *channel.Channel) {
 		a.SwitchChannel(ch)
@@ -202,11 +209,15 @@ func (a *Application) Ready(s *ningen.State) error {
 		a.SwitchChannel(ch)
 	}
 
+	// Messages
+
 	m, err := message.NewMessages(s)
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}
-  
+
+	// Binds
+
 	a.Guilds = g
 	a.Channels = c
 	a.Privates = p
@@ -239,13 +250,6 @@ func (a *Application) Ready(s *ningen.State) error {
 			a.Header.SetVisibleChild(a.Header.RightSide)
 		}
 	})
-
-	// semaphore.IdleMust(func() {
-	// 	a.Members = members.New(s)
-	// })
-
-	// jank shit
-	// h.Hamburger.GuildID = &a.Channels.GuildID
 
 	semaphore.IdleMust(func() {
 		// Set widths:

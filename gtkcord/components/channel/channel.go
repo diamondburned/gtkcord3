@@ -87,8 +87,8 @@ func newCategory(ch *discord.Channel) (chw *Channel) {
 	l.Show()
 	l.SetUseMarkup(true)
 	l.SetXAlign(0.0)
-	l.SetMarginStart(15)
-	l.SetMarginTop(15)
+	l.SetMarginStart(8)
+	l.SetMarginTop(8)
 	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.SetSingleLineMode(true)
 	l.SetMaxWidthChars(40)
@@ -121,15 +121,30 @@ func newCategory(ch *discord.Channel) (chw *Channel) {
 func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	name := `<span weight="bold">` + html.EscapeString(ch.Name) + `</span>`
 
-	l, _ := gtk.LabelNew(ChannelHash + name)
+	hash, _ := gtk.LabelNew(`<span size="x-large" weight="bold">#</span>`)
+	hash.Show()
+	hash.SetUseMarkup(true)
+	hash.SetVAlign(gtk.ALIGN_CENTER)
+	hash.SetHAlign(gtk.ALIGN_START)
+	hash.SetMarginStart(8)
+	hash.SetMarginEnd(8)
+
+	l, _ := gtk.LabelNew(name)
 	l.Show()
+	l.SetVAlign(gtk.ALIGN_CENTER)
+	l.SetHAlign(gtk.ALIGN_START)
 	l.SetUseMarkup(true)
-	l.SetXAlign(0.0)
-	l.SetMarginStart(8)
+
+	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b.Show()
+	b.SetHAlign(gtk.ALIGN_START)
+	b.Add(hash)
+	b.Add(l)
 
 	r, _ := gtk.ListBoxRowNew()
+	r.SetSizeRequest(-1, 20)
 	r.Show()
-	r.Add(l)
+	r.Add(b)
 
 	s, _ := r.GetStyleContext()
 	s.AddClass("channel")

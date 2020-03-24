@@ -18,16 +18,12 @@ type Hamburger struct {
 	Popover *Popover
 }
 
-func SpawnHamburger(relative gtk.IWidget, s *ningen.State) {
-	p := NewPopover(relative)
-	p.SetPosition(gtk.POS_RIGHT)
-
+func NewHamburger(s *ningen.State, p gtkutils.ExtendedWidget) *StatefulPopupBody {
 	body := NewStatefulPopupBody(s, s.Ready.User.ID, 0)
 	body.ParentStyle, _ = p.GetStyleContext()
 	wrapHamburger(s, body.UserPopupBody, p.Hide)
 
-	p.SetChildren(body)
-	p.Popup()
+	return body
 }
 
 func wrapHamburger(s *ningen.State, body *UserPopupBody, destroy func()) {

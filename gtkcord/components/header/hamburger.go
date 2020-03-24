@@ -2,15 +2,18 @@ package header
 
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 type Hamburger struct {
 	gtkutils.ExtendedWidget
-	Button  *gtk.MenuButton
-	OnClick func()
+	Button *gtk.MenuButton
+
+	State *ningen.State
 }
 
 func NewHeaderMenu() (*Hamburger, error) {
@@ -39,13 +42,20 @@ func NewHeaderMenu() (*Hamburger, error) {
 
 	hm := &Hamburger{ExtendedWidget: b, Button: mb}
 
-	mb.Connect("button-release-event", func() bool {
-		if hm.OnClick != nil {
-			hm.OnClick()
+	p := popup.NewDynamicPopover(mb, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
+		if hm.State == nil {
+			return nil
 		}
 
-		return true
+		return popup.NewHamburger(hm.State, p)
 	})
 
+	mb.SetPopover(p.Popover)
+	mb.SetUsePopover(true)
+
 	return hm, nil
+}
+
+func (h *Hamburger) UseState(s *ningen.State) {
+	h.State = s
 }
