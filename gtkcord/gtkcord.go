@@ -206,7 +206,7 @@ func (a *Application) Ready(s *ningen.State) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}
-
+  
 	a.Guilds = g
 	a.Channels = c
 	a.Privates = p

@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/gtkcord/plugin"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -84,6 +85,10 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 
 		if err := a.Ready(s); err != nil {
 			log.Fatalln("Failed to get gtkcord ready:", err)
+		}
+
+		if err := plugin.StartPlugins(a); err != nil {
+			log.Fatalln("Failed to initialize plugins:", err)
 		}
 	}
 }
