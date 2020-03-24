@@ -15,14 +15,15 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/members"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -63,23 +64,18 @@ type Application struct {
 
 	State *ningen.State
 
-	// Main Grid
-	Grid *gtk.Grid
-	cols map[int]gtk.IWidget
+	// Main Grid, left is always LeftGrid - *gtk.Grid
+	Main  *handy.Leaflet // LeftGrid -- Right
+	Right *singlebox.Box // Stack of Messages or full screen server details TODO
 	// <grid>        <item>       <item>
-	//  0            1             2
-	// | Left Grid   | Messages   | Members |
+	// | Left        | Right    |
+	// | Left Grid   | Messages |
 
 	// Left Grid
 	LeftGrid *gtk.Grid
-	LeftRev  *gtk.Revealer
 	leftCols map[int]gtk.IWidget
 	// <item>     <item>
 	// | Guilds   | Channels
-
-	// <item> <separator> <item> <separator> <item> <separator> <item>
-	//   0      1           2      3           4      5           6
-	// | Guilds           | Channels         | Messages         | Members
 
 	// Application states
 	Header   *header.Header
@@ -87,7 +83,6 @@ type Application struct {
 	Privates *channel.PrivateChannels
 	Channels *channel.Channels
 	Messages *message.Messages
-	Members  *members.Revealer
 
 	// GuildID -> ChannelID; if GuildID == 0 then DM
 	LastAccess map[discord.Snowflake]discord.Snowflake
@@ -139,22 +134,28 @@ func (a *Application) activate() {
 	}
 	a.Window = window.Window
 
-	a.cols = map[int]gtk.IWidget{}
 	a.leftCols = map[int]gtk.IWidget{}
 	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
 
-	// Pre-make the grid but don't use it:
-	g, _ := gtk.GridNew()
-	g.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
-	g.SetRowHomogeneous(true)
-	g.Show()
-	a.Grid = g
+	// Pre-make the leaflet but don't use it:
+	l := handy.LeafletNew()
+	l.SetModeTransitionDuration(150)
+	l.SetTransitionType(handy.LEAFLET_TRANSITION_TYPE_SLIDE)
+	l.SetInterpolateSize(true)
+	l.SetCanSwipeBack(true)
+	l.Show()
+	a.Main = l
 
 	// Instead, use the spinner:
 	s, _ := animations.NewSpinner(75)
 
+	// Create a new Header:
+	h, _ := header.NewHeader()
+	a.Header = h
+
 	window.Display(s)
-	window.Resize(1200, 850)
+	window.HeaderDisplay(h)
+	window.Resize(1200, 900)
 	window.SetTitle("gtkcord")
 	window.ShowAll()
 }
@@ -167,7 +168,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		log.Errorln(err)
 	}
 
-	semaphore.IdleMust(window.Resize, 1200, 850)
+	semaphore.IdleMust(window.Resize, 1200, 900)
 
 	// Set Markdown's highlighting theme
 	switch s.Ready.Settings.Theme {
@@ -176,12 +177,6 @@ func (a *Application) Ready(s *ningen.State) error {
 		semaphore.IdleMust(window.PreferDarkTheme, true)
 	case "light":
 		md.ChangeStyle("monokailight")
-	}
-
-	// Create a new Header:
-	h, err := header.NewHeader(s)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create header")
 	}
 
 	g, err := guild.NewGuilds(s)
@@ -211,33 +206,31 @@ func (a *Application) Ready(s *ningen.State) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}
-
-	a.Header = h
+  
 	a.Guilds = g
 	a.Channels = c
 	a.Privates = p
 	a.Messages = m
 
-	semaphore.IdleMust(func() {
-		memberc := members.New(s)
-		var mrevealer *members.Revealer
+	// Bind the back button:
+	a.Header.Back.OnClick = a.GoBack
+	a.Header.OnFold = func(folded bool) {
+		// If folded, we expand those panels:
+		a.Channels.SetHExpand(folded)
+		a.Privates.SetHExpand(folded)
+	}
 
-		// TODO: settings
-		revealed := true
-
-		mrevealer = members.NewRevealer(memberc)
-		mrevealer.BindController(h.Controller)
-		mrevealer.SetRevealChild(revealed)
-
-		a.Members = mrevealer
-	})
+	// semaphore.IdleMust(func() {
+	// 	a.Members = members.New(s)
+	// })
 
 	// jank shit
 	// h.Hamburger.GuildID = &a.Channels.GuildID
 
 	semaphore.IdleMust(func() {
-		// Set sizes
+		// Set widths:
 		a.Channels.SetSizeRequest(ChannelWidth, -1)
+		a.Privates.SetSizeRequest(ChannelWidth, -1)
 
 		// Guilds and Channels grid:
 		g1, _ := gtk.GridNew()
@@ -246,49 +239,29 @@ func (a *Application) Ready(s *ningen.State) error {
 		g1.SetRowHomogeneous(true)
 		a.LeftGrid = g1
 
-		// Guilds and Channels revealer:
-		r1, _ := gtk.RevealerNew()
-		r1.SetTransitionDuration(50)
-		r1.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
-		r1.Show()
-		r1.Add(g1)
-
-		// Bind the revealer:
-		h.Hamburger.OnClick = func() {
-			revealed := !r1.GetRevealChild()
-			r1.SetRevealChild(revealed)
-			h.Hamburger.Button.SetActive(revealed)
-
-			if revealed {
-				h.GuildBox.Show()
-			} else {
-				h.GuildBox.Hide()
-			}
-		}
-
-		// Force display the left panel, which toggles it to true:
-		h.Hamburger.OnClick()
-
 		// Add the guilds and the separator right and left of channels:
 		a.setLeftGridCol(a.Guilds, 0)
 		a.setLeftGridCol(newSeparator(), 1)
 		a.setLeftGridCol(newSeparator(), 3)
 
-		// Set the left grid to the main grid:
-		a.setGridCol(r1, 0)
+		// Set the left grid to the main leaflet:
+		a.Main.Add(g1)
 
-		// Message widget placeholder
-		b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		b.Show()
-		b.SetHExpand(true)
-		b.SetVExpand(true)
+		// Make left grid the default view:
+		a.Main.SetVisibleChild(g1)
 
-		// Set the message placeholder to the main grid:
-		a.setGridCol(b, 1)
+		// Message widget container, which will hold *Messages:
+		c, _ := singlebox.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		c.Show()
+		c.SetHExpand(true)
+		c.SetVExpand(true)
+
+		// Set the message container to the main container:
+		a.Right = c
+		a.Main.Add(c)
 
 		// Display the grid and header
-		window.Display(a.Grid)
-		window.HeaderDisplay(h)
+		window.Display(a.Main)
 		window.Show()
 
 		// Make a Quick switcher
@@ -334,17 +307,14 @@ func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake 
 	return ch
 }
 
-func (a *Application) setGridCol(w gtk.IWidget, n int) {
-	setGridCol(a.Grid, a.cols, w, n)
-}
-func (a *Application) setLeftGridCol(w gtk.IWidget, n int) {
-	setGridCol(a.LeftGrid, a.leftCols, w, n)
-}
-
 func newSeparator() *gtk.Separator {
 	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	s.Show()
 	return s
+}
+
+func (a *Application) setLeftGridCol(w gtk.IWidget, n int) {
+	setGridCol(a.LeftGrid, a.leftCols, w, n)
 }
 
 func setGridCol(grid *gtk.Grid, gridStore map[int]gtk.IWidget, w gtk.IWidget, n int) {

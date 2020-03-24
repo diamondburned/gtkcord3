@@ -193,14 +193,14 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 
 	message.rightBottom.SetHExpand(true)
 	message.rightBottom.SetMarginBottom(5)
-	message.rightBottom.SetMarginEnd(AvatarPadding * 2)
+	message.rightBottom.SetMarginEnd(AvatarPadding)
 	// message.rightBottom.Connect("size-allocate", func() {
 	// 	// Hack to force Gtk to recalculate size on changes
 	// 	message.rightBottom.SetVExpand(true)
 	// 	message.rightBottom.SetVExpand(false)
 	// })
 
-	message.avatarEv.SetMarginStart(AvatarPadding * 2)
+	message.avatarEv.SetMarginStart(AvatarPadding)
 	message.avatarEv.SetMarginEnd(AvatarPadding)
 	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 	message.avatarEv.Add(message.avatar)
@@ -229,7 +229,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.rightTop.Add(message.author)
 	gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
 
-	timestampSize := AvatarSize + AvatarPadding - 1
+	timestampSize := AvatarSize - 1
 	message.timestamp.SetSizeRequest(timestampSize, -1)
 	message.timestamp.SetOpacity(0.5)
 	message.timestamp.SetYAlign(0.0)
@@ -437,7 +437,7 @@ func (m *Message) assertContentUnsafe() {
 		m.content = msgTb
 
 		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-		msgTv.SetHExpand(true)
+		msgTv.SetHAlign(gtk.ALIGN_FILL)
 		msgTv.SetCursorVisible(false)
 		msgTv.SetEditable(false)
 		msgTv.SetCanFocus(false)

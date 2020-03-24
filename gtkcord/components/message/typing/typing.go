@@ -34,10 +34,10 @@ func handler() {
 
 	for {
 		// First, catch a TypingState
-		// for tOld == nil {
-		// 	tOld = <-typingHandler
-		// 	// stop until we get something
-		// }
+		for tOld == nil {
+			tOld = <-typingHandler
+			// stop until we get something
+		}
 
 		// Block until a tick or a typing state
 		select {
@@ -104,24 +104,22 @@ func NewState(s *state.State) *State {
 		state: s,
 	}
 
-	semaphore.IdleMust(func() {
-		// the breathing 3 dot thing
-		breathing, _ := animations.NewBreathing()
+	// the breathing 3 dot thing
+	breathing, _ := animations.NewBreathing()
 
-		t.Label, _ = gtk.LabelNew("")
-		t.Label.SetMarginStart(4)
-		t.Label.SetSingleLineMode(true)
+	t.Label, _ = gtk.LabelNew("")
+	t.Label.SetMarginStart(4)
+	t.Label.SetSingleLineMode(true)
 
-		t.Box, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		t.Box.SetHAlign(gtk.ALIGN_START)
-		t.Box.SetVAlign(gtk.ALIGN_END)
-		t.Box.Add(breathing)
-		t.Box.Add(t.Label)
-		t.Box.SetOpacity(0)
+	t.Box, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	t.Box.SetHAlign(gtk.ALIGN_START)
+	t.Box.SetVAlign(gtk.ALIGN_END)
+	t.Box.Add(breathing)
+	t.Box.Add(t.Label)
+	t.Box.SetOpacity(0)
 
-		gtkutils.Margin2(t.Box, 2, 20)
-		t.Box.SetMarginTop(0)
-	})
+	gtkutils.Margin2(t.Box, 2, 20)
+	t.Box.SetMarginTop(0)
 
 	return t
 }

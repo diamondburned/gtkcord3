@@ -11,14 +11,17 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/moreatomic"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 const scrollMinDelta = 500
+
+const MaxMessageWidth = 750
 
 type Messages struct {
 	gtkutils.ExtendedWidget
@@ -53,13 +56,18 @@ type Messages struct {
 
 func NewMessages(s *ningen.State) (*Messages, error) {
 	m := &Messages{c: s, fetch: s.Store.MaxMessages()}
-	m.Typing = typing.NewState(s.State)
-	m.Input = NewInput(m)
 
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		m.Main = main
 		m.ExtendedWidget = main
+
+		// Make the input and typing state:
+		m.Input = NewInput(m)
+		m.Typing = typing.NewState(s.State)
+
+		// For wrappping around listbox
+		c := handy.ColumnNew()
 
 		b, _ := gtk.ListBoxNew()
 		m.Messages = b
@@ -73,11 +81,7 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		m.Scroll = s
 
 		// Main actually contains the scrolling window.
-		gtkutils.InjectCSSUnsafe(main, "messagecontainer", `
-			.messagecontainer {
-				background-color: @theme_base_color;
-			}
-		`)
+		gtkutils.InjectCSSUnsafe(main, "messagecontainer", "")
 		main.Show()
 		main.SetHExpand(true)
 		main.SetVExpand(true)
@@ -98,9 +102,17 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
 		s.Show()
 
+		// Column actually contains the list:
+		c.SetMaximumWidth(MaxMessageWidth)
+		c.Add(b)
+		c.Show()
+
+		// List should fill:
+		b.SetSizeRequest(MaxMessageWidth, -1)
+
 		// Causes resize bugs:
 		v.Connect("size-allocate", m.onSizeAlloc)
-		v.Add(b)
+		v.Add(c) // add col instead of list
 		v.Show()
 
 		s.Add(v)

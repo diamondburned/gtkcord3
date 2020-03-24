@@ -4,7 +4,7 @@ pkgs.stdenv.mkDerivation rec {
 	name = "gtkcord3";
 
 	buildInputs = with pkgs; [
-		gnome3.glib gnome3.gtk
+		gnome3.glib gnome3.gtk libhandy
 		pkgconfig go
 	];
 }

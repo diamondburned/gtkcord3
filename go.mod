@@ -7,9 +7,10 @@ require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/diamondburned/arikawa v0.1.6-0.20200317012923-b59d9bfed778
+	github.com/diamondburned/handy v0.0.0-20200323032954-59a7f405f43e
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
-	github.com/gotk3/gotk3 v0.4.1-0.20200303201101-011cec6a2372
+	github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
 	github.com/markbates/pkger v0.15.0
 	github.com/mattn/go-isatty v0.0.12 // indirect

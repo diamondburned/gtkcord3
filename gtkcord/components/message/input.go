@@ -14,13 +14,14 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 type Input struct {
-	gtkutils.ExtendedWidget
+	*handy.Column
 	Messages *Messages
 
 	Main  *gtk.Box
@@ -43,63 +44,79 @@ type Input struct {
 }
 
 func NewInput(m *Messages) (i *Input) {
-	semaphore.IdleMust(func() {
-		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		style, _ := main.GetStyleContext()
-		ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	c := handy.ColumnNew()
+	c.Show()
+	c.SetMaximumWidth(MaxMessageWidth)
+	style, _ := c.GetStyleContext()
 
-		upload, _ := gtk.ButtonNewFromIconName(
-			"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-		emoji, _ := gtk.ButtonNewFromIconName(
-			"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	main.SetSizeRequest(MaxMessageWidth, -1) // fill
 
-		input, _ := gtk.TextViewNew()
-		ibuf, _ := input.GetBuffer()
+	ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 
-		i = &Input{
-			Messages:       m,
-			ExtendedWidget: main,
-			Main:           main,
-			Style:          style,
-			InputBox:       ibox,
-			Upload:         upload,
-			Emoji:          emoji,
-			Input:          input,
-			InputBuf:       ibuf,
-		}
+	upload, _ := gtk.ButtonNewFromIconName(
+		"document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	emoji, _ := gtk.ButtonNewFromIconName(
+		"face-smile-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
 
-		style.AddClass("message-input")
+	input, _ := gtk.TextViewNew()
+	ibuf, _ := input.GetBuffer()
 
-		// Initialize the completer:
-		i.initCompleter()
-		// Prepend the completer box:
-		main.Add(i.Completer)
+	i = &Input{
+		Column:   c,
+		Messages: m,
+		Main:     main,
+		Style:    style,
+		InputBox: ibox,
+		Upload:   upload,
+		Emoji:    emoji,
+		Input:    input,
+		InputBuf: ibuf,
+	}
 
-		// Prepare the message input box:
-		gtkutils.Margin2(ibox, 4, 10*2)
-		ibox.SetMarginBottom(0) // doing it legit by using label as padding
+	style.AddClass("message-input")
 
-		upload.SetVAlign(gtk.ALIGN_START)
-		upload.Connect("clicked", func() {
-			go SpawnUploader(i.upload)
-		})
-		emoji.SetVAlign(gtk.ALIGN_START)
+	// Initialize the completer:
+	i.initCompleter()
+	// Prepend the completer box:
+	main.Add(i.Completer)
 
-		gtkutils.Margin2(input, 4, 10)
-		input.AddEvents(int(gdk.KEY_PRESS_MASK))
-		input.Connect("key-press-event", i.keyDown)
-		input.SetWrapMode(gtk.WRAP_WORD_CHAR)
-		input.SetVAlign(gtk.ALIGN_CENTER)
+	// Prepare the message input box:
+	gtkutils.Margin2(ibox, 4, 10*2)
+	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
-		// Add the message input box:
-		main.Add(ibox)
-
-		ibox.PackEnd(upload, false, false, 0)
-		ibox.PackEnd(input, true, true, 0)
-		ibox.PackEnd(emoji, false, false, 0)
-
-		i.Main.ShowAll()
+	upload.SetVAlign(gtk.ALIGN_START)
+	upload.SetRelief(gtk.RELIEF_NONE)
+	upload.Connect("clicked", func() {
+		go SpawnUploader(i.upload)
 	})
+
+	emoji.SetVAlign(gtk.ALIGN_START)
+	emoji.SetRelief(gtk.RELIEF_NONE)
+
+	gtkutils.Margin2(input, 4, 10)
+	input.AddEvents(int(gdk.KEY_PRESS_MASK))
+	input.Connect("key-press-event", i.keyDown)
+	input.SetWrapMode(gtk.WRAP_WORD_CHAR)
+	input.SetVAlign(gtk.ALIGN_CENTER)
+
+	// Add the message input box:
+	main.Add(ibox)
+
+	// Add the main box:
+	c.Add(main)
+
+	// Separators between the message input box
+	s1, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	s2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+
+	ibox.PackEnd(upload, false, false, 0)
+	ibox.PackEnd(s1, false, false, 2)
+	ibox.PackEnd(input, true, true, 0)
+	ibox.PackEnd(s2, false, false, 2)
+	ibox.PackEnd(emoji, false, false, 0)
+
+	i.Main.ShowAll()
 
 	return
 }

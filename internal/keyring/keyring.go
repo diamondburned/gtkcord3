@@ -11,6 +11,10 @@ func Get() string {
 		log.Errorln("[non-fatal] Failed to get Gtkcord token from keyring")
 	}
 
+	if k == "" {
+		log.Infoln("Keyring token is empty.")
+	}
+
 	return k
 }
 

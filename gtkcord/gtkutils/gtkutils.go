@@ -45,6 +45,7 @@ type WidgetSizeRequester interface {
 type Container interface {
 	gtk.IWidget
 	Add(gtk.IWidget)
+	Remove(gtk.IWidget)
 }
 
 // Safe-guard

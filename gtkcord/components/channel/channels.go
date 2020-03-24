@@ -23,11 +23,10 @@ const (
 )
 
 type Channels struct {
-	gtkutils.ExtendedWidget
-	GuildID discord.Snowflake
+	*gtk.ScrolledWindow
+	Main *gtk.Box
 
-	Scroll *gtk.ScrolledWindow
-	Main   *gtk.Box
+	GuildID discord.Snowflake
 
 	// Headers
 	BannerImage *gtk.Image
@@ -47,11 +46,9 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		main.Show()
-		// main.SetSizeRequest(ChannelsWidth, -1)
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
 		cs.Show()
-		// cs.SetSizeRequest(ChannelsWidth, -1)
 		cs.Add(main)
 
 		cl, _ := gtk.ListBoxNew()
@@ -63,16 +60,13 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 		main.Add(cl)
 
 		chs = &Channels{
-			ExtendedWidget: cs,
-			Scroll:         cs,
+			ScrolledWindow: cs,
 			Main:           main,
 			ChList:         cl,
 			state:          state,
 		}
 
-		cl.Connect("selected-rows-changed", func(l *gtk.ListBox) {
-			var r = l.GetSelectedRow()
-
+		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 			if chs.OnSelect == nil || len(chs.Channels) == 0 || r == nil {
 				return
 			}
@@ -177,11 +171,9 @@ func (chs *Channels) UpdateBanner(url string) {
 		})
 	}
 
-	if err := cache.SetImageScaled(
-		url+"?size=512",
-		chs.BannerImage,
-		ChannelsWidth, BannerHeight); err != nil {
+	const w, h = ChannelsWidth, BannerHeight
 
+	if err := cache.SetImageScaled(url+"?size=512", chs.BannerImage, w, h); err != nil {
 		log.Errorln("Failed to get the pixbuf guild icon:", err)
 		return
 	}
