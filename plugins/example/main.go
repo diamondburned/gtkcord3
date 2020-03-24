@@ -22,7 +22,7 @@ func Ready(a *gtkcord.Application) {
 func pluginButton() *gtk.Button {
 	// Gtk errors can be ignored, things will SEGFAULT on their own anyway.
 	pb, _ := gtk.ButtonNew()
-	pb.SetLabel("BOTTOM TEXT")
+	pb.SetLabel("kurisu makise best girl")
 	pb.SetSizeRequest(128, 128)
 	pb.Show()
 	return pb

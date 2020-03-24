@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"path/filepath"
 	"plugin"
 
@@ -31,11 +32,13 @@ func StartPlugins(a *gtkcord.Application) error {
 
 		p, err := plugin.Open(filepath.Join(path, f.Name()))
 		if err != nil {
-			return errors.Wrap(err, "Failed to open plugin "+f.Name())
+			log.Errorln("error opening plugin", err)
+			continue // skip because the plugin is invalid
 		}
 
 		if err := startPlugin(p, a); err != nil {
-			return errors.Wrap(err, "Failed to load plugin "+f.Name())
+			log.Errorln("error loading plugin", err)
+			continue
 		}
 	}
 
