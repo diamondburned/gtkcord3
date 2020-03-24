@@ -39,6 +39,7 @@ func newExtraImageUnsafe(proxy, direct string, w, h int, pp ...cache.Processor) 
 
 	evb, _ := gtk.EventBoxNew()
 	evb.Add(img)
+	evb.SetHAlign(gtk.ALIGN_START)
 	evb.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) {
 		if !gtkutils.EventIsLeftClick(ev) {
 			return

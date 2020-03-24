@@ -29,7 +29,7 @@ type Header struct {
 	ChannelName *gtk.Label
 	Controller  *controller.Container
 
-	folded bool
+	Folded bool
 	OnFold func(folded bool)
 }
 
@@ -73,7 +73,7 @@ func NewHeader() (*Header, error) {
 	label.SetMarginStart(15)
 	label.SetSizeRequest(channel.ChannelsWidth-15, -1)
 	label.SetLines(1)
-	label.SetLineWrap(true)
+	label.SetLineWrap(false)
 	label.SetEllipsize(pango.ELLIPSIZE_END)
 	left.Add(label)
 
@@ -104,7 +104,7 @@ func NewHeader() (*Header, error) {
 	chname, _ := gtk.LabelNew("")
 	chname.Show()
 	chname.SetLines(1)
-	chname.SetLineWrap(true)
+	chname.SetLineWrap(false)
 	chname.SetEllipsize(pango.ELLIPSIZE_END)
 	chname.SetXAlign(0.0)
 
@@ -138,10 +138,10 @@ func NewHeader() (*Header, error) {
 }
 
 func (h *Header) onFold(folded bool) {
-	if h.folded == folded {
+	if h.Folded == folded {
 		return
 	}
-	h.folded = folded
+	h.Folded = folded
 
 	// If folded, we reveal the back button.
 	h.Back.SetRevealChild(folded)

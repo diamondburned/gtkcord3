@@ -212,13 +212,33 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.Privates = p
 	a.Messages = m
 
-	// Bind the back button:
-	a.Header.Back.OnClick = a.GoBack
+	// Expand the channel list on fold:
 	a.Header.OnFold = func(folded bool) {
 		// If folded, we expand those panels:
 		a.Channels.SetHExpand(folded)
 		a.Privates.SetHExpand(folded)
 	}
+
+	// Bind OnClick to trigger below callback:
+	a.Header.Back.OnClick = func() {
+		a.Main.SetFocusChild(a.LeftGrid)
+	}
+
+	// Bind to set-focus-child so swiping left works too.
+	a.Main.Connect("set-focus-child", func(_ *glib.Object, w *gtk.Widget) {
+		if w == nil {
+			return
+		}
+
+		switch name, _ := w.GetName(); name {
+		case "left":
+			a.Main.SetVisibleChild(a.LeftGrid)
+			a.Header.SetVisibleChild(a.Header.LeftSide)
+		case "right":
+			a.Main.SetVisibleChild(a.Right)
+			a.Header.SetVisibleChild(a.Header.RightSide)
+		}
+	})
 
 	// semaphore.IdleMust(func() {
 	// 	a.Members = members.New(s)
@@ -235,6 +255,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		// Guilds and Channels grid:
 		g1, _ := gtk.GridNew()
 		g1.Show()
+		g1.SetName("left")
 		g1.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
 		g1.SetRowHomogeneous(true)
 		a.LeftGrid = g1
@@ -253,6 +274,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		// Message widget container, which will hold *Messages:
 		c, _ := singlebox.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 		c.Show()
+		c.SetName("right")
 		c.SetHExpand(true)
 		c.SetVExpand(true)
 

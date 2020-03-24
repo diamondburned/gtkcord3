@@ -82,7 +82,7 @@ func NewInput(m *Messages) (i *Input) {
 	main.Add(i.Completer)
 
 	// Prepare the message input box:
-	gtkutils.Margin2(ibox, 4, 10*2)
+	gtkutils.Margin2(ibox, 4, 10)
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
 	upload.SetVAlign(gtk.ALIGN_START)

@@ -5,20 +5,12 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/gotk3/gotk3/gtk"
 )
 
 func Spawn() {
 	a, _ := gtk.AboutDialogNew()
-	a.SetModal(true)
-	a.SetTransientFor(window.Window)
-
-	// Hack for close button
-	a.Connect("response", func(_ *gtk.AboutDialog, resp gtk.ResponseType) {
-		if resp == gtk.RESPONSE_DELETE_EVENT {
-			a.Hide()
-		}
-	})
 
 	logo, err := logo.Pixbuf(64)
 	if err != nil {
@@ -37,6 +29,8 @@ func Spawn() {
 	a.SetWebsite("https://github.com/diamondburned/gtkcord3")
 	a.SetWebsiteLabel("Source code")
 
-	a.Run()
-	a.GrabFocus()
+	// SWITCH!
+	d := gtkutils.HandyDialog(a, window.Window)
+	d.Run()
+	d.GrabFocus()
 }

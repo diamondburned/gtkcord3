@@ -1,8 +1,6 @@
 package window
 
 import (
-	"os"
-
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -177,7 +175,7 @@ const CSS = `
 	}
 `
 
-var CustomCSS = os.Getenv("GTKCORD_CUSTOM_CSS")
+var CustomCSS string
 
 // I don't like this:
 // list row:selected { box-shadow: inset 2px 0 0 0 white; }

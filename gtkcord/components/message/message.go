@@ -200,7 +200,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	// 	message.rightBottom.SetVExpand(false)
 	// })
 
-	message.avatarEv.SetMarginStart(AvatarPadding)
+	message.avatarEv.SetMarginStart(AvatarPadding - 2)
 	message.avatarEv.SetMarginEnd(AvatarPadding)
 	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 	message.avatarEv.Add(message.avatar)
@@ -220,9 +220,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		`<span weight="bold">` + html.EscapeString(m.Author.Username) + `</span>`)
 	message.author.SetTooltipText(m.Author.Username)
 	message.author.SetSingleLineMode(true)
-	message.author.SetLineWrap(true)
-	message.author.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-	message.author.SetMaxWidthChars(100)
+	message.author.SetLineWrap(false)
 	message.author.SetEllipsize(pango.ELLIPSIZE_END)
 	message.author.SetXAlign(0.0)
 

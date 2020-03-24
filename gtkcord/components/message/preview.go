@@ -9,13 +9,14 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 	"github.com/skratchdot/open-golang/open"
 )
 
 type PreviewDialog struct {
-	*gtk.Dialog
+	*handy.Dialog
 	Content *gtk.Box
 
 	Image *gtk.Image
@@ -38,9 +39,7 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	w = int(float64(w) / 1.25)
 	h = int(float64(h) / 1.25)
 
-	d, _ := gtk.DialogNew()
-	d.SetModal(true)
-	d.SetTransientFor(window.Window)
+	d := handy.DialogNew(window.Window)
 	d.SetDefaultSize(w, h)
 
 	// Hack for close button

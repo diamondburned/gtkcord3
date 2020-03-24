@@ -11,12 +11,6 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-// GoBack is used for the mobile UI's back button.
-func (a *Application) GoBack() {
-	a.Main.SetVisibleChild(a.LeftGrid)
-	a.Header.SetVisibleChild(a.Header.LeftSide)
-}
-
 func (a *Application) SwitchGuild(g *guild.Guild) {
 	a.changeCol(columnChange{
 		Widget: a.Channels,

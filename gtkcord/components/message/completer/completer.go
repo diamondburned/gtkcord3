@@ -289,8 +289,8 @@ func completerImage(url string, pp ...cache.Processor) *gtk.Image {
 func completerLeftLabel(text string) *gtk.Label {
 	l, _ := gtk.LabelNew(text)
 	l.SetSingleLineMode(true)
-	l.SetLineWrap(true)
-	l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	l.SetLineWrap(false)
+	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.SetHAlign(gtk.ALIGN_START)
 
 	return l

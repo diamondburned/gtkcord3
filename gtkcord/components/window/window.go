@@ -41,16 +41,16 @@ func WithApplication(app *gtk.Application) error {
 	}
 	Window.ApplicationWindow = w
 
-	w.Show()
-	w.Connect("destroy", func() {
-		gtk.MainQuit()
-	})
-
 	l, err := logo.Pixbuf(64)
 	if err != nil {
 		return errors.Wrap(err, "Failed to load logo")
 	}
 	w.SetIcon(l)
+
+	w.Show()
+	w.Connect("destroy", func() {
+		gtk.MainQuit()
+	})
 
 	a, err := gtk.AccelGroupNew()
 	if err != nil {

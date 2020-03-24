@@ -262,7 +262,9 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 
 	if w > 0 && h > 0 {
 		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
-			l.SetSize(maxSize(imgW, imgH, w, h))
+			w, h = maxSize(imgW, imgH, w, h)
+			l.SetSize(w, h)
+			semaphore.IdleMust(img.SetSizeRequest, w, h)
 		})
 	}
 

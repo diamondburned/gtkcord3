@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -177,4 +178,40 @@ func EventIsRightClick(ev *gdk.Event) bool {
 func EventIsLeftClick(ev *gdk.Event) bool {
 	btn := gdk.EventButtonNewFromEvent(ev)
 	return btn.Button() == gdk.BUTTON_PRIMARY
+}
+
+type Dialoger interface {
+	GetContentArea() (*gtk.Box, error)
+	GetHeaderBar() *gtk.Widget
+	Remove(gtk.IWidget)
+}
+
+func HandyDialog(dialog Dialoger, transientFor gtk.IWindow) *handy.Dialog {
+	w, _ := dialog.GetContentArea()
+	dialog.Remove(w)
+
+	h := dialog.GetHeaderBar()
+	dialog.Remove(h)
+
+	d := handy.DialogNew(transientFor)
+	d.Show()
+
+	// Hack for close button
+	d.Connect("response", func(_ *glib.Object, resp gtk.ResponseType) {
+		if resp == gtk.RESPONSE_DELETE_EVENT {
+			d.Hide()
+		}
+	})
+
+	// Delete the existing inner box:
+	c, _ := d.GetContentArea()
+	d.Remove(c)
+
+	// Give the content box to our new dialog:
+	d.Add(w)
+
+	// Set the header:
+	d.SetTitlebar(h)
+
+	return d
 }

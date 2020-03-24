@@ -25,7 +25,10 @@ func init() {
 	flag.BoolVar(&profile, "prof", false, "Enable the profiler")
 
 	// AGGRESSIVE GC
-	debug.SetGCPercent(50)
+	debug.SetGCPercent(100)
+
+	// Set the right envs:
+	LoadEnvs()
 }
 
 func LoadToken() string {

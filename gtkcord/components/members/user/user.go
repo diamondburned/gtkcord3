@@ -38,6 +38,7 @@ func New() *Container {
 	labelBox.Show()
 
 	l, _ := gtk.LabelNew("")
+	l.SetLineWrap(false)
 	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.Show()
 	l.SetXAlign(0.0)
