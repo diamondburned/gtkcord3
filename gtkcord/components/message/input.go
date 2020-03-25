@@ -406,7 +406,7 @@ func (i *Input) _upload(content string, paths []string) error {
 	w := newMessageCustom(m)
 	semaphore.IdleMust(w.rightBottom.Add, u)
 
-	i.Messages.insert(w)
+	i.Messages._insert(w)
 	go w.updateAuthor(i.Messages.c, m.GuildID, m.Author)
 
 	_, err = i.Messages.c.State.SendMessageComplex(m.ChannelID, s)

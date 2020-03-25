@@ -36,6 +36,7 @@ type Popover struct {
 
 func NewPopover(relative gtk.IWidget) *Popover {
 	p, _ := gtk.PopoverNew(relative)
+	p.SetSizeRequest(PopupWidth, -1)
 	style, _ := p.GetStyleContext()
 
 	gtkutils.InjectCSSUnsafe(p, "user-info", "")
@@ -47,6 +48,10 @@ func NewPopover(relative gtk.IWidget) *Popover {
 	popover.Connect("closed", func() {
 		popover.Style.RemoveClass(popover.oldClass)
 		popover.oldClass = ""
+
+		if popover.Children == nil {
+			return
+		}
 
 		popover.Children.Destroy()
 		popover.Children = nil
@@ -73,6 +78,12 @@ func NewDynamicPopover(relative gtkutils.WidgetConnector, create PopoverCreator)
 			p.ShowAll()
 		}
 	})
+
+	// LMAO
+	if mb, ok := relative.(*gtk.MenuButton); ok {
+		mb.SetPopover(p.Popover)
+		mb.SetUsePopover(true)
+	}
 
 	return p
 }

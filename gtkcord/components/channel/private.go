@@ -2,7 +2,7 @@ package channel
 
 import (
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/members/user"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/user"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"

@@ -13,7 +13,7 @@ func LoadEnvs() {
 		window.CustomCSS = css
 	}
 
-	if w, _ := strconv.Atoi(os.Getenv("GTKCORD_MSGWIDTH")); w > 0 {
+	if w, _ := strconv.Atoi(os.Getenv("GTKCORD_MSGWIDTH")); w > 100 { // min 100
 		message.MaxMessageWidth = w
 	}
 }

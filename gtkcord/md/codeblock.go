@@ -254,22 +254,24 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 		if len(rest) > 0 {
 			infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
 			if infoStart != infoStop {
-				var value = rest[:len(rest)]
-
 				switch {
-				case bytes.HasSuffix(value, []byte("```")):
+				case bytes.HasSuffix(rest, []byte("```")):
 					// Single line code:
 					seg := text.NewSegment(infoStart, infoStop)
 					seg.Stop -= 3 // len("```")
 					node.Lines().Append(seg)
 
-				case bytes.IndexByte(bytes.TrimSpace(value), ' ') == -1:
+				case bytes.IndexByte(bytes.TrimSpace(rest), ' ') == -1:
 					// Account for the trailing whitespaces:
 					left := util.TrimLeftSpaceLength(rest)
 					right := util.TrimRightSpaceLength(rest)
 					// If value does not contain spaces, it's probably the language
 					// part.
-					node.Info = ast.NewTextSegment(text.NewSegment(infoStart+left, infoStop-right))
+					if left < right {
+						node.Info = ast.NewTextSegment(
+							text.NewSegment(infoStart+left, infoStop-right),
+						)
+					}
 
 				default:
 					// Invalid codeblock, but we're parsing it anyway. It will

@@ -12,7 +12,7 @@ import (
 // var MaxWorkers = runtime.GOMAXPROCS(0)
 // var sema = semaphore.NewWeighted(int64(MaxWorkers))
 
-var idleAdds = make(chan *idleCall, 0)
+var idleAdds = make(chan *idleCall, 100)
 var recvPool = sync.Pool{
 	New: func() interface{} {
 		return make(chan []reflect.Value)

@@ -13,17 +13,10 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
 )
 
-const Width = 280
-
 type Container struct {
-	*gtk.ScrolledWindow
-	// Main  *gtk.Box
-	// Roles []*RoleSection
-
-	List *gtk.ListBox
+	*gtk.ListBox
 	Rows []gtkutils.ExtendedWidget
 
 	GuildID discord.Snowflake
@@ -34,22 +27,14 @@ type Container struct {
 
 // thread-safe
 func New(s *ningen.State) (m *Container) {
-	sw, _ := gtk.ScrolledWindowNew(nil, nil)
-	sw.Show()
-	sw.SetSizeRequest(Width, -1)
-	gtkutils.InjectCSSUnsafe(sw, "membercontainer", "")
-
 	list, _ := gtk.ListBoxNew()
 	list.Show()
 	gtkutils.InjectCSSUnsafe(list, "members", "")
-	sw.Add(list)
 
 	m = &Container{
-		ScrolledWindow: sw,
-		List:           list,
-		state:          s,
-
-		Rows: []gtkutils.ExtendedWidget{},
+		ListBox: list,
+		state:   s,
+		Rows:    []gtkutils.ExtendedWidget{},
 	}
 	s.MemberList.OnOP = m.handle
 	s.MemberList.OnSync = m.handleSync
@@ -64,7 +49,7 @@ func New(s *ningen.State) (m *Container) {
 		}
 
 		p := popup.NewPopover(r)
-		p.SetPosition(gtk.POS_LEFT)
+		p.SetPosition(gtk.POS_BOTTOM)
 
 		body := popup.NewStatefulPopupBody(m.state, rw.ID, m.GuildID)
 		body.ParentStyle, _ = p.GetStyleContext()
@@ -111,7 +96,9 @@ func (m *Container) handle(
 }
 
 // Cleanup is thread-safe.
-func (m *Container) Cleanup() {
+func (m *Container) Destroy() {
+	log.Println("Members destroy called")
+
 	m.mutex.Lock()
 	m.cleanup()
 	m.mutex.Unlock()
@@ -120,7 +107,7 @@ func (m *Container) Cleanup() {
 func (m *Container) cleanup() {
 	semaphore.IdleMust(func() {
 		for i, r := range m.Rows {
-			m.List.Remove(r)
+			m.ListBox.Remove(r)
 			m.Rows[i] = nil
 		}
 		m.Rows = m.Rows[:0]
@@ -128,12 +115,7 @@ func (m *Container) cleanup() {
 }
 
 // LoadGuild is thread-safe.
-func (m *Container) LoadGuild(guildID discord.Snowflake) error {
-	guild, err := m.state.Guild(guildID)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get guild")
-	}
-
+func (m *Container) LoadGuild(guild discord.Guild) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -142,48 +124,45 @@ func (m *Container) LoadGuild(guildID discord.Snowflake) error {
 	// Borrow MemberList's mutex
 	ml := m.state.MemberList.GetMemberList(guild.ID)
 	if ml == nil {
-		return nil
+		return
 	}
 	unlock := ml.Acquire()
 	defer unlock()
 
-	m.reset(ml, *guild)
-	return nil
+	m.reset(ml, guild)
 }
 
 func (m *Container) reset(ml *ningen.MemberList, guild discord.Guild) {
-	semaphore.IdleMust(func() {
-		for i, it := range ml.Items {
-			var item gtkutils.ExtendedWidget
+	for i, it := range ml.Items {
+		var item gtkutils.ExtendedWidget
 
-			switch {
-			case it == nil, it.Group == nil && it.Member == nil:
-				item = NewMemberUnavailable()
-				log.Errorln("it == nil at index", i)
+		switch {
+		case it == nil, it.Group == nil && it.Member == nil:
+			item = NewMemberUnavailable()
+			log.Errorln("it == nil at index", i)
 
-			case it.Group != nil:
-				var name string
+		case it.Group != nil:
+			var name string
 
-				if id, err := discord.ParseSnowflake(it.Group.ID); err == nil {
-					r, err := m.state.Store.Role(m.GuildID, id)
-					if err == nil {
-						name = r.Name
-					}
+			if id, err := discord.ParseSnowflake(it.Group.ID); err == nil {
+				r, err := m.state.Store.Role(m.GuildID, id)
+				if err == nil {
+					name = r.Name
 				}
-				if name == "" {
-					name = strings.Title(it.Group.ID)
-				}
-
-				item = NewSection(name, it.Group.Count)
-
-			case it.Member != nil:
-				item = NewMember(it.Member.Member, it.Member.Presence, guild)
+			}
+			if name == "" {
+				name = strings.Title(it.Group.ID)
 			}
 
-			m.Rows = append(m.Rows, item)
-			m.List.Insert(item, -1)
+			item = NewSection(name, it.Group.Count)
+
+		case it.Member != nil:
+			item = NewMember(it.Member.Member, it.Member.Presence, guild)
 		}
-	})
+
+		m.Rows = append(m.Rows, item)
+		m.ListBox.Insert(item, -1)
+	}
 }
 
 // func (m *Container) getHoistRoles() ([]discord.Role, error) {

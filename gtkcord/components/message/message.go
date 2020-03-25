@@ -179,7 +179,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.ListBoxRow.Add(mainEv)
 
 	// On message (which is in event box) right click:
-	mainEv.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
+	mainEv.Connect("button-press-event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
 		btn := gdk.EventButtonNewFromEvent(ev)
 		if btn.Button() != gdk.BUTTON_SECONDARY {
 			return false
@@ -204,7 +204,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.avatarEv.SetMarginEnd(AvatarPadding)
 	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 	message.avatarEv.Add(message.avatar)
-	message.avatarEv.Connect("button_release_event", func(_ *gtk.EventBox, ev *gdk.Event) {
+	message.avatarEv.Connect("button_press_event", func(_ *gtk.EventBox, ev *gdk.Event) {
 		btn := gdk.EventButtonNewFromEvent(ev)
 		if btn.Button() != gdk.BUTTON_PRIMARY {
 			return

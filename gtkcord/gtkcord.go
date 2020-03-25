@@ -19,10 +19,12 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/mutexlog"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -88,7 +90,7 @@ type Application struct {
 	LastAccess map[discord.Snowflake]discord.Snowflake
 	lastAccMut sync.Mutex
 
-	busy sync.Mutex
+	busy mutexlog.Mutex
 	done chan int // exit code
 }
 
@@ -202,11 +204,13 @@ func (a *Application) Ready(s *ningen.State) error {
 	c := channel.NewChannels(s)
 	c.OnSelect = func(ch *channel.Channel) {
 		a.SwitchChannel(ch)
+		a.FocusMessages()
 	}
 
 	p := channel.NewPrivateChannels(s)
 	p.OnSelect = func(ch *channel.PrivateChannel) {
 		a.SwitchChannel(ch)
+		a.FocusMessages()
 	}
 
 	// Messages
@@ -235,23 +239,36 @@ func (a *Application) Ready(s *ningen.State) error {
 		a.Main.SetFocusChild(a.LeftGrid)
 	}
 
-	// Bind to set-focus-child so swiping left works too.
-	a.Main.Connect("set-focus-child", func(_ *glib.Object, w *gtk.Widget) {
-		if w == nil {
-			return
+	// Bind the channel menu button:
+	a.Header.ChMenuBtn.SetSpawner(func(p *gtk.Popover) gtkutils.WidgetDestroyer {
+		guID := a.Messages.GetGuildID()
+		chID := a.Messages.GetChannelID()
+
+		if !chID.Valid() || !guID.Valid() {
+			// guarded, shouldn't happen.
+			return nil
 		}
 
-		switch name, _ := w.GetName(); name {
-		case "left":
-			a.Main.SetVisibleChild(a.LeftGrid)
-			a.Header.SetVisibleChild(a.Header.LeftSide)
-		case "right":
-			a.Main.SetVisibleChild(a.Right)
-			a.Header.SetVisibleChild(a.Header.RightSide)
-		}
+		return header.NewChMenuBody(p, s, guID, chID)
 	})
 
 	semaphore.IdleMust(func() {
+		// Bind to set-focus-child so swiping left works too.
+		a.Main.Connect("set-focus-child", func(_ *glib.Object, w *gtk.Widget) {
+			if w == nil {
+				return
+			}
+
+			switch name, _ := w.GetName(); name {
+			case "left":
+				a.Main.SetVisibleChild(a.LeftGrid)
+				a.Header.SetVisibleChild(a.Header.LeftSide)
+			case "right":
+				a.Main.SetVisibleChild(a.Right)
+				a.Header.SetVisibleChild(a.Header.RightSide)
+			}
+		})
+
 		// Set widths:
 		a.Channels.SetSizeRequest(ChannelWidth, -1)
 		a.Privates.SetSizeRequest(ChannelWidth, -1)
@@ -295,21 +312,25 @@ func (a *Application) Ready(s *ningen.State) error {
 			State: s,
 			OnGuild: func(id discord.Snowflake) {
 				if g, _ := a.Guilds.FindByID(id); g != nil {
-					a.SwitchGuild(g)
+					semaphore.IdleMust(g.Row.Activate)
 				}
 			},
 			OnChannel: func(ch, guild discord.Snowflake) {
-				var channel Channel
+				var row *gtk.ListBoxRow
 				if g, _ := a.Guilds.FindByID(guild); g != nil {
 					a.SwitchGuild(g)
-					channel = a.Channels.FindByID(ch)
+					if channel := a.Channels.FindByID(ch); channel != nil {
+						row = channel.Row
+					}
 				} else {
 					a.SwitchDM()
-					channel = a.Privates.FindByID(ch)
+					if channel := a.Privates.FindByID(ch); channel != nil {
+						row = channel.ListBoxRow
+					}
 				}
 
-				if channel != nil {
-					a.SwitchChannel(channel)
+				if row != nil {
+					semaphore.IdleMust(row.Activate)
 				}
 			},
 		})

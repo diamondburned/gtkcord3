@@ -9,37 +9,8 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 )
-
-func (a *Application) SwitchGuild(g *guild.Guild) {
-	a.changeCol(columnChange{
-		Widget: a.Channels,
-		Width:  channel.ChannelsWidth,
-		Checker: func() bool {
-			// We just check if the guild ID matches that in Messages. It
-			// shouldn't.
-			return a.Messages.GuildID != g.ID
-		},
-		Setter: func(w gtk.IWidget) {
-			a.setLeftGridCol(w, 2)
-		},
-		Cleaner: func() {
-			cleanup(a.Channels, a.Privates, a.Messages)
-		},
-		Loader: func() bool {
-			if err := a.Channels.LoadGuild(g.ID); err != nil {
-				log.Errorln("Failed to load guild:", err)
-				return false
-			}
-
-			a.Header.UpdateGuild(g.Name)
-			return true
-		},
-		After: func() {},
-	})
-}
 
 // SwitchLastChannel, nil for DM.
 func (a *Application) SwitchLastChannel(g *guild.Guild) {
@@ -48,10 +19,8 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 		if ok {
 			semaphore.IdleMust(func() {
 				a.Privates.List.SelectRow(c.ListBoxRow)
-				if a.Main.GetFold() != handy.FOLD_FOLDED {
-					c.ListBoxRow.Activate()
-				}
 			})
+			a.SwitchChannel(c)
 		}
 
 		return
@@ -69,11 +38,48 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	if lastCh != nil {
 		semaphore.IdleMust(func() {
 			a.Channels.ChList.SelectRow(lastCh.Row)
-			if a.Main.GetFold() != handy.FOLD_FOLDED {
-				lastCh.Row.Activate()
-			}
 		})
+		a.SwitchChannel(lastCh)
 	}
+}
+
+func (a *Application) FocusMessages() {
+	semaphore.IdleMust(func() {
+		// Set the default visible widget to the right container:
+		a.Main.SetVisibleChild(a.Right)
+		a.Header.SetVisibleChild(a.Header.RightSide)
+
+		// Grab the message input's focus:
+		a.Messages.Focus()
+	})
+}
+
+func (a *Application) SwitchGuild(g *guild.Guild) {
+	a.changeCol(columnChange{
+		Widget: a.Channels,
+		Width:  channel.ChannelsWidth,
+		Checker: func() bool {
+			// We just check if the guild ID matches that in Messages. It
+			// shouldn't.
+			return a.Channels.GuildID != g.ID || a.Messages.GuildID != g.ID
+		},
+		Setter: func(w gtk.IWidget) {
+			a.setLeftGridCol(w, 2)
+		},
+		Before: func() {
+			cleanup(a.Channels, a.Privates, a.Messages, a.Header.ChMenuBtn)
+		},
+		Loader: func() bool {
+			if err := a.Channels.LoadGuild(g.ID); err != nil {
+				log.Errorln("Failed to load guild:", err)
+				return false
+			}
+
+			a.Header.UpdateGuild(g.Name)
+			return true
+		},
+		After: func() {},
+	})
 }
 
 func (a *Application) SwitchDM() {
@@ -88,8 +94,8 @@ func (a *Application) SwitchDM() {
 		Setter: func(w gtk.IWidget) {
 			a.setLeftGridCol(w, 2)
 		},
-		Cleaner: func() {
-			cleanup(a.Channels, a.Privates, a.Messages)
+		Before: func() {
+			cleanup(a.Channels, a.Privates, a.Messages, a.Header.ChMenuBtn)
 		},
 		Loader: func() bool {
 			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
@@ -116,7 +122,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 		Setter: func(w gtk.IWidget) {
 			a.Right.Add(w)
 		},
-		Cleaner: func() {
+		Before: func() {
 			a.Messages.Cleanup()
 		},
 		Loader: func() bool {
@@ -134,14 +140,12 @@ func (a *Application) SwitchChannel(ch Channel) {
 			window.SetTitle("#" + name + " - gtkcord")
 
 			semaphore.IdleMust(func() {
-				// Set the default visible widget to the right container:
-				a.Main.SetVisibleChild(a.Right)
-				a.Header.SetVisibleChild(a.Header.RightSide)
+				// Show the channel menu if we're in a guild:
+				if a.Messages.GetGuildID().Valid() {
+					a.Header.ChMenuBtn.SetRevealChild(true)
+				}
 
-				// Grab the message input's focus:
-				a.Messages.Focus()
-
-				// Scroll to bottom:
+				// Always scroll to bottom:
 				a.Messages.ScrollToBottom()
 			})
 		},
@@ -153,7 +157,7 @@ type columnChange struct {
 	Width   int
 	Checker func() bool            // true == switch
 	Setter  func(wnew gtk.IWidget) // thread-safe
-	Cleaner func()
+	Before  func()
 	Loader  func() bool
 	After   func() // only if succeed
 }
@@ -173,7 +177,7 @@ func (a *Application) changeCol(c columnChange) {
 	defer semaphore.IdleMust(a.LeftGrid.SetSensitive, true)
 
 	// Clean up channels
-	c.Cleaner()
+	c.Before()
 
 	// We're not adding a spinner anymore. The message view now loads so fast a
 	// spinner is practically useless and is more likely to induce epilepsy than

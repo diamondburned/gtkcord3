@@ -19,8 +19,10 @@ func Spawn() {
 	a.SetLogo(logo)
 
 	a.SetProgramName("gtkcord3")
-	a.SetComments("Astolfo is cute.")
-	a.SetAuthors([]string{"diamondburned", "Contributors"})
+	a.SetAuthors([]string{
+		`diamondburned: "Astolfo is cute."`,
+		"GitHub Contributors",
+	})
 
 	a.SetCopyright("Copyright (C) 2020 diamondburned")
 	a.SetLicense("GNU General Public License v3.0")
