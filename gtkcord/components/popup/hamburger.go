@@ -7,6 +7,8 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/zalando/go-keyring"
+	"os"
 )
 
 const HamburgerWidth = 240
@@ -60,6 +62,16 @@ func wrapHamburger(s *ningen.State, body *UserPopupBody, destroy func()) {
 		about.Spawn()
 	})
 	menu.Add(aboutBtn)
+
+	logoutBtn := newButton("Log Out", func() {
+		destroy()
+		if err := keyring.Delete("gtkcord", "token"); err != nil {
+			log.Fatalln("error deleting token on logout", err)
+		}
+		log.Println("please start gtkcord again to log in")
+		os.Exit(0)
+	})
+	menu.Add(logoutBtn)
 }
 
 func newStatusPage(s *ningen.State, destroy func()) gtk.IWidget {
