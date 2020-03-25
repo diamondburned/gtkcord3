@@ -2,9 +2,9 @@ package header
 
 import (
 	"html"
+	"time"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/controller"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/handy"
@@ -13,12 +13,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+const foldDelay = 150 * 2 * time.Millisecond
+
 type Header struct {
 	*handy.Leaflet
 
 	// Left: hamburger and guild name:
 	LeftSide  *gtk.HeaderBar
-	Hamburger *Hamburger
+	Hamburger *MainHamburger
 	GuildName *gtk.Label
 
 	Separator *gtk.Separator
@@ -27,10 +29,14 @@ type Header struct {
 	RightSide   *gtk.HeaderBar
 	Back        *Back
 	ChannelName *gtk.Label
-	Controller  *controller.Container
+	ChMenuBtn   *ChMenuButton
 
-	Folded bool
-	OnFold func(folded bool)
+	// Unused
+	// Controller  *controller.Container
+
+	lastFold time.Time
+	Folded   bool
+	OnFold   func(folded bool)
 }
 
 func NewHeader() (*Header, error) {
@@ -51,7 +57,7 @@ func NewHeader() (*Header, error) {
 	left.SetCustomTitle(empty())
 	l.Add(left)
 
-	hamburger, err := NewHeaderMenu()
+	hamburger, err := NewMainHamburger()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create hamburger")
 	}
@@ -93,9 +99,13 @@ func NewHeader() (*Header, error) {
 	right.SetHExpand(true)
 	right.SetShowCloseButton(true)
 	right.SetProperty("spacing", 0)
-	right.SetCustomTitle(empty())
 	right.SetSizeRequest(message.MaxMessageWidth, -1) // so collapse works
 	l.Add(right)
+
+	body, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	body.Show()
+	body.SetHExpand(true)
+	right.SetCustomTitle(body)
 
 	// Back button:
 	back := NewBack()
@@ -106,18 +116,23 @@ func NewHeader() (*Header, error) {
 	chname.SetLines(1)
 	chname.SetLineWrap(false)
 	chname.SetEllipsize(pango.ELLIPSIZE_END)
+	chname.SetHExpand(true)
 	chname.SetXAlign(0.0)
 
-	right.Add(back)
-	right.Add(chname)
+	// Channel menu button:
+	btn := NewChMenuButton()
+
+	body.Add(back)
+	body.Add(chname)
+	body.Add(btn)
 
 	/*
 	 * Grid 4
 	 */
 
 	// Button container for controls suck as Search, Members, etc.
-	cont := controller.New()
-	right.Add(cont)
+	// cont := controller.New()
+	// right.Add(cont)
 
 	h := &Header{
 		Leaflet:     l,
@@ -128,7 +143,8 @@ func NewHeader() (*Header, error) {
 		RightSide:   right,
 		Back:        back,
 		ChannelName: chname,
-		Controller:  cont,
+		ChMenuBtn:   btn,
+		// Controller:  cont,
 	}
 	l.Connect("size-allocate", func() {
 		h.onFold(l.GetFold() == handy.FOLD_FOLDED)
@@ -138,6 +154,12 @@ func NewHeader() (*Header, error) {
 }
 
 func (h *Header) onFold(folded bool) {
+	if now := time.Now(); h.lastFold.After(now.Add(-foldDelay)) {
+		return
+	} else {
+		h.lastFold = now
+	}
+
 	if h.Folded == folded {
 		return
 	}

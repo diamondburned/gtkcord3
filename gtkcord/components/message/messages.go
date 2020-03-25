@@ -2,7 +2,6 @@ package message
 
 import (
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -12,6 +11,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
+	"github.com/diamondburned/gtkcord3/internal/mutexlog"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -38,7 +38,7 @@ type Messages struct {
 
 	Messages *gtk.ListBox
 	messages []*Message
-	guard    sync.RWMutex
+	guard    mutexlog.Mutex
 
 	resetting    bool
 	fetchingMore moreatomic.Bool
@@ -162,15 +162,15 @@ func (m *Messages) Focus() {
 }
 
 func (m *Messages) GetChannelID() discord.Snowflake {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	return m.ChannelID
 }
 
 func (m *Messages) GetGuildID() discord.Snowflake {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	return m.GuildID
 }
@@ -179,8 +179,8 @@ func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
 	ids := make([]discord.Snowflake, 0, limit)
 	added := make(map[discord.Snowflake]struct{}, limit)
 
-	m.guard.RLock()
-	defer m.guard.RUnlock()
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		message := m.messages[i]
@@ -197,8 +197,8 @@ func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
 }
 
 func (m *Messages) LastFromMe() *Message {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	for n := len(m.messages) - 1; n >= 0; n-- {
 		if msg := m.messages[n]; msg.AuthorID == m.c.Ready.User.ID {
@@ -211,8 +211,8 @@ func (m *Messages) LastFromMe() *Message {
 func (m *Messages) Last() *Message {
 	// yolo, this causes a freeze bug.
 
-	m.guard.RLock()
-	defer m.guard.RUnlock()
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	if len(m.messages) == 0 {
 		return nil
@@ -273,7 +273,7 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 
 			w := newMessageUnsafe(m.c, message)
 			w.updateAuthor(m.c, message.GuildID, message.Author)
-			m.insert(w)
+			m._insert(w)
 		}
 	})
 
@@ -374,8 +374,8 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	m.acked = true
 
 	go func() {
-		m.guard.RLock()
-		defer m.guard.RUnlock()
+		m.guard.Lock()
+		defer m.guard.Unlock()
 
 		if len(m.messages) == 0 {
 			return
@@ -385,7 +385,7 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		chID := m.ChannelID
 
 		// Find the latest message and ack it:
-		m.c.MarkRead(chID, msID)
+		go m.c.MarkRead(chID, msID)
 	}()
 }
 
@@ -407,19 +407,21 @@ func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
-	m.fetchingMore.Set(true)
-	m.guard.Lock()
+	go func() {
+		m.fetchingMore.Set(true)
+		m.guard.Lock()
 
-	go m.fetchMore()
+		defer m.fetchingMore.Set(false)
+		defer m.guard.Unlock()
+
+		semaphore.IdleMust(m.Scroll.SetSensitive, false)
+		defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
+
+		m.fetchMore()
+	}()
 }
 
 func (m *Messages) fetchMore() {
-	defer m.fetchingMore.Set(false)
-	defer m.guard.Unlock()
-
-	semaphore.IdleMust(m.Scroll.SetSensitive, false)
-	defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
-
 	if len(m.messages) < m.fetch {
 		return
 	}
@@ -484,9 +486,6 @@ func (m *Messages) cleanOldMessages() {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
 	// Check the number of messages
 	if len(m.messages) <= m.fetch {
 		return
@@ -509,16 +508,20 @@ func (m *Messages) cleanOldMessages() {
 }
 
 func (m *Messages) Insert(message *discord.Message) {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	m.insert(message)
+}
+
+func (m *Messages) insert(message *discord.Message) {
 	// Clean up old messages (thread-safe):
 	defer m.cleanOldMessages()
 
 	// Are we sure this is not our message?
-	if m.Update(message) {
+	if m.update(message) {
 		return
 	}
-
-	m.guard.Lock()
-	defer m.guard.Unlock()
 
 	// Mark for ack, check onEdgeReached
 	m.acked = false
@@ -526,7 +529,7 @@ func (m *Messages) Insert(message *discord.Message) {
 	var w *Message
 	semaphore.IdleMust(func() {
 		w = newMessageUnsafe(m.c, message)
-		m.insert(w)
+		m._insert(w)
 		w.updateAuthor(m.c, message.GuildID, message.Author)
 	})
 
@@ -534,7 +537,7 @@ func (m *Messages) Insert(message *discord.Message) {
 }
 
 // not thread safe
-func (m *Messages) insert(w *Message) {
+func (m *Messages) _insert(w *Message) {
 	// Bind Message's fields to Messages'
 	injectMessage(m, w)
 
@@ -548,9 +551,15 @@ func (m *Messages) insert(w *Message) {
 }
 
 func (m *Messages) Update(update *discord.Message) bool {
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
+	return m.update(update)
+}
+
+func (m *Messages) update(update *discord.Message) bool {
 	var target *Message
 
-	m.guard.RLock()
 	for _, message := range m.messages {
 		if false ||
 			(message.ID.Valid() && message.ID == update.ID) ||
@@ -560,7 +569,6 @@ func (m *Messages) Update(update *discord.Message) bool {
 			break
 		}
 	}
-	m.guard.RUnlock()
 
 	if target == nil {
 		return false
@@ -586,8 +594,7 @@ func (m *Messages) Update(update *discord.Message) bool {
 	return true
 }
 
-func (m *Messages) UpdateMessageAuthor(ns ...discord.Member) {
-	m.guard.RLock()
+func (m *Messages) updateMessageAuthor(ns ...discord.Member) {
 	for _, n := range ns {
 		for _, message := range m.messages {
 			if message.AuthorID != n.User.ID {
@@ -596,13 +603,16 @@ func (m *Messages) UpdateMessageAuthor(ns ...discord.Member) {
 			message.UpdateMember(m.c, m.GuildID, n)
 		}
 	}
-	m.guard.RUnlock()
 }
 
 func (m *Messages) Delete(ids ...discord.Snowflake) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
+	m.delete(ids...)
+}
+
+func (m *Messages) delete(ids ...discord.Snowflake) {
 	for _, id := range ids {
 		for i, message := range m.messages {
 			if message.ID != id {

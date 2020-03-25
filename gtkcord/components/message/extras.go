@@ -32,6 +32,13 @@ const (
 	`
 )
 
+func clampWidth(width int) int {
+	if max := MaxMessageWidth - (AvatarSize + AvatarPadding*2) - 15; width > max {
+		width = max
+	}
+	return width
+}
+
 func newExtraImageUnsafe(proxy, direct string, w, h int, pp ...cache.Processor) gtkutils.ExtendedWidget {
 	img, _ := gtk.ImageNew()
 	img.SetVAlign(gtk.ALIGN_START)
@@ -54,6 +61,9 @@ func newExtraImageUnsafe(proxy, direct string, w, h int, pp ...cache.Processor) 
 }
 
 func maxSize(w, h, maxW, maxH int) (int, int) {
+	// cap width
+	maxW = clampWidth(maxW)
+
 	if w == 0 || h == 0 {
 		// shit
 		return maxW, maxH
@@ -70,7 +80,6 @@ func maxSize(w, h, maxW, maxH int) (int, int) {
 	return w, h
 }
 
-// https://stackoverflow.com/questions/3008772/how-to-smart-resize-a-displayed-image-to-original-aspect-ratio
 func sizeToURL(url string, w, h int) string {
 	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
 }
@@ -92,7 +101,7 @@ func NewAttachmentUnsafe(msg *discord.Message) []gtk.IWidget {
 		w, h := maxSize(int(att.Width), int(att.Height), EmbedMaxWidth, EmbedImgHeight)
 		proxyURL := sizeToURL(att.Proxy, w, h)
 
-		img := newExtraImageUnsafe(proxyURL, att.URL, 0, 0)
+		img := newExtraImageUnsafe(proxyURL, att.URL, w, h)
 		if img, ok := img.(gtkutils.Marginator); ok {
 			img.SetMarginStart(0)
 		}
@@ -168,8 +177,9 @@ func newImageEmbedUnsafe(embed discord.Embed) gtkutils.ExtendedWidget {
 
 	w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
 	w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
+	link := sizeToURL(embed.Thumbnail.Proxy, w, h)
 
-	img := newExtraImageUnsafe(embed.Thumbnail.Proxy, embed.Thumbnail.URL, w, h)
+	img := newExtraImageUnsafe(link, embed.Thumbnail.URL, w, h)
 	if img, ok := img.(gtkutils.Marginator); ok {
 		img.SetMarginStart(0)
 	}
@@ -355,7 +365,7 @@ func newNormalEmbedUnsafe(
 
 		wrapper.Add(newExtraImageUnsafe(
 			sizeToURL(embed.Image.Proxy, w, h),
-			embed.Image.URL, 0, 0,
+			embed.Image.URL, w, h,
 		))
 	}
 

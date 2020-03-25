@@ -41,7 +41,9 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	h = int(float64(h) / 1.25)
 
 	d := handy.DialogNew(window.Window)
-	d.SetDefaultSize(w, h)
+	if !d.GetNarrow() {
+		d.SetDefaultSize(w, h)
+	}
 
 	// Hack for close button
 	d.Connect("response", func(_ *glib.Object, resp gtk.ResponseType) {
@@ -81,7 +83,8 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	s.SetVExpand(true)
 
 	c, _ := d.GetContentArea()
-	c.Add(s)
+	d.Remove(c)
+	d.Add(s)
 	d.ShowAll()
 
 	pd := PreviewDialog{
@@ -102,7 +105,7 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	})
 
 	// Calculate the sizee so that the image is just slightly (80%) smaller:
-	w = w * 8 / 10
+	// w = w * 8 / 10
 	h = h * 8 / 10
 
 	go pd.Fetch(w, h)

@@ -91,7 +91,7 @@ func Resize(maxW, maxH int) Processor {
 		bounds := img.Bounds()
 		imgW, imgH := bounds.Dx(), bounds.Dy()
 
-		w, h := maxSize(imgW, imgH, maxW, maxH)
+		w, h := MaxSize(imgW, imgH, maxW, maxH)
 
 		return imaging.Resize(img, w, h, imaging.Lanczos)
 	}

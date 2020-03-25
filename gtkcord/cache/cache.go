@@ -262,9 +262,12 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 
 	if w > 0 && h > 0 {
 		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
-			w, h = maxSize(imgW, imgH, w, h)
-			l.SetSize(w, h)
-			semaphore.IdleMust(img.SetSizeRequest, w, h)
+			w, h = MaxSize(imgW, imgH, w, h)
+			defer semaphore.Async(img.SetSizeRequest, w, h)
+
+			if w != imgW || h != imgH {
+				l.SetSize(w, h)
+			}
 		})
 	}
 
@@ -288,21 +291,29 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 				return
 			}
 		}
-	})
-
-	gtkutils.Connect(l, "area-updated", func() {
-		pMu.Lock()
-		defer pMu.Unlock()
-
 		switch {
 		case p == nil:
 			return
 		case gif:
-			semaphore.IdleMust(img.SetFromAnimation, p)
+			semaphore.Async(img.SetFromAnimation, p)
 		default:
-			semaphore.IdleMust(img.SetFromPixbuf, p)
+			semaphore.Async(img.SetFromPixbuf, p)
 		}
 	})
+
+	// gtkutils.Connect(l, "area-updated", func() {
+	// 	pMu.Lock()
+	// 	defer pMu.Unlock()
+
+	// 	switch {
+	// 	case p == nil:
+	// 		return
+	// 	case gif:
+	// 		semaphore.IdleMust(img.SetFromAnimation, p)
+	// 	default:
+	// 		semaphore.IdleMust(img.SetFromPixbuf, p)
+	// 	}
+	// })
 
 	if err != nil {
 		return err
@@ -324,7 +335,7 @@ func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
 }
 
 func AsyncFetchUnsafe(url string, img *gtk.Image, w, h int, pp ...Processor) {
-	gtkutils.ImageSetIcon(img, "image-missing", 24)
+	gtkutils.ImageSetIcon(img, "image-missing", w)
 
 	go func() {
 		var err error
@@ -340,7 +351,11 @@ func AsyncFetchUnsafe(url string, img *gtk.Image, w, h int, pp ...Processor) {
 	}()
 }
 
-func maxSize(w, h, maxW, maxH int) (int, int) {
+func SizeToURL(url string, w, h int) string {
+	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
+}
+
+func MaxSize(w, h, maxW, maxH int) (int, int) {
 	if w < maxW && h < maxH {
 		return w, h
 	}

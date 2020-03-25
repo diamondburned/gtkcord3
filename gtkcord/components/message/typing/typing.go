@@ -3,7 +3,6 @@ package typing
 import (
 	"html"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -14,6 +13,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/mutexlog"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -79,7 +79,7 @@ type State struct {
 	*gtk.Box
 	Label *gtk.Label
 
-	mu sync.Mutex
+	mu mutexlog.Mutex
 
 	Users []typingUser
 
@@ -118,8 +118,7 @@ func NewState(s *state.State) *State {
 	t.Box.Add(t.Label)
 	t.Box.SetOpacity(0)
 
-	gtkutils.Margin2(t.Box, 2, 20)
-	t.Box.SetMarginTop(0)
+	gtkutils.Margin2(t.Box, 0, 20)
 
 	return t
 }
@@ -290,15 +289,7 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 		}
 	}
 
-	// Attempt 3: if we have to manually fetch the user from their ID
-	if user.Name == "" {
-		u, err := t.state.User(typing.UserID)
-		if err == nil {
-			user.Name = u.Username
-		}
-	}
-
-	// Attempt 4: just use the ID
+	// Attempt 3: just use the ID
 	if user.Name == "" {
 		user.Name = typing.UserID.String()
 	}
