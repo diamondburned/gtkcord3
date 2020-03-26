@@ -23,3 +23,9 @@ func Set(token string) {
 		log.Errorln("[non-fatal] Failed to set Gtkcord token to keyring")
 	}
 }
+
+func Delete() {
+	if err := keyring.Delete("gtkcord", "token"); err != nil {
+		log.Errorln("[non-fatal] Failed to delete Gtkcord token from keyring")
+	}
+}

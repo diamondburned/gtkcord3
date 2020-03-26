@@ -16,7 +16,8 @@ type MainHamburger struct {
 	gtkutils.ExtendedWidget
 	Button *gtk.MenuButton
 
-	State *ningen.State
+	State  *ningen.State
+	LogOut func()
 }
 
 func NewMainHamburger() (*MainHamburger, error) {
@@ -52,7 +53,7 @@ func NewMainHamburger() (*MainHamburger, error) {
 
 		body := popup.NewStatefulPopupBody(hm.State, hm.State.Ready.User.ID, 0)
 		body.ParentStyle, _ = p.GetStyleContext()
-		wrapHamburger(hm.State, body.UserPopupBody, p.Hide)
+		hm.wrapHamburger(body.UserPopupBody, p.Hide)
 
 		return body
 	})
@@ -67,7 +68,7 @@ func (h *MainHamburger) UseState(s *ningen.State) {
 	h.State = s
 }
 
-func wrapHamburger(s *ningen.State, body *popup.UserPopupBody, destroy func()) {
+func (h *MainHamburger) wrapHamburger(body *popup.UserPopupBody, destroy func()) {
 	// body MUST starts at 3
 
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
@@ -84,7 +85,7 @@ func wrapHamburger(s *ningen.State, body *popup.UserPopupBody, destroy func()) {
 
 	stack, _ := gtk.StackNew()
 	stack.AddNamed(menu, "main")
-	stack.AddNamed(newStatusPage(s, destroy), "status")
+	stack.AddNamed(newStatusPage(h.State, destroy), "status")
 	stack.Show()
 	main.Add(stack)
 
@@ -101,6 +102,12 @@ func wrapHamburger(s *ningen.State, body *popup.UserPopupBody, destroy func()) {
 		about.Spawn()
 	})
 	menu.Add(aboutBtn)
+
+	logoutBtn := newButton("Log Out", func() {
+		destroy()
+		go h.LogOut()
+	})
+	menu.Add(logoutBtn)
 }
 
 func newStatusPage(s *ningen.State, destroy func()) gtk.IWidget {

@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
@@ -23,6 +24,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/glib"
@@ -141,6 +143,25 @@ func (a *Application) activate() {
 	a.leftCols = map[int]gtk.IWidget{}
 	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
 
+	// Pre-make some widgets but don't use them:
+	a.init()
+
+	// Use the spinner instead of the Leaflet:
+	s, _ := animations.NewSpinner(75)
+
+	// Use a custom header instead of the actual Header:
+	h, _ := gtk.HeaderBarNew()
+	h.SetTitle("Connecting to Discord.")
+	h.SetShowCloseButton(true)
+
+	window.Display(s)
+	window.HeaderDisplay(h)
+	window.Resize(1200, 900)
+	window.SetTitle("gtkcord")
+	window.ShowAll()
+}
+
+func (a *Application) init() {
 	// Pre-make the leaflet but don't use it:
 	l := handy.LeafletNew()
 	l.SetModeTransitionDuration(150)
@@ -150,18 +171,10 @@ func (a *Application) activate() {
 	l.Show()
 	a.Main = l
 
-	// Instead, use the spinner:
-	s, _ := animations.NewSpinner(75)
-
 	// Create a new Header:
 	h, _ := header.NewHeader()
+	h.Hamburger.LogOut = a.LogOut // bind
 	a.Header = h
-
-	window.Display(s)
-	window.HeaderDisplay(h)
-	window.Resize(1200, 900)
-	window.SetTitle("gtkcord")
-	window.ShowAll()
 }
 
 func (a *Application) Ready(s *ningen.State) error {
@@ -172,6 +185,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		log.Errorln(err)
 	}
 
+	semaphore.IdleMust(window.HeaderDisplay, a.Header) // restore header post login.
 	semaphore.IdleMust(window.Resize, 1200, 900)
 
 	// Set Markdown's highlighting theme
@@ -339,6 +353,38 @@ func (a *Application) Ready(s *ningen.State) error {
 	})
 
 	return nil
+}
+
+func (a *Application) LogOut() {
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
+	// Disable the entire application:
+	semaphore.IdleMust(window.Window.SetSensitive, false)
+	defer semaphore.IdleMust(window.Window.SetSensitive, true) // restore last
+
+	// First we need to close the session:
+	if err := a.State.Close(); err != nil {
+		log.Errorln("Failed to close:", err)
+	}
+	a.State = nil
+
+	// Then we delete the keyrings:
+	keyring.Delete()
+
+	// Then we reinitialize some widgets:
+	a.init()
+
+	// Then we call the login dialog and exit without waiting:
+	go semaphore.IdleMust(func() {
+		l := login.NewLogin(func(s *ningen.State) {
+			if err := a.Ready(s); err != nil {
+				log.Fatalln("Failed to re-login:", err)
+			}
+		})
+
+		l.Run()
+	})
 }
 
 func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake {
