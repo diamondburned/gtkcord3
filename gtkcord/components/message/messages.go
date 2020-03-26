@@ -373,24 +373,24 @@ func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 
 	// Prevent fetching if we've just fetched 5 (or less) seconds ago. HasBeen
 	// also implicitly updates.
-	if !m.lastFetched.HasBeen(5 * time.Second) {
+	if !m.lastFetched.HasBeen(2 * time.Second) {
 		return
 	}
 
 	// Buggy, apparently steals lock.
 
-	// go func() {
-	// 	m.fetchingMore.Set(true)
-	// 	m.guard.Lock()
+	go func() {
+		m.fetchingMore.Set(true)
+		m.guard.Lock()
 
-	// 	defer m.fetchingMore.Set(false)
-	// 	defer m.guard.Unlock()
+		defer m.fetchingMore.Set(false)
+		defer m.guard.Unlock()
 
-	// 	semaphore.IdleMust(m.Scroll.SetSensitive, false)
-	// 	defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
+		semaphore.IdleMust(m.Scroll.SetSensitive, false)
+		defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
 
-	// 	m.fetchMore()
-	// }()
+		m.fetchMore()
+	}()
 }
 
 func (m *Messages) fetchMore() {
