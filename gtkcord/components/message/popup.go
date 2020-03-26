@@ -25,7 +25,7 @@ func (m *Messages) userMentionPressed(ev md.PressedEvent, user *discord.GuildUse
 	p.SetPosition(gtk.POS_RIGHT)
 	p.SetPointingTo(rect)
 
-	body := popup.NewStatefulPopupBody(m.c, user.ID, m.GuildID)
+	body := popup.NewStatefulPopupBody(m.c, user.ID, m.GetGuildID())
 	body.Prefetch = &user.User
 	body.ParentStyle, _ = p.GetStyleContext()
 
@@ -42,7 +42,7 @@ func (m *Messages) onAvatarClick(msg *Message) {
 	p := popup.NewPopover(msg.avatar)
 	p.SetPosition(gtk.POS_RIGHT)
 
-	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GuildID)
+	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GetGuildID())
 	body.ParentStyle, _ = p.GetStyleContext()
 
 	p.SetChildren(body)

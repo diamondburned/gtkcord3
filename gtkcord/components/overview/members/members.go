@@ -10,7 +10,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -38,6 +37,9 @@ func New(s *ningen.State) (m *Container) {
 	}
 	s.MemberList.OnOP = m.handle
 	s.MemberList.OnSync = m.handleSync
+
+	// unreference these things
+	list.Connect("destroy", m.cleanup)
 
 	list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		i := r.GetIndex()
@@ -95,23 +97,15 @@ func (m *Container) handle(
 	defer m.mutex.Unlock()
 }
 
-// Cleanup is thread-safe.
-func (m *Container) Destroy() {
-	log.Println("Members destroy called")
-
-	m.mutex.Lock()
-	m.cleanup()
-	m.mutex.Unlock()
-}
-
 func (m *Container) cleanup() {
-	semaphore.IdleMust(func() {
-		for i, r := range m.Rows {
-			m.ListBox.Remove(r)
-			m.Rows[i] = nil
-		}
-		m.Rows = m.Rows[:0]
-	})
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	for i, r := range m.Rows {
+		m.ListBox.Remove(r)
+		m.Rows[i] = nil
+	}
+	m.Rows = nil
 }
 
 // LoadGuild is thread-safe.

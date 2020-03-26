@@ -49,6 +49,43 @@ func (a Attribute) Has(attr Attribute) bool {
 	return a&attr == attr
 }
 
+func (a *Attribute) Add(attr Attribute) {
+	*a |= attr
+}
+func (a *Attribute) Remove(attr Attribute) {
+	*a &= ^attr
+}
+
+func (a Attribute) Markup() string {
+	var attrs = make([]string, 0, 7)
+
+	if a.Has(AttrBold) {
+		attrs = append(attrs, `weight="bold"`)
+	}
+	if a.Has(AttrItalics) {
+		attrs = append(attrs, `style="italic"`)
+	}
+	if a.Has(AttrUnderline) {
+		attrs = append(attrs, `underline="single"`)
+	}
+	if a.Has(AttrStrikethrough) {
+		attrs = append(attrs, `strikethrough="true"`)
+	}
+	if a.Has(AttrSpoiler) {
+		attrs = append(attrs, `foreground="#808080"`) // no fancy click here
+	}
+	if a.Has(AttrMonospace) {
+		attrs = append(attrs, `font_family="monospace"`)
+	}
+
+	// only append this if not spoiler to avoid duplicate tags
+	if a.Has(AttrQuoted) && !a.Has(AttrStrikethrough) {
+		attrs = append(attrs, `foreground="#789922"`)
+	}
+
+	return strings.Join(attrs, " ")
+}
+
 func (a Attribute) StringInt() string {
 	return strconv.FormatUint(uint64(a), 10)
 }

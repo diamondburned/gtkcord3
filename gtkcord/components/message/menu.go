@@ -11,7 +11,7 @@ import (
 func (m *Messages) menuAddAdmin(msg *Message, menu gtkutils.Container) {
 	var canDelete = msg.AuthorID == m.c.Ready.User.ID
 	if !canDelete {
-		p, err := m.c.Permissions(m.ChannelID, m.c.Ready.User.ID)
+		p, err := m.c.Permissions(m.GetChannelID(), m.c.Ready.User.ID)
 		if err != nil {
 			log.Errorln("Failed to get permissions:", err)
 			return
@@ -24,7 +24,7 @@ func (m *Messages) menuAddAdmin(msg *Message, menu gtkutils.Container) {
 		iDel, _ := gtk.MenuItemNewWithLabel("Delete Message")
 		iDel.Connect("activate", func() {
 			go func() {
-				if err := m.c.DeleteMessage(m.ChannelID, msg.ID); err != nil {
+				if err := m.c.DeleteMessage(m.GetChannelID(), msg.ID); err != nil {
 					log.Errorln("Error deleting message:", err)
 				}
 			}()
@@ -57,15 +57,15 @@ func (m *Messages) menuAddDebug(msg *Message, menu gtkutils.Container) {
 
 	cpchID, _ := gtk.MenuItemNewWithLabel("Copy Channel ID")
 	cpchID.Connect("activate", func() {
-		window.Window.Clipboard.SetText(m.ChannelID.String())
+		window.Window.Clipboard.SetText(m.GetChannelID().String())
 	})
 	cpchID.Show()
 	menu.Add(cpchID)
 
-	if m.GuildID.Valid() {
+	if m.GetGuildID().Valid() {
 		cpgID, _ := gtk.MenuItemNewWithLabel("Copy Guild ID")
 		cpgID.Connect("activate", func() {
-			window.Window.Clipboard.SetText(m.GuildID.String())
+			window.Window.Clipboard.SetText(m.GetGuildID().String())
 		})
 		cpgID.Show()
 		menu.Add(cpgID)

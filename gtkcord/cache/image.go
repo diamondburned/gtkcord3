@@ -3,6 +3,7 @@ package cache
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	"image/png"
@@ -17,10 +18,15 @@ import (
 
 type Processor func(image.Image) image.Image
 
-func ProcessAnimation(data []byte, processors []Processor) ([]byte, error) {
-	GIF, err := gif.DecodeAll(bytes.NewReader(data))
+func ProcessAnimationStream(r io.Reader, processors []Processor) ([]byte, error) {
+	GIF, err := gif.DecodeAll(r)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to decode GIF")
+	}
+
+	// Add transparency:
+	if p, ok := GIF.Config.ColorModel.(color.Palette); ok {
+		GIF.Config.ColorModel = ensurePaletteTransparent(p)
 	}
 
 	// Encode the GIF frame-by-frame
@@ -31,6 +37,10 @@ func ProcessAnimation(data []byte, processors []Processor) ([]byte, error) {
 		}
 
 		frame.Rect = img.Bounds()
+
+		if frame.Palette != nil {
+			frame.Palette = ensurePaletteTransparent(frame.Palette)
+		}
 
 		for x := 0; x < frame.Rect.Dx(); x++ {
 			for y := 0; y < frame.Rect.Dy(); y++ {
@@ -54,13 +64,20 @@ func ProcessAnimation(data []byte, processors []Processor) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-var pngEncoder = png.Encoder{
-	// Prefer compression over speed, as the cache is retained for a long time.
-	CompressionLevel: png.BestCompression,
+func ensurePaletteTransparent(palette color.Palette) color.Palette {
+	// TODO: properly quantize
+	if len(palette) > 255 {
+		palette = palette[:255]
+	}
+	palette = append(palette, color.Transparent)
+
+	return palette
 }
 
-func Process(data []byte, processors []Processor) ([]byte, error) {
-	return ProcessStream(bytes.NewReader(data), processors)
+var pngEncoder = png.Encoder{
+	// Prefer speed over compression, since cache is slightly more optimized
+	// now.
+	CompressionLevel: png.NoCompression,
 }
 
 func ProcessStream(r io.Reader, processors []Processor) ([]byte, error) {

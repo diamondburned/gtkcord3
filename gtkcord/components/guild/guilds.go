@@ -105,7 +105,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 	semaphore.IdleMust(func() {
 		gw, _ := gtk.ScrolledWindowNew(nil, nil)
 		gw.Show()
-		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL) // external means hidden scroll
 		g.ExtendedWidget = gw
 
 		l, _ := gtk.ListBoxNew()

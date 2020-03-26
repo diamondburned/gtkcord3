@@ -24,11 +24,11 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/gtkcord3/internal/mutexlog"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 var HTTPClient = http.Client{
@@ -90,7 +90,7 @@ type Application struct {
 	LastAccess map[discord.Snowflake]discord.Snowflake
 	lastAccMut sync.Mutex
 
-	busy mutexlog.Mutex
+	busy deadlock.Mutex
 	done chan int // exit code
 }
 
@@ -119,13 +119,15 @@ func (a *Application) Start() {
 }
 
 func (a *Application) Wait() {
-	if sig := <-a.done; sig != 0 {
-		os.Exit(sig)
-	}
+	sig := <-a.done
 
 	// Close session on exit:
 	if a.State != nil {
 		a.State.Close()
+	}
+
+	if sig != 0 {
+		os.Exit(sig)
 	}
 }
 

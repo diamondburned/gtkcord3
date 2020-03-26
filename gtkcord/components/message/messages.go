@@ -11,11 +11,11 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
-	"github.com/diamondburned/gtkcord3/internal/mutexlog"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 const scrollMinDelta = 500
@@ -24,8 +24,8 @@ var MaxMessageWidth = 800
 
 type Messages struct {
 	gtkutils.ExtendedWidget
-	ChannelID discord.Snowflake
-	GuildID   discord.Snowflake
+	channelID discord.Snowflake
+	guildID   discord.Snowflake
 
 	c     *ningen.State
 	fetch int // max messages
@@ -38,7 +38,7 @@ type Messages struct {
 
 	Messages *gtk.ListBox
 	messages []*Message
-	guard    mutexlog.Mutex
+	guard    deadlock.RWMutex
 
 	resetting    bool
 	fetchingMore moreatomic.Bool
@@ -98,6 +98,7 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		s.Connect("edge-overshot", m.onEdgeOvershot)
 		s.SetCanFocus(true)
 		s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
+		s.SetProperty("propagate-natural-height", true)
 		s.SetProperty("min-content-width", 300)
 		s.SetProperty("min-content-height", 300)
 		s.SetProperty("window-placement", gtk.CORNER_BOTTOM_LEFT)
@@ -162,25 +163,25 @@ func (m *Messages) Focus() {
 }
 
 func (m *Messages) GetChannelID() discord.Snowflake {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
-	return m.ChannelID
+	return m.channelID
 }
 
 func (m *Messages) GetGuildID() discord.Snowflake {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
-	return m.GuildID
+	return m.guildID
 }
 
 func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
 	ids := make([]discord.Snowflake, 0, limit)
 	added := make(map[discord.Snowflake]struct{}, limit)
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		message := m.messages[i]
@@ -197,8 +198,8 @@ func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
 }
 
 func (m *Messages) LastFromMe() *Message {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	for n := len(m.messages) - 1; n >= 0; n-- {
 		if msg := m.messages[n]; msg.AuthorID == m.c.Ready.User.ID {
@@ -209,10 +210,8 @@ func (m *Messages) LastFromMe() *Message {
 }
 
 func (m *Messages) Last() *Message {
-	// yolo, this causes a freeze bug.
-
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	if len(m.messages) == 0 {
 		return nil
@@ -231,22 +230,22 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	m.ChannelID = channel
+	m.channelID = channel
 
 	// Mark that we're loading messages.
 	m.resetting = true
 
 	// Order: latest is first.
-	messages, err := m.c.Messages(m.ChannelID)
+	messages, err := m.c.Messages(m.channelID)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
 	// Set GuildID and subscribe if it's valid:
 	if len(messages) > 0 {
-		m.GuildID = messages[0].GuildID
-		if m.GuildID.Valid() {
-			go m.c.Subscribe(m.GuildID, m.ChannelID, 0)
+		m.guildID = messages[0].GuildID
+		if m.guildID.Valid() {
+			go m.c.Subscribe(m.guildID, m.channelID, 0)
 		}
 
 	} else {
@@ -275,16 +274,15 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 			w.updateAuthor(m.c, message.GuildID, message.Author)
 			m._insert(w)
 		}
+
+		// Iterate backwards, from latest to earliest:
+		for i := len(m.messages) - 1; i >= 0; i-- {
+			m.messages[i].updateExtras(m.c, &messages[i])
+		}
 	})
 
 	// Mark for ack, check onEdgeReached
 	m.acked = false
-
-	// Iterate backwards, from latest to earliest.
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		go m.messages[i].UpdateExtras(m.c, &messages[i])
-	}
-
 	m.resetting = false
 
 	return nil
@@ -325,34 +323,6 @@ func (m *Messages) ScrollToBottom() {
 	vAdj.SetValue(to)
 }
 
-// func (m *Messages) onSizeAlloc() {
-// 	log.Println("Child notify")
-
-// 	adj, _ := m.Viewport.GetVAdjustment()
-
-// 	max := adj.GetUpper()
-
-// 	// if max := int64(max); max == m.lastHeight {
-// 	// 	return
-// 	// } else {
-// 	// 	m.lastHeight = max
-// 	// }
-
-// 	cur := adj.GetValue() + adj.GetPageSize()
-
-// 	delta := int32(max - cur)
-// 	atomic.StoreInt32(&m.scrollDelta, delta)
-
-// 	// If the scroll is not close to the bottom and we're not loading messages:
-// 	if delta > scrollMinDelta {
-// 		// Then we don't scroll.
-// 		// log.Println("Not scrolling. Loading:", loading)
-// 		return
-// 	}
-
-// 	adj.SetValue(max)
-// }
-
 func (m *Messages) onScroll(adj *gtk.Adjustment) {
 	if adj.GetUpper()-adj.GetPageSize() == adj.GetValue() {
 		m.atBottom = true
@@ -382,7 +352,7 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		}
 
 		msID := m.messages[len(m.messages)-1].ID
-		chID := m.ChannelID
+		chID := m.channelID
 
 		// Find the latest message and ack it:
 		go m.c.MarkRead(chID, msID)
@@ -407,18 +377,20 @@ func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
-	go func() {
-		m.fetchingMore.Set(true)
-		m.guard.Lock()
+	// Buggy, apparently steals lock.
 
-		defer m.fetchingMore.Set(false)
-		defer m.guard.Unlock()
+	// go func() {
+	// 	m.fetchingMore.Set(true)
+	// 	m.guard.Lock()
 
-		semaphore.IdleMust(m.Scroll.SetSensitive, false)
-		defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
+	// 	defer m.fetchingMore.Set(false)
+	// 	defer m.guard.Unlock()
 
-		m.fetchMore()
-	}()
+	// 	semaphore.IdleMust(m.Scroll.SetSensitive, false)
+	// 	defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
+
+	// 	m.fetchMore()
+	// }()
 }
 
 func (m *Messages) fetchMore() {
@@ -430,7 +402,7 @@ func (m *Messages) fetchMore() {
 	first := m.messages[0].ID
 
 	// Bypass the state cache
-	messages, err := m.c.MessagesBefore(m.ChannelID, first, uint(m.fetch))
+	messages, err := m.c.MessagesBefore(m.channelID, first, uint(m.fetch))
 	if err != nil {
 		// TODO: error popup
 		log.Errorln("Failed to fetch past messages:", err)
@@ -470,8 +442,8 @@ func (m *Messages) fetchMore() {
 
 			// Update the message too, only we use the channel's GuildID instead
 			// of the message's, as GuildID isn't populated for API-fetched messages.
-			w.updateAuthor(m.c, m.GuildID, message.Author)
-			go w.UpdateExtras(m.c, message)
+			w.updateAuthor(m.c, m.guildID, message.Author)
+			w.updateExtras(m.c, message)
 		}
 	})
 
@@ -531,12 +503,11 @@ func (m *Messages) insert(message *discord.Message) {
 		w = newMessageUnsafe(m.c, message)
 		m._insert(w)
 		w.updateAuthor(m.c, message.GuildID, message.Author)
+		w.updateExtras(m.c, message)
 	})
-
-	go w.UpdateExtras(m.c, message)
 }
 
-// not thread safe
+// not thread-safe
 func (m *Messages) _insert(w *Message) {
 	// Bind Message's fields to Messages'
 	injectMessage(m, w)
@@ -544,6 +515,7 @@ func (m *Messages) _insert(w *Message) {
 	// Try and see if the message should be condensed
 	tryCondense(m.messages, w)
 
+	// This adds the message into the list, not call the above Insert().
 	m.Messages.Insert(w, -1)
 	m.messages = append(m.messages, w)
 
@@ -551,8 +523,8 @@ func (m *Messages) _insert(w *Message) {
 }
 
 func (m *Messages) Update(update *discord.Message) bool {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	return m.update(update)
 }
@@ -574,22 +546,18 @@ func (m *Messages) update(update *discord.Message) bool {
 		return false
 	}
 
+	target.ID = update.ID
+
 	// Clear the nonce, if any:
 	semaphore.IdleMust(func() {
 		if !target.getAvailableUnsafe() {
 			target.setAvailableUnsafe(true)
 		}
+		if update.Content != "" {
+			target.UpdateContentUnsafe(m.c, update)
+		}
+		target.updateExtras(m.c, update)
 	})
-
-	target.ID = update.ID
-	// target.Nonce = ""
-
-	if update.Content != "" {
-		target.UpdateContent(m.c, update)
-	}
-	go func() {
-		target.UpdateExtras(m.c, update)
-	}()
 
 	return true
 }
@@ -600,7 +568,7 @@ func (m *Messages) updateMessageAuthor(ns ...discord.Member) {
 			if message.AuthorID != n.User.ID {
 				continue
 			}
-			message.UpdateMember(m.c, m.GuildID, n)
+			message.UpdateMember(m.c, m.guildID, n)
 		}
 	}
 }

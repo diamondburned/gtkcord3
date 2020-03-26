@@ -38,11 +38,6 @@ type Input struct {
 	Send     *gtk.Button
 
 	Editing *discord.Message
-
-	OnTyping func()
-
-	// uploadButton
-	// emojiButton
 }
 
 func NewInput(m *Messages) (i *Input) {
@@ -82,13 +77,13 @@ func NewInput(m *Messages) (i *Input) {
 	main.Add(i.Completer)
 
 	// Prepare the message input box:
-	gtkutils.Margin2(ibox, 4, 10)
+	gtkutils.Margin2(ibox, 4, 5)
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
 	upload.SetVAlign(gtk.ALIGN_START)
 	upload.SetRelief(gtk.RELIEF_NONE)
 	upload.Connect("clicked", func() {
-		go SpawnUploader(i.upload)
+		SpawnUploader(i.upload)
 	})
 
 	send.SetVAlign(gtk.ALIGN_START)
@@ -144,7 +139,7 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	}
 
 	// Send an OnTyping request:
-	i.Messages.Typing.Type(i.Messages.ChannelID)
+	i.Messages.Typing.Type(i.Messages.GetChannelID())
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
 	const cntrlMask = uint(gdk.GDK_CONTROL_MASK)
@@ -277,15 +272,18 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 }
 
 func (i *Input) editMessage(id discord.Snowflake) error {
-	m, err := i.Messages.c.State.Store.Message(i.Messages.ChannelID, id)
+	m, err := i.Messages.c.State.Store.Message(i.Messages.GetChannelID(), id)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get message")
 	}
 
 	i.Editing = m
-	semaphore.IdleMust(i.Style.AddClass, "editing")
 
-	semaphore.IdleMust(i.InputBuf.SetText, i.Editing.Content)
+	semaphore.IdleMust(func() {
+		i.Style.AddClass("editing")
+		i.InputBuf.SetText(i.Editing.Content)
+	})
+
 	return nil
 }
 
@@ -326,8 +324,8 @@ func (i *Input) popContent() string {
 func (i *Input) makeMessage(content string) *discord.Message {
 	return &discord.Message{
 		Type:      discord.DefaultMessage,
-		ChannelID: i.Messages.ChannelID,
-		GuildID:   i.Messages.GuildID,
+		ChannelID: i.Messages.GetChannelID(),
+		GuildID:   i.Messages.GetGuildID(),
 		Author:    i.Messages.c.Ready.User,
 		Content:   content,
 		Timestamp: discord.Timestamp(time.Now()),
@@ -404,9 +402,12 @@ func (i *Input) _upload(content string, paths []string) error {
 	s := u.MakeSendData(m)
 
 	w := newMessageCustom(m)
-	semaphore.IdleMust(w.rightBottom.Add, u)
 
-	i.Messages._insert(w)
+	semaphore.IdleMust(func() {
+		w.rightBottom.Add(u)
+		i.Messages._insert(w)
+	})
+
 	go w.updateAuthor(i.Messages.c, m.GuildID, m.Author)
 
 	_, err = i.Messages.c.State.SendMessageComplex(m.ChannelID, s)

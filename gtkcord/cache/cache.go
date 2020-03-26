@@ -18,7 +18,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -29,7 +28,7 @@ var Client = http.Client{
 
 // DO NOT TOUCH.
 const (
-	CacheHash   = "trapscute"
+	CacheHash   = "hackadoll3"
 	CachePrefix = "gtkcord3"
 )
 
@@ -65,11 +64,8 @@ func cleanUpCache() {
 	}
 }
 
-func TransformURL(s string, w, h int, gif bool) string {
+func TransformURL(s string) string {
 	var sizeSuffix string
-	if w > 0 && h > 0 && gif {
-		sizeSuffix = "_sz" + strconv.Itoa(w) + "x" + strconv.Itoa(h)
-	}
 
 	u, err := url.Parse(s)
 	if err != nil {
@@ -89,7 +85,7 @@ func TransformURL(s string, w, h int, gif bool) string {
 // converts anything that isn't a digit or letter into underscores.
 func SanitizeString(str string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '#' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '#' || r == '.' {
 			return r
 		}
 
@@ -110,20 +106,18 @@ func download(url string, pp []Processor, gif bool) ([]byte, error) {
 		return nil, fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to download image")
-	}
-
-	if len(b) == 0 {
-		return nil, errors.New("nil body")
-	}
+	var b []byte
 
 	if len(pp) > 0 {
 		if gif {
-			b, err = ProcessAnimation(b, pp)
+			b, err = ProcessAnimationStream(r.Body, pp)
 		} else {
-			b, err = Process(b, pp)
+			b, err = ProcessStream(r.Body, pp)
+		}
+	} else {
+		b, err = ioutil.ReadAll(r.Body)
+		if err != nil {
+			err = errors.Wrap(err, "Failed to download image")
 		}
 	}
 
@@ -132,16 +126,12 @@ func download(url string, pp []Processor, gif bool) ([]byte, error) {
 
 // get doesn't check if the file exists
 func get(url, dst string, pp []Processor, gif bool) error {
-	// Unlock FileIO mutex to allow concurrent requests.
-	// fileIO.Unlock()
-	// defer fileIO.Lock()
-
 	b, err := download(url, pp, gif)
 	if err != nil {
 		return err
 	}
 
-	if err := ioutil.WriteFile(dst, b, 0755); err != nil {
+	if err := ioutil.WriteFile(dst, b, 0644); err != nil {
 		return errors.Wrap(err, "Failed to write file to "+dst)
 	}
 
@@ -154,30 +144,22 @@ func GetPixbuf(url string, pp ...Processor) (*gdk.Pixbuf, error) {
 
 func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error) {
 	// Transform URL:
-	dst := TransformURL(url, w, h, false)
-
-	// fileIO.Lock()
-	// defer fileIO.Unlock()
+	dst := TransformURL(url)
 
 	// Try and get the Pixbuf from file:
-	p, err := gdk.PixbufNewFromFileAtScale(dst, w, h, true)
+	p, err := getPixbufFromFile(dst, w, h)
 	if err == nil {
 		return p, nil
 	}
-
-	// If resize is requested, we resize using Go's instead.
-	// if w > 0 && h > 0 {
-	// 	pp = append(pp, Resize(w, h))
-	// }
 
 	// Get the image into file (dst)
 	if err := get(url, dst, pp, false); err != nil {
 		return nil, err
 	}
 
-	p, err = gdk.PixbufNewFromFileAtScale(dst, w, h, true)
+	p, err = getPixbufFromFile(dst, w, h)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get pixbuf")
+		return nil, err
 	}
 
 	return p, nil
@@ -190,30 +172,11 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
 	// Transform URL:
 	gif := strings.Contains(url, "gif")
-	dst := TransformURL(url, w, h, gif)
+	dst := TransformURL(url)
 
-	// fileIO.Lock()
-	// defer fileIO.Unlock()
-
-	// Try and get the Pixbuf from file:
-	if !gif {
-		p, err := gdk.PixbufNewFromFileAtScale(dst, w, h, true)
-		if err == nil {
-			semaphore.IdleMust(img.SetFromPixbuf, p)
-			return nil
-		}
-	} else {
-		p, err := gdk.PixbufAnimationNewFromFile(dst)
-		if err == nil {
-			semaphore.IdleMust(img.SetFromAnimation, p)
-			return nil
-		}
-	}
-
-	// If resize is requested, we resize using Go's instead.
-	// Only use this for GIF animations.
-	if w > 0 && h > 0 && gif {
-		pp = append(pp, Resize(w, h))
+	// Try and set the Pixbuf from file:
+	if err := setImageFromFile(img, dst, gif, w, h); err == nil {
+		return nil
 	}
 
 	// Get the image into file (dst)
@@ -221,20 +184,10 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 		return err
 	}
 
-	if !gif {
-		p, err := gdk.PixbufNewFromFileAtScale(dst, w, h, true)
-		if err != nil {
-			os.Remove(dst)
-			return errors.Wrap(err, "Failed to get pixbuf after downloading")
-		}
-		semaphore.IdleMust(img.SetFromPixbuf, p)
-	} else {
-		p, err := gdk.PixbufAnimationNewFromFile(dst)
-		if err != nil {
-			os.Remove(dst)
-			return errors.Wrap(err, "Failed to get animation after downloading")
-		}
-		semaphore.IdleMust(img.SetFromAnimation, p)
+	// Try again:
+	if err := setImageFromFile(img, dst, gif, w, h); err != nil {
+		os.Remove(dst)
+		return errors.Wrap(err, "Failed to get pixbuf after downloading")
 	}
 
 	return nil
@@ -249,83 +202,12 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 	defer r.Body.Close()
 
 	if r.StatusCode < 200 || r.StatusCode > 299 {
-		return fmt.Errorf("Bad status code %d for %s", r.StatusCode, url)
+		return fmt.Errorf("Bad status code %d", r.StatusCode)
 	}
 
 	var gif = strings.Contains(url, ".gif")
-	var l *gdk.PixbufLoader
 
-	l, err = gdk.PixbufLoaderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a pixbuf_loader")
-	}
-
-	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
-			w, h = MaxSize(imgW, imgH, w, h)
-			defer semaphore.Async(img.SetSizeRequest, w, h)
-
-			if w != imgW || h != imgH {
-				l.SetSize(w, h)
-			}
-		})
-	}
-
-	var p interface{}
-	var pMu sync.Mutex
-
-	gtkutils.Connect(l, "area-prepared", func() {
-		pMu.Lock()
-		defer pMu.Unlock()
-
-		if gif {
-			p, err = l.GetAnimation()
-			if err != nil || p == nil {
-				log.Errorln("Failed to get animation during area-prepared:", err)
-				return
-			}
-		} else {
-			p, err = l.GetPixbuf()
-			if err != nil || p == nil {
-				log.Errorln("Failed to get pixbuf during area-prepared:", err)
-				return
-			}
-		}
-		switch {
-		case p == nil:
-			return
-		case gif:
-			semaphore.Async(img.SetFromAnimation, p)
-		default:
-			semaphore.Async(img.SetFromPixbuf, p)
-		}
-	})
-
-	// gtkutils.Connect(l, "area-updated", func() {
-	// 	pMu.Lock()
-	// 	defer pMu.Unlock()
-
-	// 	switch {
-	// 	case p == nil:
-	// 		return
-	// 	case gif:
-	// 		semaphore.IdleMust(img.SetFromAnimation, p)
-	// 	default:
-	// 		semaphore.IdleMust(img.SetFromPixbuf, p)
-	// 	}
-	// })
-
-	if err != nil {
-		return err
-	}
-
-	defer l.Close()
-
-	if _, err := io.Copy(l, r.Body); err != nil {
-		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
-	}
-
-	return nil
+	return setImageStream(r.Body, img, gif, w, h)
 }
 
 func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
@@ -369,4 +251,124 @@ func MaxSize(w, h, maxW, maxH int) (int, int) {
 	}
 
 	return w, h
+}
+
+func getPixbufFromFile(path string, w, h int) (*gdk.Pixbuf, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to open file")
+	}
+	defer f.Close()
+
+	l, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create a pixbuf_loader")
+	}
+
+	if w > 0 && h > 0 {
+		gtkutils.Connect(l, "size-prepared", func(_ interface{}, imgW, imgH int) {
+			w, h = MaxSize(imgW, imgH, w, h)
+			if w != imgW || h != imgH {
+				l.SetSize(w, h)
+			}
+		})
+	}
+
+	if _, err := io.Copy(l, f); err != nil {
+		return nil, errors.Wrap(err, "Failed to stream to pixbuf_loader")
+	}
+
+	if err := l.Close(); err != nil {
+		return nil, errors.Wrap(err, "Failed to close pixbuf_loader")
+	}
+
+	p, err := l.GetPixbuf()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get pixbuf")
+	}
+
+	return p, nil
+}
+
+func setImageFromFile(img *gtk.Image, path string, gif bool, w, h int) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return errors.Wrap(err, "Failed to open file")
+	}
+	defer f.Close()
+
+	return setImageStream(f, img, gif, w, h)
+}
+
+func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
+	l, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		return errors.Wrap(err, "Failed to create a pixbuf_loader")
+	}
+
+	if w > 0 && h > 0 {
+		gtkutils.Connect(l, "size-prepared", func(_ interface{}, imgW, imgH int) {
+			w, h = MaxSize(imgW, imgH, w, h)
+
+			// If the new sizes don't match, then we need to resize the image:
+			if w != imgW || h != imgH {
+				l.SetSize(w, h)
+			}
+
+			semaphore.Async(func() {
+				// If the image's size hasn't been set before, we set it:
+				if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
+					img.SetSizeRequest(w, h)
+				}
+			})
+		})
+	}
+
+	var p interface{}
+	var pMu sync.Mutex
+
+	gtkutils.Connect(l, "area-prepared", func() {
+		pMu.Lock()
+		defer pMu.Unlock()
+
+		if gif {
+			p, err = l.GetAnimation()
+			if err != nil || p == nil {
+				log.Errorln("Failed to get animation during area-prepared:", err)
+				return
+			}
+		} else {
+			p, err = l.GetPixbuf()
+			if err != nil || p == nil {
+				log.Errorln("Failed to get pixbuf during area-prepared:", err)
+				return
+			}
+		}
+	})
+
+	gtkutils.Connect(l, "area-updated", func() {
+		pMu.Lock()
+		defer pMu.Unlock()
+
+		switch {
+		case p == nil:
+			return
+		case gif:
+			semaphore.Async(img.SetFromAnimation, p)
+		default:
+			semaphore.Async(img.SetFromPixbuf, p)
+		}
+	})
+
+	if err != nil {
+		return err
+	}
+
+	defer l.Close()
+
+	if _, err := io.Copy(l, r); err != nil {
+		return errors.Wrap(err, "Failed to stream to pixbuf_loader")
+	}
+
+	return nil
 }

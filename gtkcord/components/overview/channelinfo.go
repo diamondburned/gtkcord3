@@ -17,7 +17,7 @@ type ChannelInfo struct {
 	Hash   *gtk.Label
 	Name   *gtk.Label
 
-	Description *gtk.TextView
+	Description *gtk.Label
 }
 
 func NewChannelInfo(ch discord.Channel) *ChannelInfo {
@@ -45,19 +45,16 @@ func NewChannelInfo(ch discord.Channel) *ChannelInfo {
 	name.SetLineWrap(true)
 	name.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 
-	desc, _ := gtk.TextViewNew()
+	desc, _ := gtk.LabelNew(string(md.ParseToMarkup([]byte(ch.Topic))))
 	desc.Show()
+	desc.SetUseMarkup(true)
 	desc.SetMarginStart(CommonMargin)
 	desc.SetMarginEnd(CommonMargin)
 	desc.SetMarginBottom(CommonMargin)
+	desc.SetXAlign(0.0)
 	desc.SetHExpand(true)
-	desc.SetCursorVisible(false)
-	desc.SetEditable(false)
-	desc.SetCanFocus(false)
-	desc.SetWrapMode(gtk.WRAP_WORD_CHAR)
-
-	buf, _ := desc.GetBuffer()
-	md.Parse([]byte(ch.Topic), buf)
+	desc.SetLineWrap(true)
+	desc.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 
 	box.Add(header)
 	box.Add(desc)

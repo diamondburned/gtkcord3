@@ -2,7 +2,6 @@ package gtkutils
 
 import (
 	"html"
-	"sync"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -10,6 +9,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type ExtendedWidget interface {
@@ -115,7 +115,7 @@ func KeyIsASCII(key uint) bool {
 	return key >= gdk.KEY_exclam && key <= gdk.KEY_asciitilde
 }
 
-var connectMutex sync.Mutex
+var connectMutex deadlock.Mutex
 
 type connector interface {
 	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)

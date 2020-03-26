@@ -13,8 +13,8 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/gtkcord3/internal/mutexlog"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/sasha-s/go-deadlock"
 )
 
 const TypingTimeout = 8 * time.Second
@@ -34,10 +34,10 @@ func handler() {
 
 	for {
 		// First, catch a TypingState
-		for tOld == nil {
-			tOld = <-typingHandler
-			// stop until we get something
-		}
+		// for tOld == nil {
+		// 	tOld = <-typingHandler
+		// 	// stop until we get something
+		// }
 
 		// Block until a tick or a typing state
 		select {
@@ -79,7 +79,7 @@ type State struct {
 	*gtk.Box
 	Label *gtk.Label
 
-	mu mutexlog.Mutex
+	mu deadlock.Mutex
 
 	Users []typingUser
 

@@ -108,7 +108,12 @@ func (c *Container) UpdateActivity(ac *discord.Activity) {
 	case discord.StreamingActivity:
 		game = "Streaming " + ac.Details
 	case discord.CustomActivity:
-		game = ac.Emoji.String() + " " + ac.State
+		var emoji = ac.Emoji.Name
+		if ac.Emoji.ID.Valid() { // if the emoji is custom:
+			emoji = ":" + emoji + ":"
+		}
+
+		game = emoji + " " + ac.State
 	}
 
 	c.Activity.SetMarkup(`<span size="smaller">` + html.EscapeString(game) + "</span>")

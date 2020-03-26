@@ -18,32 +18,32 @@ func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	if m.ChannelID != t.ChannelID {
+	if m.channelID != t.ChannelID {
 		return
 	}
 
-	m.Typing.Add(t)
+	go m.Typing.Add(t)
 }
 
 func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	if m.ChannelID != c.ChannelID {
+	if m.channelID != c.ChannelID {
 		return
 	}
 
 	m.insert((*discord.Message)(c))
 
 	// Check typing
-	m.Typing.Remove(c.Author.ID)
+	go m.Typing.Remove(c.Author.ID)
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
-	if m.ChannelID != u.ChannelID {
+	if m.channelID != u.ChannelID {
 		return
 	}
 
@@ -54,7 +54,7 @@ func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	if m.ChannelID != d.ChannelID {
+	if m.channelID != d.ChannelID {
 		return
 	}
 
@@ -64,7 +64,7 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	if m.ChannelID != d.ChannelID {
+	if m.channelID != d.ChannelID {
 		return
 	}
 
@@ -72,10 +72,10 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
-	if m.ChannelID != c.GuildID {
+	if m.channelID != c.GuildID {
 		return
 	}
 

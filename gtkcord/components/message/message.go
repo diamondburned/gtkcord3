@@ -76,7 +76,6 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 	// defer log.Benchmark("newMessage")()
 
 	message := newMessageCustomUnsafe(m)
-	defer message.markBusy()()
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
@@ -172,7 +171,6 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		timestamp:   timestamp,
 		rightBottom: rightBottom,
 	}
-	defer message.markBusy()()
 
 	// Wrap main around an event box
 	mainEv.Add(message.main)
@@ -247,32 +245,9 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	return
 }
 
-func (m *Message) markBusy() func() {
-	// atomic.AddInt32(&m.busy, 1)
-	// return func() { atomic.AddInt32(&m.busy, -1) }
-	return func() {}
-}
-
-func (m *Message) isBusy() bool {
-	// return atomic.LoadInt32(&m.busy) == 0
-	return false
-}
-
-// func (m *Message) getAvailable() bool {
-// 	return semaphore.IdleMust(m.rightBottom.GetOpacity).(float64) > 0.9
-// }
-
 func (m *Message) getAvailableUnsafe() bool {
 	return m.rightBottom.GetOpacity() > 0.9
 }
-
-// func (m *Message) setAvailable(available bool) {
-// 	if available {
-// 		semaphore.IdleMust(m.rightBottom.SetOpacity, 1.0)
-// 	} else {
-// 		semaphore.IdleMust(m.rightBottom.SetOpacity, 0.5)
-// 	}
-// }
 
 func (m *Message) setAvailableUnsafe(available bool) {
 	if available {
@@ -292,8 +267,6 @@ func (m *Message) setOffset(last *Message) {
 }
 
 func (m *Message) SetCondensedUnsafe(condensed bool) {
-	defer m.markBusy()()
-
 	if m.Condensed == condensed {
 		return
 	}
@@ -379,8 +352,6 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 }
 
 func (m *Message) UpdateAvatar(url string) {
-	defer m.markBusy()()
-
 	if url == "" {
 		url = AvatarFallbackURL
 	}
@@ -411,8 +382,6 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 }
 
 func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
-	defer m.markBusy()()
-
 	if update.Content != "" {
 		m.assertContentUnsafe()
 		md.ParseMessageContent(m.content, s.Store, update)
@@ -445,24 +414,26 @@ func (m *Message) assertContentUnsafe() {
 }
 
 func (m *Message) UpdateExtras(s *ningen.State, update *discord.Message) {
-	defer m.markBusy()()
-
 	semaphore.IdleMust(func() {
-		for _, extra := range m.extras {
-			m.rightBottom.Remove(extra)
-		}
-
-		// set to nil so the old slice can be GC'd
-		m.extras = nil
-		m.extras = append(m.extras, NewEmbedUnsafe(s, update)...)
-		m.extras = append(m.extras, NewAttachmentUnsafe(update)...)
-
-		for _, extra := range m.extras {
-			m.rightBottom.Add(extra)
-		}
-
-		m.rightBottom.ShowAll()
+		m.updateExtras(s, update)
 	})
+}
+
+func (m *Message) updateExtras(s *ningen.State, update *discord.Message) {
+	for _, extra := range m.extras {
+		m.rightBottom.Remove(extra)
+	}
+
+	// set to nil so the old slice can be GC'd
+	m.extras = nil
+	m.extras = append(m.extras, NewEmbedUnsafe(s, update)...)
+	m.extras = append(m.extras, NewAttachmentUnsafe(update)...)
+
+	for _, extra := range m.extras {
+		m.rightBottom.Add(extra)
+	}
+
+	m.rightBottom.ShowAll()
 }
 
 func smaller(text string) string {

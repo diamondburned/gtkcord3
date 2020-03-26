@@ -29,7 +29,10 @@ func init() {
 }
 
 type State struct {
-	*gtk.ListBox
+	*gtk.Revealer
+
+	Scroll  *gtk.ScrolledWindow
+	ListBox *gtk.ListBox
 	Entries []*Entry
 
 	state *ningen.State
@@ -68,19 +71,38 @@ type MessageContainer interface {
 	GetRecentAuthors(limit int) []discord.Snowflake
 }
 
-func New(s *ningen.State, ibuf *gtk.TextBuffer, msgC MessageContainer) *State {
-	l, _ := gtk.ListBoxNew()
-	gtkutils.InjectCSSUnsafe(l, "completer", "")
+func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *State {
+	revealer, _ := gtk.RevealerNew()
+	revealer.Show()
+	revealer.SetRevealChild(false)
+	revealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_NONE)
 
-	state := &State{
-		ListBox:   l,
-		state:     s,
-		InputBuf:  ibuf,
+	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
+	scroll.Show()
+	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+	scroll.SetProperty("propagate-natural-height", true)
+	scroll.SetProperty("min-content-height", 0)
+	scroll.SetProperty("max-content-height", 250) // arbitrary height
+	scroll.SetSizeRequest(-1, 250)
+
+	listbox, _ := gtk.ListBoxNew()
+	listbox.Show()
+	listbox.SetFocusVAdjustment(scroll.GetVAdjustment())
+	gtkutils.InjectCSSUnsafe(listbox, "completer", "")
+
+	s := &State{
+		Revealer:  revealer,
+		Scroll:    scroll,
+		ListBox:   listbox,
+		state:     state,
+		InputBuf:  textbuf,
 		container: msgC,
 	}
-	l.Connect("row-activated", state.ApplyCompletion)
+	revealer.Add(scroll)
+	scroll.Add(listbox)
+	listbox.Connect("row-activated", s.applyCompletion)
 
-	return state
+	return s
 }
 
 func (c *State) KeyDown(state, key uint) bool {
@@ -88,6 +110,7 @@ func (c *State) KeyDown(state, key uint) bool {
 	if key == gdk.KEY_space {
 		if !c.IsEmpty() {
 			c.clearCompletion()
+			c.Revealer.SetRevealChild(false)
 		}
 
 		return false
@@ -113,11 +136,12 @@ func (c *State) KeyDown(state, key uint) bool {
 
 	if key == gdk.KEY_Escape {
 		c.clearCompletion()
+		c.Revealer.SetRevealChild(false)
 		return true
 	}
 
 	if key == gdk.KEY_Return || key == gdk.KEY_Tab {
-		c.ApplyCompletion()
+		c.applyCompletion()
 		return true
 	}
 
@@ -202,16 +226,21 @@ func (c *State) run() {
 	}
 	c.lastword = word
 
-	if !c.IsEmpty() {
-		c.ClearCompletion()
+	if !c.IsEmpty() && len(c.Entries) > 0 {
+		// Clear completion without hiding:
+		semaphore.IdleMust(c.clearCompletion)
 	}
+
+	// Reveal (true) if c.Entries is not empty.
+	defer semaphore.IdleMust(func() {
+		c.SetRevealChild(len(c.Entries) != 0)
+	})
 
 	if word == "" {
 		return
 	}
 
 	c.loadCompletion(word)
-	semaphore.IdleMust(c.ListBox.Show)
 }
 
 func (c *State) ClearCompletion() {
@@ -219,7 +248,10 @@ func (c *State) ClearCompletion() {
 		return
 	}
 
-	semaphore.IdleMust(c.clearCompletion)
+	semaphore.IdleMust(func() {
+		c.clearCompletion()
+		c.SetRevealChild(false)
+	})
 }
 
 func (c *State) clearCompletion() {
@@ -234,11 +266,11 @@ func (c *State) clearCompletion() {
 	c.users = c.users[:0]
 	// c.emojis = c.emojis[:0]
 
-	c.ListBox.Hide()
+	// c.ScrolledWindow.Hide()
 }
 
 // Finalizing function
-func (c *State) ApplyCompletion() {
+func (c *State) applyCompletion() {
 	r := c.ListBox.GetSelectedRow()
 	if r == nil {
 		r = c.Entries[0].ListBoxRow
@@ -260,6 +292,7 @@ func (c *State) ApplyCompletion() {
 	c.InputBuf.Insert(c.start, c.Entries[i].Text+" ")
 
 	c.clearCompletion()
+	c.SetRevealChild(false)
 }
 
 func (c *State) loadCompletion(word string) {

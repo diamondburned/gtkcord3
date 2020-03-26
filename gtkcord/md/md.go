@@ -1,6 +1,8 @@
 package md
 
 import (
+	"bytes"
+
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
@@ -72,6 +74,20 @@ func parse(content []byte, r *Renderer, opts ...parser.ParseOption) {
 	back.BackwardChar()
 
 	r.Buffer.Delete(back, end)
+}
+
+func ParseToMarkup(content []byte) []byte {
+	p := parser.NewParser(
+		parser.WithBlockParsers(BlockParsers()...),
+		parser.WithInlineParsers(InlineParsers()...),
+	)
+
+	node := p.Parse(text.NewReader(content))
+
+	var buf bytes.Buffer
+	NewMarkupRenderer().Render(&buf, content, node)
+
+	return bytes.TrimSpace(buf.Bytes())
 }
 
 func getMessage(pc parser.Context) *discord.Message {

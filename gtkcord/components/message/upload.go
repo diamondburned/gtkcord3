@@ -25,32 +25,39 @@ type Uploader struct {
 //go:linkname gostring runtime.gostring
 func gostring(p unsafe.Pointer) string
 
+var defaultDir string
+
 func SpawnUploader(callback func(absolutePath []string)) {
-	dialog := semaphore.IdleMust(gtk.FileChooserDialogNewWith2Buttons,
+	dialog, _ := gtk.FileChooserDialogNewWith2Buttons(
 		"Upload File", window.Window,
 		gtk.FILE_CHOOSER_ACTION_OPEN,
 		"Cancel", gtk.RESPONSE_CANCEL,
 		"Upload", gtk.RESPONSE_ACCEPT,
-	).(*gtk.FileChooserDialog)
+	)
 
 	WithPreviewer(dialog)
 
-	defaultDir := glib.GetUserDataDir()
-	semaphore.IdleMust(dialog.SetCurrentFolder, defaultDir)
-	semaphore.IdleMust(dialog.SetSelectMultiple, true)
+	if defaultDir == "" {
+		defaultDir = glib.GetUserDataDir()
+	}
 
-	defer semaphore.IdleMust(dialog.Close)
+	dialog.SetCurrentFolder(defaultDir)
+	dialog.SetSelectMultiple(true)
 
-	if res := semaphore.IdleMust(dialog.Run).(gtk.ResponseType); res != gtk.RESPONSE_ACCEPT {
+	defer dialog.Close()
+
+	if res := dialog.Run(); res != gtk.RESPONSE_ACCEPT {
 		return
 	}
 
 	// Glib's shitty singly linked list:
-	slist := semaphore.IdleMust(dialog.GetFilenames).(*glib.SList)
+	slist, _ := dialog.GetFilenames()
+
 	var names = make([]string, 0, int(slist.Length()))
 	slist.Foreach(func(ptr unsafe.Pointer) {
 		names = append(names, gostring(ptr))
 	})
+
 	slist.Free()
 
 	go callback(names)
@@ -150,7 +157,12 @@ func (p *ProgressUploader) Read(b []byte) (int, error) {
 	n, err := p.r.Read(b)
 
 	atomic.AddUint64(&p.n, uint64(n))
-	glib.IdleAdd(p.bar.SetFraction, float64(p.n)/p.s)
+
+	frac := float64(p.n) / p.s
+
+	semaphore.Async(func() {
+		p.bar.SetFraction(frac)
+	})
 
 	return n, err
 }
@@ -160,10 +172,10 @@ func (p *ProgressUploader) Close() error {
 }
 
 func WithPreviewer(fc *gtk.FileChooserDialog) {
-	img := semaphore.IdleMust(gtk.ImageNew).(*gtk.Image)
+	img, _ := gtk.ImageNew()
 
-	semaphore.IdleMust(fc.SetPreviewWidget, img)
-	semaphore.IdleMust(fc.Connect, "update-preview",
+	fc.SetPreviewWidget(img)
+	fc.Connect("update-preview",
 		func(fc *gtk.FileChooserDialog, img *gtk.Image) {
 			file := fc.GetPreviewFilename()
 

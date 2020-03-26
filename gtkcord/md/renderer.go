@@ -86,15 +86,15 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 
 	case *ast.Paragraph:
 		if !enter {
-			r.insertWithTag([]byte("\n"), nil)
+			r.insertWithTag([]byte{'\n'}, nil)
 		}
 
 	case *ast.Blockquote:
 		r.tags.tagSet(AttrQuoted, enter)
 		if enter {
-			r.insertWithTag([]byte("> "), nil)
+			r.insertWithTag([]byte{'>', ' '}, nil)
 		} else {
-			r.insertWithTag([]byte("\n"), nil)
+			r.insertWithTag([]byte{'\n'}, nil)
 		}
 
 	case *ast.FencedCodeBlock:
@@ -161,7 +161,7 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 
 			// Check if blockquote prefix:
 			if r.tags.Attr.Has(AttrQuoted) {
-				r.insertWithTag([]byte("> "), nil)
+				r.insertWithTag([]byte{'>', ' '}, nil)
 			}
 		}
 	}

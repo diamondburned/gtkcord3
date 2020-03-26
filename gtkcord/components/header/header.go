@@ -6,7 +6,6 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -185,8 +184,7 @@ func (h *Header) onFold(folded bool) {
 }
 
 func (h *Header) UpdateGuild(name string) {
-	semaphore.IdleMust(h.GuildName.SetMarkup,
-		`<span weight="bold">`+html.EscapeString(name)+`</span>`)
+	h.GuildName.SetMarkup(`<span weight="bold">` + html.EscapeString(name) + `</span>`)
 }
 
 func (h *Header) UpdateChannel(name string) {
@@ -194,7 +192,7 @@ func (h *Header) UpdateChannel(name string) {
 		name = `<span weight="bold">` + "#" + html.EscapeString(name) + `</span>`
 	}
 
-	semaphore.IdleMust(h.ChannelName.SetMarkup, name)
+	h.ChannelName.SetMarkup(name)
 }
 
 func empty() *gtk.Box {

@@ -33,11 +33,7 @@ func init() {
 		for call := range idleAdds {
 			call := call
 
-			// log.Debugln(call.trace, "adding into main thread")
-
 			glib.IdleAdd(func() {
-				// now := time.Now()
-
 				var val []reflect.Value
 
 				log.Debugln(call.trace, "main thread")
@@ -53,8 +49,6 @@ func init() {
 				if call.done != nil {
 					call.done <- val
 				}
-
-				// log.Debugln(call.trace, "main thread replied")
 			})
 		}
 	}()

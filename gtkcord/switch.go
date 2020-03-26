@@ -61,7 +61,7 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 		Checker: func() bool {
 			// We just check if the guild ID matches that in Messages. It
 			// shouldn't.
-			return a.Channels.GuildID != g.ID || a.Messages.GuildID != g.ID
+			return a.Channels.GuildID != g.ID || a.Messages.GetGuildID() != g.ID
 		},
 		Setter: func(w gtk.IWidget) {
 			a.setLeftGridCol(w, 2)
@@ -75,10 +75,11 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 				return false
 			}
 
-			a.Header.UpdateGuild(g.Name)
 			return true
 		},
-		After: func() {},
+		After: func() {
+			semaphore.IdleMust(a.Header.UpdateGuild, g.Name)
+		},
 	})
 }
 
@@ -89,7 +90,7 @@ func (a *Application) SwitchDM() {
 		Checker: func() bool {
 			// If the guildID is valid, that means the channel does have a
 			// guild, so we're not in DMs.
-			return a.Messages.GuildID.Valid()
+			return a.Messages.GetGuildID().Valid()
 		},
 		Setter: func(w gtk.IWidget) {
 			a.setLeftGridCol(w, 2)
@@ -99,10 +100,11 @@ func (a *Application) SwitchDM() {
 		},
 		Loader: func() bool {
 			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
-			a.Header.UpdateGuild("Private Messages")
 			return true
 		},
-		After: func() {},
+		After: func() {
+			semaphore.IdleMust(a.Header.UpdateGuild, "Private Messages")
+		},
 	})
 }
 
@@ -117,7 +119,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 		Widget: a.Messages,
 		Width:  -1,
 		Checker: func() bool {
-			return a.Messages.ChannelID != ch.ChannelID()
+			return a.Messages.GetChannelID() != ch.ChannelID()
 		},
 		Setter: func(w gtk.IWidget) {
 			a.Right.Add(w)
@@ -136,10 +138,11 @@ func (a *Application) SwitchChannel(ch Channel) {
 			a.lastAccess(ch.GuildID(), a.Messages.GetChannelID())
 
 			name, _ := ch.ChannelInfo()
-			a.Header.UpdateChannel(name)
-			window.SetTitle("#" + name + " - gtkcord")
 
 			semaphore.IdleMust(func() {
+				a.Header.UpdateChannel(name)
+				window.SetTitle("#" + name + " - gtkcord")
+
 				// Show the channel menu if we're in a guild:
 				if a.Messages.GetGuildID().Valid() {
 					a.Header.ChMenuBtn.SetRevealChild(true)

@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -33,30 +34,31 @@ const (
 )
 
 func clampWidth(width int) int {
-	if max := MaxMessageWidth - (AvatarSize + AvatarPadding*2) - 15; width > max {
+	if max := MaxMessageWidth - (AvatarSize + AvatarPadding*2) - (EmbedMargin * 3); width > max {
 		width = max
 	}
 	return width
 }
 
-func newExtraImageUnsafe(proxy, direct string, w, h int, pp ...cache.Processor) gtkutils.ExtendedWidget {
+func newExtraImageUnsafe(proxy, url string, w, h int, pp ...cache.Processor) *gtk.EventBox {
 	img, _ := gtk.ImageNew()
+	img.Show()
 	img.SetVAlign(gtk.ALIGN_START)
 	img.SetHAlign(gtk.ALIGN_START)
 
 	evb, _ := gtk.EventBoxNew()
+	evb.Show()
 	evb.Add(img)
 	evb.SetHAlign(gtk.ALIGN_START)
 	evb.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) {
 		if !gtkutils.EventIsLeftClick(ev) {
 			return
 		}
-		SpawnPreviewDialog(proxy, direct)
+		SpawnPreviewDialog(proxy, url)
 	})
 	embedSetMargin(evb)
 
 	cache.AsyncFetchUnsafe(proxy, img, w, h, pp...)
-	evb.ShowAll()
 	return evb
 }
 
@@ -69,15 +71,7 @@ func maxSize(w, h, maxW, maxH int) (int, int) {
 		return maxW, maxH
 	}
 
-	if w > h {
-		h = h * maxW / w
-		w = maxW
-	} else {
-		w = w * maxH / h
-		h = maxH
-	}
-
-	return w, h
+	return cache.MaxSize(w, h, maxW, maxH)
 }
 
 func sizeToURL(url string, w, h int) string {
@@ -102,9 +96,7 @@ func NewAttachmentUnsafe(msg *discord.Message) []gtk.IWidget {
 		proxyURL := sizeToURL(att.Proxy, w, h)
 
 		img := newExtraImageUnsafe(proxyURL, att.URL, w, h)
-		if img, ok := img.(gtkutils.Marginator); ok {
-			img.SetMarginStart(0)
-		}
+		img.SetMarginStart(0)
 
 		widgets = append(widgets, img)
 	}
@@ -180,17 +172,15 @@ func newImageEmbedUnsafe(embed discord.Embed) gtkutils.ExtendedWidget {
 	link := sizeToURL(embed.Thumbnail.Proxy, w, h)
 
 	img := newExtraImageUnsafe(link, embed.Thumbnail.URL, w, h)
-	if img, ok := img.(gtkutils.Marginator); ok {
-		img.SetMarginStart(0)
-	}
+	img.SetMarginStart(0)
 	return img
 }
 
 func newNormalEmbedUnsafe(
 	s *ningen.State, msg *discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 
-	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	main.SetHAlign(gtk.ALIGN_START)
+	content, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	content.SetHAlign(gtk.ALIGN_START)
 
 	if embed.Author != nil {
 		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -206,6 +196,7 @@ func newNormalEmbedUnsafe(
 
 		if embed.Author.Name != "" {
 			author, _ := gtk.LabelNew(embed.Author.Name)
+			author.SetUseMarkup(true)
 			author.SetLineWrap(true)
 			author.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 			author.SetXAlign(0.0)
@@ -220,7 +211,7 @@ func newNormalEmbedUnsafe(
 			box.Add(author)
 		}
 
-		main.Add(box)
+		content.Add(box)
 	}
 
 	if embed.Title != "" {
@@ -236,21 +227,26 @@ func newNormalEmbedUnsafe(
 		label.SetXAlign(0.0)
 		embedSetMargin(label)
 
-		main.Add(label)
+		content.Add(label)
 	}
 
 	if embed.Description != "" {
-		txtb, _ := gtk.TextBufferNew(nil)
-		md.ParseWithMessage([]byte(embed.Description), txtb, s.Store, msg)
+		// txtb, _ := gtk.TextBufferNew(nil)
+		// md.ParseWithMessage([]byte(embed.Description), txtb, s.Store, msg)
 
-		txtv, _ := gtk.TextViewNewWithBuffer(txtb)
-		txtv.SetCursorVisible(false)
-		txtv.SetEditable(false)
-		txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-		txtv.SetSizeRequest(-1, -1)
-		embedSetMargin(txtv)
+		// txtv, _ := gtk.TextViewNewWithBuffer(txtb)
+		// txtv.SetCursorVisible(false)
+		// txtv.SetEditable(false)
+		// txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 
-		main.Add(txtv)
+		desc, _ := gtk.LabelNew(string(md.ParseToMarkup([]byte(embed.Description))))
+		desc.SetUseMarkup(true)
+		desc.SetLineWrap(true)
+		desc.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+		desc.SetXAlign(0.0)
+		embedSetMargin(desc)
+
+		content.Add(desc)
 	}
 
 	if len(embed.Fields) > 0 {
@@ -261,7 +257,7 @@ func newNormalEmbedUnsafe(
 		fields.SetRowSpacing(uint(7))
 		fields.SetColumnSpacing(uint(14))
 
-		main.Add(fields)
+		content.Add(fields)
 
 		col, row := 0, 0
 
@@ -312,6 +308,7 @@ func newNormalEmbedUnsafe(
 
 			if embed.Footer.Text != "" {
 				text, _ := gtk.LabelNew(embed.Footer.Text)
+				text.SetVAlign(gtk.ALIGN_START)
 				text.SetOpacity(0.65)
 				text.SetLineWrap(true)
 				text.SetLineWrapMode(pango.WRAP_WORD_CHAR)
@@ -332,16 +329,16 @@ func newNormalEmbedUnsafe(
 			footer.Add(text)
 		}
 
-		main.Add(footer)
+		content.Add(footer)
 	}
 
 	if embed.Thumbnail != nil {
 		wrapper, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		wrapper.Add(main)
+		wrapper.Add(content)
 
 		// Do a shitty hack:
-		main = wrapper
-		main.SetHAlign(gtk.ALIGN_START)
+		content = wrapper
+		content.SetHAlign(gtk.ALIGN_START)
 
 		w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
 		w, h = maxSize(w, h, 80, 80)
@@ -354,11 +351,11 @@ func newNormalEmbedUnsafe(
 
 	if embed.Image != nil {
 		wrapper, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		wrapper.Add(main)
+		wrapper.Add(content)
 
 		// Do a shitty hack again:
-		main = wrapper
-		main.SetHAlign(gtk.ALIGN_START)
+		content = wrapper
+		content.SetHAlign(gtk.ALIGN_START)
 
 		w, h := int(embed.Image.Width), int(embed.Image.Height)
 		w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
@@ -369,19 +366,31 @@ func newNormalEmbedUnsafe(
 		))
 	}
 
+	// Wrap the content inside another box:
+	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	main.SetHAlign(gtk.ALIGN_START)
+	main.SetSizeRequest(clampWidth(EmbedMaxWidth)+(EmbedMargin*2), 0)
+	main.Add(content)
+
+	// Apply margin to content:
+	content.SetMarginTop(EmbedMargin / 2)
+	content.SetMarginBottom(EmbedMargin / 2)
+
+	// Add a frame around the main embed:
 	gtkutils.InjectCSSUnsafe(main, "embed", fmt.Sprintf(EmbedMainCSS, embed.Color))
 
-	main.ShowAll()
-	return main
+	// Wrap the main embed around a column
+	c := handy.ColumnNew()
+	c.SetMaximumWidth(600) // arbitrary max size
+	c.SetHAlign(gtk.ALIGN_START)
+	c.Add(main)
+
+	return c
 }
 
 func embedSetMargin(w gtkutils.Marginator) {
-	w.SetMarginStart(EmbedMargin * 2)
-	w.SetMarginEnd(EmbedMargin * 2)
+	w.SetMarginStart(EmbedMargin)
+	w.SetMarginEnd(EmbedMargin)
 	w.SetMarginTop(EmbedMargin / 2)
 	w.SetMarginBottom(EmbedMargin / 2)
-}
-
-func asyncFetch(url string, img *gtk.Image, w, h int, pp ...cache.Processor) {
-	cache.AsyncFetch(url, img, w, h, pp...)
 }

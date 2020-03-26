@@ -39,8 +39,8 @@ var (
 
 func init() {
 	// Hijack
-	flag.BoolVar(&Quiet, "q", false, "Disable debug traces")
-	flag.BoolVar(&Quiet, "quiet", false, "Disable debug traces")
+	flag.BoolVar(&Quiet, "q", Quiet, "")
+	flag.BoolVar(&Quiet, "quiet", Quiet, "Disable debug traces")
 
 	f, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0775)
 	if err != nil {
