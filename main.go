@@ -58,9 +58,8 @@ func Login(finish func(s *ningen.State)) error {
 	var token = LoadKeyring()
 
 	if token != "" {
-		s, err := ningen.Connect(token)
+		_, err := ningen.Connect(token, finish)
 		if err == nil {
-			go finish(s)
 			return nil
 		}
 
@@ -83,15 +82,13 @@ func Login(finish func(s *ningen.State)) error {
 
 func Finish(a *gtkcord.Application) func(s *ningen.State) {
 	return func(s *ningen.State) {
-		// Store the token:
-		keyring.Set(s.Token)
-
 		if err := a.Ready(s); err != nil {
 			log.Fatalln("Failed to get gtkcord ready:", err)
 		}
 
 		if err := plugin.StartPlugins(a); err != nil {
-			log.Fatalln("Failed to initialize plugins:", err)
+			// TODO: plugin manager
+			log.Errorln("Failed to initialize plugins:", err)
 		}
 	}
 }

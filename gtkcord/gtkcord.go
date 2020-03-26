@@ -180,6 +180,9 @@ func (a *Application) init() {
 func (a *Application) Ready(s *ningen.State) error {
 	a.State = s
 
+	// Store the token:
+	keyring.Set(s.Token)
+
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln(err)

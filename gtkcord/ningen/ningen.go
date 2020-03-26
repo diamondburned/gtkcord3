@@ -53,7 +53,7 @@ type Mute struct {
 	Everyone bool // @everyone
 }
 
-func Connect(token string) (*State, error) {
+func Connect(token string, onReady func(s *State)) (*State, error) {
 	store := state.NewDefaultStore(&state.DefaultStoreOptions{
 		MaxMessages: 50,
 	})
@@ -62,6 +62,13 @@ func Connect(token string) (*State, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a new Discord session")
 	}
+
+	ningen := ningen(s)
+
+	s.AddHandler(func(r *gateway.ReadyEvent) {
+		ningen.UpdateReady(*r)
+		onReady(ningen)
+	})
 
 	// s.Gateway.OP = make(chan *gateway.OP)
 	// go func() {
@@ -76,10 +83,10 @@ func Connect(token string) (*State, error) {
 		return nil, errors.Wrap(err, "Failed to connect to Discord")
 	}
 
-	return Ningen(s)
+	return ningen, nil
 }
 
-func Ningen(s *state.State) (*State, error) {
+func ningen(s *state.State) *State {
 	state := &State{
 		State:         s,
 		MutedGuilds:   map[discord.Snowflake]*Mute{},
@@ -159,9 +166,9 @@ func Ningen(s *state.State) (*State, error) {
 		}
 	})
 
-	state.UpdateReady(s.Ready)
+	// state.UpdateReady(s.Ready)
 	// state.UpdateNitroEmojis()
-	return state, nil
+	return state
 }
 
 func (s *State) AddReadChange(fn func(s *State, rs *gateway.ReadState, unread bool)) {

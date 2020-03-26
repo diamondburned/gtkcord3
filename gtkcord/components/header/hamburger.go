@@ -5,6 +5,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/about"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -97,17 +98,23 @@ func (h *MainHamburger) wrapHamburger(body *popup.UserPopupBody, destroy func())
 	statusBtn.SetProperty("menu-name", "status")
 	menu.Add(statusBtn)
 
+	logoutBtn := newButton("Log Out", func() {
+		destroy()
+		go h.LogOut()
+	})
+	menu.Add(logoutBtn)
+
 	aboutBtn := newButton("About", func() {
 		destroy()
 		about.Spawn()
 	})
 	menu.Add(aboutBtn)
 
-	logoutBtn := newButton("Log Out", func() {
+	quitBtn := newButton("Quit", func() {
 		destroy()
-		go h.LogOut()
+		window.Destroy()
 	})
-	menu.Add(logoutBtn)
+	menu.Add(quitBtn)
 }
 
 func newStatusPage(s *ningen.State, destroy func()) gtk.IWidget {

@@ -166,18 +166,28 @@ type columnChange struct {
 }
 
 func (a *Application) changeCol(c columnChange) {
-	// Lock
-	a.busy.Lock()
-	defer a.busy.Unlock()
+	// Lock and blur in the same thread so less race conditions occur:
+	semaphore.IdleMust(func() {
+		// We disable input first so no events can queue up:
+		a.LeftGrid.SetSensitive(false)
+
+		// Then we acquire the lock:
+		a.busy.Lock()
+	})
+
+	// We defer in a similar way, but we do the opposite:
+	defer semaphore.IdleMust(func() {
+		// Unlock first, so incoming events don't lock:
+		a.busy.Unlock()
+
+		// Then allow events:
+		a.LeftGrid.SetSensitive(true)
+	})
 
 	if !c.Checker() {
 		c.After()
 		return
 	}
-
-	// Blur the entire left grid, which includes guilds and channels.
-	semaphore.IdleMust(a.LeftGrid.SetSensitive, false)
-	defer semaphore.IdleMust(a.LeftGrid.SetSensitive, true)
 
 	// Clean up channels
 	c.Before()

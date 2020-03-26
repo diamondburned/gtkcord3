@@ -203,24 +203,14 @@ func (l *Login) discordLogin() error {
 
 // endgame function
 func (l *Login) tryLoggingIn() error {
-	s, err := CreateState(l.LastToken)
-	if err != nil {
-		return err
-	}
-
-	// Finish with the callback:
-	go l.finish(s)
-	return nil
+	_, err := ningen.Connect(l.LastToken, l.finish)
+	return err
 }
 
 func openDiscordLoginPage() {
 	if err := open.Run("https://github.com/diamondburned/discordlogin"); err != nil {
 		log.Errorln("Failed to open URL to DiscordLogin:", err)
 	}
-}
-
-func CreateState(token string) (*ningen.State, error) {
-	return ningen.Connect(token)
 }
 
 func LookPathExtras(file string) (string, error) {

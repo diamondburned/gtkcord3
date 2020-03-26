@@ -48,9 +48,7 @@ func WithApplication(app *gtk.Application) error {
 	w.SetIcon(l)
 
 	w.Show()
-	w.Connect("destroy", func() {
-		gtk.MainQuit()
-	})
+	w.Connect("destroy", app.Quit)
 
 	a, err := gtk.AccelGroupNew()
 	if err != nil {
@@ -113,6 +111,11 @@ func WithApplication(app *gtk.Application) error {
 	}
 
 	return nil
+}
+
+// Destroy closes the application as well.
+func Destroy() {
+	Window.Window.Destroy()
 }
 
 func Blur() {
