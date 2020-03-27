@@ -4,6 +4,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -12,6 +13,7 @@ var Window *Container
 
 type Container struct {
 	*gtk.ApplicationWindow
+	App   *gtk.Application
 	Accel *gtk.AccelGroup
 
 	Root   *gdk.Window
@@ -33,7 +35,7 @@ func WithApplication(app *gtk.Application) error {
 		return nil
 	}
 
-	Window = &Container{}
+	Window = &Container{App: app}
 
 	w, err := gtk.ApplicationWindowNew(app)
 	if err != nil {
@@ -111,6 +113,10 @@ func WithApplication(app *gtk.Application) error {
 	}
 
 	return nil
+}
+
+func Notify(id string, notification *glib.Notification) {
+	Window.App.SendNotification(id, notification)
 }
 
 // Destroy closes the application as well.

@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
 func LoadEnvs() {
@@ -15,5 +16,9 @@ func LoadEnvs() {
 
 	if w, _ := strconv.Atoi(os.Getenv("GTKCORD_MSGWIDTH")); w > 100 { // min 100
 		message.MaxMessageWidth = w
+	}
+
+	if os.Getenv("GTKCORD_QUIET") != "" {
+		log.Quiet = true
 	}
 }

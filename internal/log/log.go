@@ -1,7 +1,6 @@
 package log
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -39,8 +38,8 @@ var (
 
 func init() {
 	// Hijack
-	flag.BoolVar(&Quiet, "q", Quiet, "")
-	flag.BoolVar(&Quiet, "quiet", Quiet, "Disable debug traces")
+	// flag.BoolVar(&Quiet, "q", Quiet, "")
+	// flag.BoolVar(&Quiet, "quiet", Quiet, "Disable debug traces")
 
 	f, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0775)
 	if err != nil {

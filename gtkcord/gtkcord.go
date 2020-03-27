@@ -3,8 +3,6 @@ package gtkcord
 import (
 	"math/rand"
 	"net/http"
-	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -93,47 +91,24 @@ type Application struct {
 	lastAccMut sync.Mutex
 
 	busy deadlock.Mutex
-	done chan int // exit code
+	// done chan int // exit code
 }
 
 // New is not thread-safe.
-func New() (*Application, error) {
-	a, err := gtk.ApplicationNew("org.diamondburned.gtkcord", glib.APPLICATION_FLAGS_NONE)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a new *gtk.Application")
+func New(app *gtk.Application) *Application {
+	return &Application{
+		Application: app,
 	}
-
-	app := &Application{
-		Application: a,
-	}
-	a.Connect("activate", app.activate)
-
-	return app, nil
 }
 
-func (a *Application) Start() {
-	a.done = make(chan int)
-
-	go func() {
-		runtime.LockOSThread()
-		a.done <- a.Application.Run(nil)
-	}()
-}
-
-func (a *Application) Wait() {
-	sig := <-a.done
-
+func (a *Application) Close() {
 	// Close session on exit:
 	if a.State != nil {
 		a.State.Close()
 	}
-
-	if sig != 0 {
-		os.Exit(sig)
-	}
 }
 
-func (a *Application) activate() {
+func (a *Application) Init() {
 	// Activate the window singleton:
 	if err := window.WithApplication(a.Application); err != nil {
 		log.Fatalln("Failed to initialize the window:", err)
@@ -202,6 +177,10 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Have Hamburger use the state:
 	a.Header.Hamburger.UseState(s)
+
+	// Bind stuff
+	a.bindActions()
+	a.bindNotifier()
 
 	// Guilds
 
@@ -335,22 +314,7 @@ func (a *Application) Ready(s *ningen.State) error {
 				}
 			},
 			OnChannel: func(ch, guild discord.Snowflake) {
-				var row *gtk.ListBoxRow
-				if g, _ := a.Guilds.FindByID(guild); g != nil {
-					a.SwitchGuild(g)
-					if channel := a.Channels.FindByID(ch); channel != nil {
-						row = channel.Row
-					}
-				} else {
-					a.SwitchDM()
-					if channel := a.Privates.FindByID(ch); channel != nil {
-						row = channel.ListBoxRow
-					}
-				}
-
-				if row != nil {
-					semaphore.IdleMust(row.Activate)
-				}
+				a.SwitchToID(ch, guild)
 			},
 		})
 	})

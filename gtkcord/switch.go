@@ -12,6 +12,29 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
+// SwitchToID returns true if it can find the channel.
+func (a *Application) SwitchToID(ch, guild discord.Snowflake) bool {
+	var row *gtk.ListBoxRow
+	if g, _ := a.Guilds.FindByID(guild); g != nil {
+		a.SwitchGuild(g)
+		if channel := a.Channels.FindByID(ch); channel != nil {
+			row = channel.Row
+		}
+	} else {
+		a.SwitchDM()
+		if channel := a.Privates.FindByID(ch); channel != nil {
+			row = channel.ListBoxRow
+		}
+	}
+
+	if row != nil {
+		semaphore.IdleMust(row.Activate)
+		return true
+	}
+
+	return false
+}
+
 // SwitchLastChannel, nil for DM.
 func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	if g == nil {

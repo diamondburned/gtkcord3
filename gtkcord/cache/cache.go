@@ -315,12 +315,10 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
 				l.SetSize(w, h)
 			}
 
-			semaphore.Async(func() {
-				// If the image's size hasn't been set before, we set it:
-				if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
-					img.SetSizeRequest(w, h)
-				}
-			})
+			// If the image's size hasn't been set before, we set it:
+			if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
+				img.SetSizeRequest(w, h)
+			}
 		})
 	}
 
@@ -354,9 +352,11 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
 		case p == nil:
 			return
 		case gif:
-			semaphore.Async(img.SetFromAnimation, p)
+			// img.SetFromAnimation(p.(*gdk.PixbufAnimation))
+			semaphore.IdleMust(img.SetFromAnimation, p)
 		default:
-			semaphore.Async(img.SetFromPixbuf, p)
+			// img.SetFromPixbuf(p.(*gdk.Pixbuf))
+			semaphore.IdleMust(img.SetFromPixbuf, p)
 		}
 	})
 

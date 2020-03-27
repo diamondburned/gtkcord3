@@ -9,7 +9,6 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/sasha-s/go-deadlock"
 )
 
 type ExtendedWidget interface {
@@ -115,20 +114,17 @@ func KeyIsASCII(key uint) bool {
 	return key >= gdk.KEY_exclam && key <= gdk.KEY_asciitilde
 }
 
-var connectMutex deadlock.Mutex
-
 type connector interface {
 	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
 }
 
 func Connect(connector connector, event string, cb interface{}, data ...interface{}) {
-	connectMutex.Lock()
-	defer connectMutex.Unlock()
-
-	_, err := connector.Connect(event, cb, data...)
-	if err != nil {
-		log.Panicln("Failed to connect:", err)
-	}
+	semaphore.IdleMust(func() {
+		_, err := connector.Connect(event, cb, data...)
+		if err != nil {
+			log.Panicln("Failed to connect:", err)
+		}
+	})
 }
 
 func DiffClass(old *string, new string, style *gtk.StyleContext) {

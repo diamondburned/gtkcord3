@@ -1,11 +1,13 @@
 package humanize
 
 import (
-	"log"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/Xuanwo/go-locale"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/goodsign/monday"
 )
 
@@ -17,27 +19,44 @@ const (
 
 var Locale monday.Locale = monday.LocaleEnUS // changed on init
 
-func init() {
-	if tag, err := locale.Detect(); err == nil {
-		Locale = monday.Locale(tag.String())
-	}
+var localeOnce sync.Once
 
-	// Check if locale is supported
-	for _, locale := range monday.ListLocales() {
-		if locale == Locale {
-			return
+func lettersOnly(str string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) {
+			return r
 		}
-	}
+		return -1
+	}, str)
+}
 
-	log.Println("Locale", Locale, "not found, defaulting to en_US")
-	Locale = monday.LocaleEnUS
+func ensureLocale() {
+	localeOnce.Do(func() {
+		if tag, err := locale.Detect(); err == nil {
+			Locale = monday.Locale(lettersOnly(tag.String()))
+		}
+
+		// Check if locale is supported
+		for _, locale := range monday.ListLocales() {
+			if lettersOnly(string(locale)) == string(Locale) {
+				return
+			}
+		}
+
+		log.Println("Locale", Locale, "not found, defaulting to en_US")
+		Locale = monday.LocaleEnUS
+	})
 }
 
 func TimeKitchen(t time.Time) string {
+	ensureLocale()
+
 	return monday.Format(t, time.Kitchen, Locale)
 }
 
 func TimeAgo(t time.Time) string {
+	ensureLocale()
+
 	trunc := t
 	trunc = t.Truncate(Day)
 
@@ -71,4 +90,12 @@ func Strings(list []string) string {
 	default:
 		return strings.Join(list[len(list)-1:], ", ") + " and " + list[len(list)-1]
 	}
+}
+
+func TrimString(str string, maxlen int) string {
+	if len(str) < maxlen-3 {
+		return str
+	}
+
+	return str[:maxlen-3] + "..."
 }

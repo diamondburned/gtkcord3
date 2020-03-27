@@ -52,7 +52,8 @@ type Messages struct {
 }
 
 func NewMessages(s *ningen.State) (*Messages, error) {
-	m := &Messages{c: s, fetch: s.Store.MaxMessages()}
+	// guildID == 1 is a hack to fix DM.
+	m := &Messages{c: s, fetch: s.Store.MaxMessages(), guildID: 1}
 
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)

@@ -37,7 +37,7 @@ type Login struct {
 func NewHeader() gtkutils.ExtendedWidget {
 	h, _ := gtk.HeaderBarNew()
 	h.SetShowCloseButton(true)
-	h.SetTitle("Login to Discord")
+	h.SetTitle("Login to gtkcord")
 
 	return h
 }

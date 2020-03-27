@@ -1,10 +1,7 @@
 package main
 
 import (
-	"flag"
-	"net/http"
 	"os"
-	"runtime"
 	"runtime/debug"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
@@ -14,6 +11,8 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
 
 	// Profiler
 	_ "net/http/pprof"
@@ -22,7 +21,7 @@ import (
 var profile bool
 
 func init() {
-	flag.BoolVar(&profile, "prof", false, "Enable the profiler")
+	// flag.BoolVar(&profile, "prof", false, "Enable the profiler")
 
 	// AGGRESSIVE GC
 	debug.SetGCPercent(100)
@@ -37,8 +36,8 @@ func LoadToken() string {
 		return token
 	}
 
-	flag.StringVar(&token, "t", "", "Token")
-	flag.Parse()
+	// flag.StringVar(&token, "t", "", "Token")
+	// flag.Parse()
 
 	return token
 }
@@ -94,23 +93,36 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
-	a, err := gtkcord.New()
+	a, err := gtk.ApplicationNew("com.diamondburned.gtkcord", glib.APPLICATION_FLAGS_NONE)
 	if err != nil {
-		log.Fatalln("Failed to start gtkcord:", err)
+		log.Fatalln("Failed to create a new *gtk.Application:", err)
 	}
 
-	a.Start()
-	defer a.Wait()
+	g := gtkcord.New(a)
 
-	// Try and log in:
-	if err := Login(Finish(a)); err != nil {
-		log.Fatalln("Failed to login:", err)
+	a.Connect("activate", func() {
+		g.Init()
+
+		go func() {
+			// Try and log in:
+			if err := Login(Finish(g)); err != nil {
+				log.Fatalln("Failed to login:", err)
+			}
+		}()
+	})
+
+	a.Connect("shutdown", func() {
+		g.Close()
+	})
+
+	if sig := a.Run(os.Args); sig > 0 {
+		os.Exit(sig)
 	}
 
-	if profile {
-		// Profiler
-		runtime.SetMutexProfileFraction(5)   // ???
-		runtime.SetBlockProfileRate(5000000) // 5ms
-		go http.ListenAndServe("localhost:6969", nil)
-	}
+	// if profile {
+	// 	// Profiler
+	// 	runtime.SetMutexProfileFraction(5)   // ???
+	// 	runtime.SetBlockProfileRate(5000000) // 5ms
+	// 	go http.ListenAndServe("localhost:6969", nil)
+	// }
 }

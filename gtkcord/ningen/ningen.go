@@ -26,8 +26,8 @@ type State struct {
 	*state.State
 
 	mutedMutex    sync.RWMutex
-	MutedGuilds   map[discord.Snowflake]*Mute
-	MutedChannels map[discord.Snowflake]*Mute
+	mutedGuilds   map[discord.Snowflake]*Mute
+	mutedChannels map[discord.Snowflake]*Mute
 
 	readMutex sync.RWMutex
 	lastAck   api.Ack
@@ -46,11 +46,14 @@ type State struct {
 
 type Mute struct {
 	// if true, then muted
-	All           bool
-	Notifications int // some sort of constant?
+	All      bool
+	Everyone bool // @everyone, guild only
 
-	// guild only
-	Everyone bool // @everyone
+	// 3 - Guild defaults
+	// 2 - Nothing
+	// 1 - Only mentions
+	// 0 - All
+	Notifications gateway.UserNotification // some sort of constant?
 }
 
 func Connect(token string, onReady func(s *State)) (*State, error) {
@@ -89,8 +92,8 @@ func Connect(token string, onReady func(s *State)) (*State, error) {
 func ningen(s *state.State) *State {
 	state := &State{
 		State:         s,
-		MutedGuilds:   map[discord.Snowflake]*Mute{},
-		MutedChannels: map[discord.Snowflake]*Mute{},
+		mutedGuilds:   map[discord.Snowflake]*Mute{},
+		mutedChannels: map[discord.Snowflake]*Mute{},
 		LastRead:      map[discord.Snowflake]*gateway.ReadState{},
 		guilds:        map[discord.Snowflake]*guildState{},
 	}
@@ -224,10 +227,10 @@ func (s *State) updateMuteState(ugses []gateway.UserGuildSettings) {
 	defer s.mutedMutex.Unlock()
 
 	for _, ugs := range ugses {
-		mg, ok := s.MutedGuilds[ugs.GuildID]
+		mg, ok := s.mutedGuilds[ugs.GuildID]
 		if !ok {
 			mg = &Mute{}
-			s.MutedGuilds[ugs.GuildID] = mg
+			s.mutedGuilds[ugs.GuildID] = mg
 		}
 
 		mg.All = ugs.Muted
@@ -235,10 +238,10 @@ func (s *State) updateMuteState(ugses []gateway.UserGuildSettings) {
 		mg.Notifications = ugs.MessageNotifications
 
 		for _, ch := range ugs.ChannelOverrides {
-			mc, ok := s.MutedChannels[ch.ChannelID]
+			mc, ok := s.mutedChannels[ch.ChannelID]
 			if !ok {
 				mc = &Mute{}
-				s.MutedChannels[ch.ChannelID] = mc
+				s.mutedChannels[ch.ChannelID] = mc
 			}
 
 			mc.All = ch.Muted
@@ -357,6 +360,29 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	}()
 }
 
+func (s *State) GetChannelMuted(channelID discord.Snowflake) *Mute {
+	s.mutedMutex.RLock()
+	defer s.mutedMutex.RUnlock()
+
+	if m, ok := s.mutedChannels[channelID]; ok {
+		// Channels don't have an @everyone mute.
+		return m
+	}
+
+	return nil
+}
+
+func (s *State) GetGuildMuted(guildID discord.Snowflake) *Mute {
+	s.mutedMutex.RLock()
+	defer s.mutedMutex.RUnlock()
+
+	m, ok := s.mutedGuilds[guildID]
+	if ok {
+		return m
+	}
+	return nil
+}
+
 func (s *State) CategoryMuted(channelID discord.Snowflake) bool {
 	ch, err := s.Store.Channel(channelID)
 	if err != nil {
@@ -371,26 +397,19 @@ func (s *State) CategoryMuted(channelID discord.Snowflake) bool {
 }
 
 func (s *State) ChannelMuted(channelID discord.Snowflake) bool {
-	s.mutedMutex.RLock()
-	defer s.mutedMutex.RUnlock()
-
-	if m, ok := s.MutedChannels[channelID]; ok {
-		// Channels don't have an @everyone mute.
-		return m.All
+	m := s.GetChannelMuted(channelID)
+	if m == nil {
+		return false
 	}
-
-	return false
+	return m.All
 }
 
 func (s *State) GuildMuted(guildID discord.Snowflake, everyone bool) bool {
-	s.mutedMutex.RLock()
-	defer s.mutedMutex.RUnlock()
-
-	m, ok := s.MutedGuilds[guildID]
-	if ok {
-		return (!everyone && m.All) || (everyone && m.Everyone)
+	m := s.GetGuildMuted(guildID)
+	if m == nil {
+		return false
 	}
-	return false
+	return (!everyone && m.All) || (everyone && m.Everyone)
 }
 
 type GuildEmojis struct {
