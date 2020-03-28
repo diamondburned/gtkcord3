@@ -4,8 +4,7 @@
 <h1 align="center">gtkcord</h1>
 <p  align="center">A lightweight Discord client which uses GTK3 for the user interface.</p>
 
-<img src=".readme-resources/images/screenshot3.png" />
-<h6 align="center"><a href="https://www.pixiv.net/en/artworks/70546791">(Background is not included.)</a></h6>
+<img src=".readme-resources/images/screenshot4.png" />
 
 </p>
 
@@ -47,15 +46,15 @@ go get github.com/diamondburned/gtkcord3 # auto updates
 - See the messages of the selected channel
 	- [ ] Message reactions
 - Send messages
-	- [ ] Emojis
+	- [x] Emojis
 	- [ ] Message reactions
 - Graphical login
-	- [ ] Graphical logout
+	- [x] Graphical logout
 - Hamburger menu
 	- [ ] Change the visibility of your online state
 		- [ ] Custom Rich Presence
 		- [ ] Rich Presence IPC server
-	- [ ] About dialog
+	- [x] About dialog
 
 ## Low priority
 
