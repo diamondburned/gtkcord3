@@ -101,7 +101,7 @@ func main() {
 	g := gtkcord.New(a)
 
 	a.Connect("activate", func() {
-		g.Init()
+		g.Activate()
 
 		go func() {
 			// Try and log in:

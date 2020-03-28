@@ -46,7 +46,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		return nil
 	}
 
-	// ALso don't parse if there's no Discord state:
+	// Also don't parse if there's no Discord state:
 	state := getSession(pc)
 	if state == nil {
 		return nil

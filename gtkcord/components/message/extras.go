@@ -13,7 +13,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -182,6 +181,8 @@ func newNormalEmbedUnsafe(
 	content, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	content.SetHAlign(gtk.ALIGN_START)
 
+	widthHint := 0 // used for calculating requested embed width
+
 	if embed.Author != nil {
 		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 		embedSetMargin(box)
@@ -263,13 +264,13 @@ func newNormalEmbedUnsafe(
 
 		for _, field := range embed.Fields {
 			text, _ := gtk.LabelNew("")
-			text.SetLineWrap(true)
-			text.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+			text.SetEllipsize(pango.ELLIPSIZE_END)
 			text.SetXAlign(float64(0.0))
 			text.SetMarkup(fmt.Sprintf(
 				`<span weight="heavy">%s</span>`+"\n"+`<span weight="light">%s</span>`,
 				field.Name, field.Value,
 			))
+			text.SetTooltipText(field.Name + "\n" + field.Value)
 
 			// I have no idea what this does. It')s just improvised.
 			if field.Inline && col < 3 {
@@ -360,16 +361,25 @@ func newNormalEmbedUnsafe(
 		w, h := int(embed.Image.Width), int(embed.Image.Height)
 		w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
 
+		// set width hint to resize embeds accordingly
+		widthHint = w
+
 		wrapper.Add(newExtraImageUnsafe(
 			sizeToURL(embed.Image.Proxy, w, h),
 			embed.Image.URL, w, h,
 		))
 	}
 
+	// Calculate the embed width without padding:
+	var w = clampWidth(EmbedMaxWidth)
+	if widthHint > 0 && w > widthHint {
+		w = widthHint
+	}
+
 	// Wrap the content inside another box:
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	main.SetHAlign(gtk.ALIGN_START)
-	main.SetSizeRequest(clampWidth(EmbedMaxWidth)+(EmbedMargin*2), 0)
+	main.SetSizeRequest(w+(EmbedMargin*2), 0)
 	main.Add(content)
 
 	// Apply margin to content:
@@ -379,13 +389,7 @@ func newNormalEmbedUnsafe(
 	// Add a frame around the main embed:
 	gtkutils.InjectCSSUnsafe(main, "embed", fmt.Sprintf(EmbedMainCSS, embed.Color))
 
-	// Wrap the main embed around a column
-	c := handy.ColumnNew()
-	c.SetMaximumWidth(600) // arbitrary max size
-	c.SetHAlign(gtk.ALIGN_START)
-	c.Add(main)
-
-	return c
+	return main
 }
 
 func embedSetMargin(w gtkutils.Marginator) {

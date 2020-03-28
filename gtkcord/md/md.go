@@ -90,6 +90,44 @@ func ParseToMarkup(content []byte) []byte {
 	return bytes.TrimSpace(buf.Bytes())
 }
 
+func ParseToMarkupWithMessage(content []byte, s state.Store, m *discord.Message) []byte {
+	// Context to pass down messages:
+	ctx := parser.NewContext()
+	ctx.Set(messageCtx, m)
+	ctx.Set(sessionCtx, s)
+
+	p := parser.NewParser(
+		parser.WithBlockParsers(BlockParsers()...),
+		parser.WithInlineParsers(InlineParsers()...),
+	)
+
+	node := p.Parse(text.NewReader(content), parser.WithContext(ctx))
+
+	var buf bytes.Buffer
+	NewMarkupRenderer().Render(&buf, content, node)
+
+	return bytes.TrimSpace(buf.Bytes())
+}
+
+func ParseToSimpleMarkupWithMessage(content []byte, s state.Store, m *discord.Message) []byte {
+	// Context to pass down messages:
+	ctx := parser.NewContext()
+	ctx.Set(messageCtx, m)
+	ctx.Set(sessionCtx, s)
+
+	p := parser.NewParser(
+		parser.WithBlockParsers(BlockParsers()...),
+		parser.WithInlineParsers(InlineParsers()...),
+	)
+
+	node := p.Parse(text.NewReader(content), parser.WithContext(ctx))
+
+	var buf bytes.Buffer
+	NewSimpleMarkupRenderer().Render(&buf, content, node)
+
+	return bytes.TrimSpace(buf.Bytes())
+}
+
 func getMessage(pc parser.Context) *discord.Message {
 	if v := pc.Get(messageCtx); v != nil {
 		return v.(*discord.Message)

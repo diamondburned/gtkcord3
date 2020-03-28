@@ -3,9 +3,10 @@ package gtkcord
 import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/gotk3/gotk3/glib"
+	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
 func (a *Application) bindNotifier() {
@@ -13,25 +14,30 @@ func (a *Application) bindNotifier() {
 }
 
 func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
-	var msg = discord.Message(*create)
+	var msg = (*discord.Message)(create)
 
-	if !a.State.MessageMentions(msg) {
+	if !a.State.MessageMentions(*msg) {
 		return
 	}
 
-	name := a.State.AuthorDisplayName(msg)
-
-	notification := glib.NotificationNew(name + " mentioned you.")
-	notification.SetBody(humanize.TrimString(msg.Content, 256))
-	notification.SetPriority(glib.NOTIFICATION_PRIORITY_HIGH)
-
-	// Set the click action to open the client:
-	gtkutils.NSetDefaultActionAndTargetValue(
-		notification,
-		"app.load-channel", // actions.go
-		glib.VariantFromInt64(int64(create.ChannelID)),
+	var (
+		name    = a.State.AuthorDisplayName(*msg)
+		content = humanize.TrimString(msg.Content, 256)
+		markup  = md.ParseToSimpleMarkupWithMessage([]byte(content), a.State.Store, msg)
 	)
 
-	// Spawn:
-	a.Application.SendNotification("mentioned", notification)
+	notification := gdbus.Notification{
+		AppName:   "gtkcord3",
+		ReplaceID: gdbus.GetUUID("mentioned"),
+		AppIcon:   "user-available",
+		Title:     name + " mentioned you.",
+		Message:   string(markup),
+		Actions: [][2]string{
+			{"default", "load-channel:" + create.ChannelID.String()},
+		},
+	}
+
+	if err := a.DBusConn.Notify(notification); err != nil {
+		log.Errorln("Failed to notify:", err)
+	}
 }

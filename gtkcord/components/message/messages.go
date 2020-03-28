@@ -289,10 +289,6 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	return nil
 }
 
-func (m *Messages) ShouldCondense(msg *Message) bool {
-	return shouldCondense(m.messages, msg)
-}
-
 func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
 	return lastMessageFrom(m.messages, author)
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -62,7 +63,8 @@ const (
 
 type Application struct {
 	*gtk.Application
-	Window *window.Container
+	DBusConn *gdbus.Connection
+	Window   *window.Container
 
 	State *ningen.State
 
@@ -108,7 +110,10 @@ func (a *Application) Close() {
 	}
 }
 
-func (a *Application) Init() {
+func (a *Application) Activate() {
+	// Register the dbus connection:
+	a.DBusConn = gdbus.FromApplication(&a.Application.Application)
+
 	// Activate the window singleton:
 	if err := window.WithApplication(a.Application); err != nil {
 		log.Fatalln("Failed to initialize the window:", err)

@@ -317,7 +317,7 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
 
 			// If the image's size hasn't been set before, we set it:
 			if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
-				img.SetSizeRequest(w, h)
+				semaphore.IdleMust(img.SetSizeRequest, w, h)
 			}
 		})
 	}
