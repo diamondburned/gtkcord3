@@ -15,23 +15,23 @@ func (m *Messages) injectHandlers() {
 }
 
 func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	if m.channelID != t.ChannelID {
+	if m.channelID.Get() != t.ChannelID {
 		return
 	}
+
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	go m.Typing.Add(t)
 }
 
 func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	if m.channelID != c.ChannelID {
+	if m.channelID.Get() != c.ChannelID {
 		return
 	}
+
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	m.insert((*discord.Message)(c))
 
@@ -40,44 +40,45 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
-	if m.channelID != u.ChannelID {
+	if m.channelID.Get() != u.ChannelID {
 		return
 	}
+
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	m.update((*discord.Message)(u))
 }
 
 func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	if m.channelID != d.ChannelID {
+	if m.channelID.Get() != d.ChannelID {
 		return
 	}
+
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	m.delete(d.ID)
 }
-func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
 
-	if m.channelID != d.ChannelID {
+func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
+	if m.channelID.Get() != d.ChannelID {
 		return
 	}
+
+	m.guard.Lock()
+	defer m.guard.Unlock()
 
 	m.delete(d.IDs...)
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
-	if m.channelID != c.GuildID {
+	if m.channelID.Get() != c.GuildID {
 		return
 	}
+
+	m.guard.RLock()
+	defer m.guard.RUnlock()
 
 	m.updateMessageAuthor(c.Members...)
 }

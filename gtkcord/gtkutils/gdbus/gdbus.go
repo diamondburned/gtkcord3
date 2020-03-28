@@ -105,7 +105,9 @@ func FromApplication(app *glib.Application) *Connection {
 func wrapConnection(v *C.GDBusConnection) *Connection {
 	c := &Connection{Native: v}
 	runtime.SetFinalizer(c, func(c *Connection) {
-		cbDelete(unsafe.Pointer(c.Native))
+		ptr := unsafe.Pointer(c.Native)
+		cbDelete(ptr)
+		C.g_object_unref((C.gpointer)(ptr))
 	})
 	return c
 }
@@ -123,12 +125,24 @@ func (c *Connection) CallSync(
 
 	var err *C.GError
 
+	cbusName := cstringOpt(busName)
+	defer freeNonNil(unsafe.Pointer(cbusName))
+
+	cobjectPath := cstringOpt(objectPath)
+	defer freeNonNil(unsafe.Pointer(cobjectPath))
+
+	cinterfaceName := cstringOpt(interfaceName)
+	defer freeNonNil(unsafe.Pointer(cinterfaceName))
+
+	cmethodName := cstringOpt(methodName)
+	defer freeNonNil(unsafe.Pointer(cmethodName))
+
 	v := C.g_dbus_connection_call_sync(
 		c.Native,
-		C.CString(busName),
-		C.CString(objectPath),
-		C.CString(interfaceName),
-		C.CString(methodName),
+		cbusName,
+		cobjectPath,
+		cinterfaceName,
+		cmethodName,
 		(*C.GVariant)(parameters.ToGVariant()),
 		(*C.GVariantType)(replyType.GVariantType),
 		C.GDBusCallFlags(callFlags),
@@ -154,15 +168,30 @@ func (c *Connection) SignalSubscribe(
 	callback SignalCallback,
 ) uint {
 
+	csender := cstringOpt(sender)
+	defer freeNonNil(unsafe.Pointer(csender))
+
+	cinterfaceName := cstringOpt(interfaceName)
+	defer freeNonNil(unsafe.Pointer(cinterfaceName))
+
+	cmember := cstringOpt(member)
+	defer freeNonNil(unsafe.Pointer(cmember))
+
+	cobjectPath := cstringOpt(objectPath)
+	defer freeNonNil(unsafe.Pointer(cobjectPath))
+
+	carg0 := cstringOpt(arg0)
+	defer freeNonNil(unsafe.Pointer(carg0))
+
 	ptr, call := cbAssign(unsafe.Pointer(c.Native), c, callback)
 
 	v := C.g_dbus_connection_signal_subscribe(
 		c.Native,
-		cstringOpt(sender),
-		cstringOpt(interfaceName),
-		cstringOpt(member),
-		cstringOpt(objectPath),
-		cstringOpt(arg0),
+		csender,
+		cinterfaceName,
+		cmember,
+		cobjectPath,
+		carg0,
 		C.GDBusSignalFlags(flags),
 		C.GDBusSignalCallback(C.gdbusSignalCallback),
 		ptr, nil,
@@ -191,6 +220,12 @@ func cstringOpt(str string) *C.gchar {
 		return nil
 	}
 	return C.CString(str)
+}
+
+func freeNonNil(v unsafe.Pointer) {
+	if v != nil {
+		C.free(v)
+	}
 }
 
 func VariantTuple(v *glib.Variant, n int) []*glib.Variant {

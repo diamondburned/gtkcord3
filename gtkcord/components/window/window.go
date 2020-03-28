@@ -24,8 +24,8 @@ type Container struct {
 	CSS       *gtk.CssProvider
 	Clipboard *gtk.Clipboard
 
-	CursorDefault *gdk.Cursor
-	CursorPointer *gdk.Cursor
+	// CursorDefault *gdk.Cursor
+	// CursorPointer *gdk.Cursor
 
 	Settings *gtk.Settings
 }
@@ -103,14 +103,14 @@ func WithApplication(app *gtk.Application) error {
 		return errors.Wrap(err, "Failed to make a headerbar")
 	}
 
-	Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a default cursor")
-	}
-	Window.CursorPointer, err = gdk.CursorNewFromName(d, "pointer")
-	if err != nil {
-		return errors.Wrap(err, "Failed to create a pointer cursor")
-	}
+	// Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
+	// if err != nil {
+	// 	return errors.Wrap(err, "Failed to create a default cursor")
+	// }
+	// Window.CursorPointer, err = gdk.CursorNewFromName(d, "pointer")
+	// if err != nil {
+	// 	return errors.Wrap(err, "Failed to create a pointer cursor")
+	// }
 
 	return nil
 }
@@ -131,12 +131,12 @@ func Unblur() {
 	Window.SetSensitive(true)
 }
 
-func SetPointerCursor() {
-	Window.Root.SetCursor(Window.CursorPointer)
-}
-func SetDefaultCursor() {
-	Window.Root.SetCursor(Window.CursorDefault)
-}
+// func SetPointerCursor() {
+// 	Window.Root.SetCursor(Window.CursorPointer)
+// }
+// func SetDefaultCursor() {
+// 	Window.Root.SetCursor(Window.CursorDefault)
+// }
 
 func Resize(w, h int) {
 	Window.Window.Resize(w, h)

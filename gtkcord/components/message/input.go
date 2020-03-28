@@ -138,7 +138,8 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return false
 	}
 
-	// Send an OnTyping request:
+	// Send an OnTyping request. This does not acquire the mutex, but instead
+	// gets the ID atomically.
 	i.Messages.Typing.Type(i.Messages.GetChannelID())
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)

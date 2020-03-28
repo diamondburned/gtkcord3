@@ -24,8 +24,8 @@ var MaxMessageWidth = 800
 
 type Messages struct {
 	gtkutils.ExtendedWidget
-	channelID discord.Snowflake
-	guildID   discord.Snowflake
+	channelID moreatomic.Snowflake
+	guildID   moreatomic.Snowflake
 
 	c     *ningen.State
 	fetch int // max messages
@@ -164,17 +164,11 @@ func (m *Messages) Focus() {
 }
 
 func (m *Messages) GetChannelID() discord.Snowflake {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
-	return m.channelID
+	return m.channelID.Get()
 }
 
 func (m *Messages) GetGuildID() discord.Snowflake {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
-	return m.guildID
+	return m.guildID.Get()
 }
 
 func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
@@ -231,22 +225,24 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	m.channelID = channel
+	m.channelID.Set(channel)
 
 	// Mark that we're loading messages.
 	m.resetting = true
 
 	// Order: latest is first.
-	messages, err := m.c.Messages(m.channelID)
+	messages, err := m.c.Messages(channel)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get messages")
 	}
 
 	// Set GuildID and subscribe if it's valid:
 	if len(messages) > 0 {
-		m.guildID = messages[0].GuildID
-		if m.guildID.Valid() {
-			go m.c.Subscribe(m.guildID, m.channelID, 0)
+		guild := messages[0].GuildID
+		m.guildID.Set(guild)
+
+		if guild.Valid() {
+			go m.c.Subscribe(guild, channel, 0)
 		}
 
 	} else {
@@ -349,7 +345,7 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		}
 
 		msID := m.messages[len(m.messages)-1].ID
-		chID := m.channelID
+		chID := m.channelID.Get()
 
 		// Find the latest message and ack it:
 		go m.c.MarkRead(chID, msID)
@@ -398,8 +394,12 @@ func (m *Messages) fetchMore() {
 	// Grab the first ID
 	first := m.messages[0].ID
 
+	// Grab the channel and guild dID:
+	channelID := m.channelID.Get()
+	guildID := m.guildID.Get()
+
 	// Bypass the state cache
-	messages, err := m.c.MessagesBefore(m.channelID, first, uint(m.fetch))
+	messages, err := m.c.MessagesBefore(channelID, first, uint(m.fetch))
 	if err != nil {
 		// TODO: error popup
 		log.Errorln("Failed to fetch past messages:", err)
@@ -439,7 +439,7 @@ func (m *Messages) fetchMore() {
 
 			// Update the message too, only we use the channel's GuildID instead
 			// of the message's, as GuildID isn't populated for API-fetched messages.
-			w.updateAuthor(m.c, m.guildID, message.Author)
+			w.updateAuthor(m.c, guildID, message.Author)
 			w.updateExtras(m.c, message)
 		}
 	})
@@ -560,12 +560,14 @@ func (m *Messages) update(update *discord.Message) bool {
 }
 
 func (m *Messages) updateMessageAuthor(ns ...discord.Member) {
+	guildID := m.guildID.Get()
+
 	for _, n := range ns {
 		for _, message := range m.messages {
 			if message.AuthorID != n.User.ID {
 				continue
 			}
-			message.UpdateMember(m.c, m.guildID, n)
+			message.UpdateMember(m.c, guildID, n)
 		}
 	}
 }

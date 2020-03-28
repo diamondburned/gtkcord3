@@ -47,6 +47,7 @@ func (n *State) SearchMember(guildID discord.Snowflake, prefix string) {
 			GuildID:   []discord.Snowflake{guildID},
 			Query:     prefix,
 			Presences: true,
+			Limit:     25,
 		})
 
 		if err != nil {
@@ -73,15 +74,15 @@ func (n *State) RequestMember(guildID, memID discord.Snowflake) {
 			Presences: true,
 		})
 
+		// relock
+		n.gmu.Lock()
+		defer n.gmu.Unlock()
+
 		if err != nil {
 			log.Errorln("Failed to request guild members:", err)
-
-			// relock
-			n.gmu.Lock()
-			defer n.gmu.Unlock()
-
-			delete(gd.requestingMembers, memID)
 		}
+
+		delete(gd.requestingMembers, memID)
 	}()
 }
 

@@ -150,6 +150,7 @@ func (t *State) Reset() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	t.lastTyped = time.Time{} // zero out
 	t.Users = t.Users[:0]
 
 	semaphore.IdleMust(func() {
