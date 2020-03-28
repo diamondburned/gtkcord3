@@ -21,23 +21,40 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 	}
 
 	var (
-		name    = a.State.AuthorDisplayName(*msg)
+		title   = a.State.AuthorDisplayName(*msg) + "mentioned you"
 		content = humanize.TrimString(msg.Content, 256)
 		markup  = md.ParseToSimpleMarkupWithMessage([]byte(content), a.State.Store, msg)
 	)
 
+	if ch, _ := a.State.Store.Channel(msg.ChannelID); ch != nil {
+		var suffix = " (#" + ch.Name + ")"
+
+		if msg.GuildID.Valid() {
+			if g, _ := a.State.Store.Guild(msg.GuildID); g != nil {
+				suffix = " (#" + ch.Name + ", " + g.Name + ")"
+			}
+		}
+
+		title += suffix
+	}
+
 	notification := gdbus.Notification{
-		AppName:   "gtkcord3",
-		ReplaceID: gdbus.GetUUID("mentioned"),
-		AppIcon:   "user-available",
-		Title:     name + " mentioned you.",
-		Message:   string(markup),
-		Actions: [][2]string{
-			{"default", "load-channel:" + create.ChannelID.String()},
+		AppName: "gtkcord3",
+		AppIcon: "user-available",
+		Title:   title + ".",
+		Message: string(markup),
+		Actions: []*gdbus.Action{
+			{
+				ID:    "default",
+				Label: "Open",
+				Callback: func() {
+					a.actionLoadChannel(nil, int64(create.ChannelID))
+				},
+			},
 		},
 	}
 
-	if err := a.DBusConn.Notify(notification); err != nil {
+	if _, err := a.Notifier.Notify(notification); err != nil {
 		log.Errorln("Failed to notify:", err)
 	}
 }

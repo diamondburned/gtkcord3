@@ -584,8 +584,10 @@ func (m *Messages) delete(ids ...discord.Snowflake) {
 				continue
 			}
 
+			oldMessage := m.messages[i]
+
 			m.messages = append(m.messages[:i], m.messages[i+1:]...)
-			semaphore.IdleMust(m.Messages.Remove, message)
+			semaphore.IdleMust(m.Messages.Remove, oldMessage)
 
 			// Exit if len is 0
 			if len(m.messages) == 0 {
@@ -593,13 +595,13 @@ func (m *Messages) delete(ids ...discord.Snowflake) {
 			}
 
 			// Check if the last message (relative to i) is the author's:
-			if i > 0 && m.messages[i-1].AuthorID == message.AuthorID {
+			if i > 0 && m.messages[i-1].AuthorID == oldMessage.AuthorID {
 				// Then we continue, since we don't need to uncollapse.
 				break
 			}
 
 			// Check if next message is author's:
-			if i < len(m.messages) && m.messages[i].AuthorID == message.AuthorID {
+			if i < len(m.messages) && m.messages[i].AuthorID == oldMessage.AuthorID {
 				// Then uncollapse next message:
 				semaphore.IdleMust(m.messages[i].SetCondensedUnsafe, false)
 			}
@@ -607,8 +609,6 @@ func (m *Messages) delete(ids ...discord.Snowflake) {
 			break
 		}
 	}
-
-	return
 }
 
 func (m *Messages) deleteNonce(nonce string) bool {

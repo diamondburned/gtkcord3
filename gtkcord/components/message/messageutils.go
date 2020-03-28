@@ -12,10 +12,22 @@ func injectMessage(m *Messages, w *Message) {
 	w.ListBoxRow.SetFocusVAdjustment(m.Messages.GetFocusVAdjustment())
 }
 
-func shouldCondense(msg, last *Message) bool {
-	return true &&
-		msg.AuthorID == last.AuthorID &&
-		msg.Timestamp.Sub(last.Timestamp) < 5*time.Minute
+func shouldCondense(msgs []*Message, msg, lastSameAuthor *Message) bool {
+	if len(msgs) == 0 {
+		return false
+	}
+
+	if lastSameAuthor == nil {
+		return false
+	}
+
+	var latest = msgs[len(msgs)-1]
+
+	if msg.AuthorID != latest.AuthorID {
+		return false
+	}
+
+	return msg.Timestamp.Sub(lastSameAuthor.Timestamp) < 5*time.Minute
 }
 
 func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
@@ -33,11 +45,8 @@ func tryCondense(msgs []*Message, msg *Message) {
 	}
 
 	var last = lastMessageFrom(msgs, msg.AuthorID)
-	if last == nil {
-		return
-	}
 
-	if shouldCondense(msg, last) {
+	if shouldCondense(msgs, msg, last) {
 		msg.setOffset(last)
 		msg.SetCondensedUnsafe(true)
 	}

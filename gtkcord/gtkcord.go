@@ -63,7 +63,7 @@ const (
 
 type Application struct {
 	*gtk.Application
-	DBusConn *gdbus.Connection
+	Notifier *gdbus.Notifier
 	Window   *window.Container
 
 	State *ningen.State
@@ -112,7 +112,7 @@ func (a *Application) Close() {
 
 func (a *Application) Activate() {
 	// Register the dbus connection:
-	a.DBusConn = gdbus.FromApplication(&a.Application.Application)
+	a.Notifier = gdbus.NewNotifier(gdbus.FromApplication(&a.Application.Application))
 
 	// Activate the window singleton:
 	if err := window.WithApplication(a.Application); err != nil {

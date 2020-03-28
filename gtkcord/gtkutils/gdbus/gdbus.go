@@ -1,18 +1,57 @@
 package gdbus
 
-// #cgo pkg-config: glib-2.0 gio-2.0
-// #include <glib-2.0/glib.h>
-// #include <gio/gio.h>
-// #include "error.h"
+/*
+#cgo pkg-config: glib-2.0 gio-2.0
+#include <glib-2.0/glib.h>
+#include <gio/gio.h>
+
+extern void gdbusSignalCallback(
+	GDBusConnection *conn,
+	gchar *sender_name,
+	gchar *object_path,
+	gchar *interface_name,
+	gchar *signal_name,
+	GVariant *parameters,
+	gpointer key
+);
+*/
 import "C"
 
 import (
-	"errors"
-	"math/rand"
-	"sync"
+	"runtime"
 	"unsafe"
 
 	"github.com/gotk3/gotk3/glib"
+	"github.com/pkg/errors"
+)
+
+//export gdbusSignalCallback
+func gdbusSignalCallback(
+	conn *C.GDBusConnection,
+	senderName, objectPath, interfaceName, signalName *C.gchar,
+	parameters *C.GVariant,
+	key C.gpointer,
+) {
+
+	cb := cbGet(key)
+	if cb == nil {
+		return
+	}
+
+	cb.fn.(SignalCallback)(
+		cb.receiver.(*Connection),
+		C.GoString(senderName),
+		C.GoString(objectPath),
+		C.GoString(interfaceName),
+		C.GoString(signalName),
+		glib.TakeVariant(unsafe.Pointer(parameters)),
+	)
+}
+
+type SignalCallback func(
+	conn *Connection,
+	senderName, objectPath, interfaceName, signalName string,
+	parameters *glib.Variant,
 )
 
 type BusType int
@@ -32,6 +71,15 @@ const (
 	DBUS_CALL_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION CallFlags = C.G_DBUS_CALL_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION
 )
 
+type SignalFlags int
+
+const (
+	DBUS_SIGNAL_FLAGS_NONE                 SignalFlags = C.G_DBUS_SIGNAL_FLAGS_NONE
+	DBUS_SIGNAL_FLAGS_NO_MATCH_RULE        SignalFlags = C.G_DBUS_SIGNAL_FLAGS_NO_MATCH_RULE
+	DBUS_SIGNAL_FLAGS_MATCH_ARG0_NAMESPACE SignalFlags = C.G_DBUS_SIGNAL_FLAGS_MATCH_ARG0_NAMESPACE
+	DBUS_SIGNAL_FLAGS_MATCH_ARG0_PATH      SignalFlags = C.G_DBUS_SIGNAL_FLAGS_MATCH_ARG0_PATH
+)
+
 type Connection struct {
 	Native *C.GDBusConnection
 }
@@ -40,10 +88,10 @@ func GetSessionBusSync() (*Connection, error) {
 	var err *C.GError
 	v := C.g_bus_get_sync(C.GBusType(BUS_TYPE_SESSION), nil, &err)
 	if err != nil {
-		return nil, errors.New(C.GoString(C.error_message(err)))
+		return nil, errors.New(errorMessage(err))
 	}
 
-	return &Connection{Native: v}, nil
+	return wrapConnection(v), nil
 }
 
 func FromApplication(app *glib.Application) *Connection {
@@ -51,7 +99,15 @@ func FromApplication(app *glib.Application) *Connection {
 	if v == nil {
 		return nil
 	}
-	return &Connection{Native: v}
+	return wrapConnection(v)
+}
+
+func wrapConnection(v *C.GDBusConnection) *Connection {
+	c := &Connection{Native: v}
+	runtime.SetFinalizer(c, func(c *Connection) {
+		cbDelete(unsafe.Pointer(c.Native))
+	})
+	return c
 }
 
 func (c *Connection) CallSync(
@@ -82,93 +138,71 @@ func (c *Connection) CallSync(
 	)
 
 	if err != nil {
-		return nil, errors.New(C.GoString(C.error_message(err)))
+		return nil, errors.New(errorMessage(err))
 	}
 
 	return glib.TakeVariant(unsafe.Pointer(v)), nil
 }
 
-type Notification struct {
-	AppName   string
-	ReplaceID uint32
-	AppIcon   string
-	Title     string
-	Message   string
-	Actions   [][2]string
-	Expiry    int32
-}
+func (c *Connection) SignalSubscribe(
+	sender,
+	interfaceName,
+	member,
+	objectPath,
+	arg0 string,
+	flags SignalFlags,
+	callback SignalCallback,
+) uint {
 
-func (c *Connection) Notify(n Notification) error {
-	args := make([]*C.GVariant, 8) // num of structs
-	args[0] = C.g_variant_new_take_string(C.CString(n.AppName))
-	args[1] = C.g_variant_new_uint32(C.guint32(n.ReplaceID))
-	args[2] = C.g_variant_new_take_string(C.CString(n.AppIcon))
-	args[3] = C.g_variant_new_take_string(C.CString(n.Title))
-	args[4] = C.g_variant_new_take_string(C.CString(n.Message))
+	ptr, call := cbAssign(unsafe.Pointer(c.Native), c, callback)
 
-	var firstAction **C.GVariant
-
-	if len(n.Actions) > 0 {
-		var actions = make([]*C.GVariant, len(n.Actions)*2)
-
-		for i := 0; i < len(actions); i += 2 {
-			action := n.Actions[i/2]
-
-			k := C.g_variant_new_take_string(C.CString(action[0]))
-			v := C.g_variant_new_take_string(C.CString(action[1]))
-
-			actions[i], actions[i+1] = k, v
-		}
-
-		firstAction = &actions[0]
-	}
-
-	args[5] = C.g_variant_new_array(C.G_VARIANT_TYPE_STRING, firstAction, C.gsize(len(n.Actions)*2))
-
-	dict := C.g_variant_dict_new(nil)
-	defer C.g_variant_dict_unref(dict)
-	args[6] = C.g_variant_dict_end(dict)
-
-	args[7] = C.g_variant_new_int32(C.gint32(n.Expiry))
-
-	var err *C.GError
-
-	C.g_dbus_connection_call_sync(
+	v := C.g_dbus_connection_signal_subscribe(
 		c.Native,
-		C.CString("org.freedesktop.Notifications"),
-		C.CString("/org/freedesktop/Notifications"),
-		C.CString("org.freedesktop.Notifications"),
-		C.CString("Notify"),
-		C.g_variant_new_tuple(&args[0], C.gsize(8)),
-		C.G_VARIANT_TYPE_ANY,
-		C.G_DBUS_CALL_FLAGS_NONE,
-		C.gint(-1),
-		nil,
-		&err,
+		cstringOpt(sender),
+		cstringOpt(interfaceName),
+		cstringOpt(member),
+		cstringOpt(objectPath),
+		cstringOpt(arg0),
+		C.GDBusSignalFlags(flags),
+		C.GDBusSignalCallback(C.gdbusSignalCallback),
+		ptr, nil,
 	)
 
-	if err != nil {
-		return errors.New(C.GoString(C.error_message(err)))
-	}
-
-	return nil
+	call.id = uint(v)
+	return call.id
 }
 
-var gUUID = map[string]uint32{}
-var gMut = sync.Mutex{}
+func (c *Connection) SignalUnsubscribe(id uint) {
+	cbForEach(func(i int, cb *callback) bool {
+		if cb.id == id {
+			delete(registry, i)
+			return true
+		}
+		return false
+	})
+	C.g_dbus_connection_signal_unsubscribe(
+		c.Native,
+		C.uint(id),
+	)
+}
 
-func GetUUID(key string) uint32 {
-	const offset = 100
+func cstringOpt(str string) *C.gchar {
+	if str == "" {
+		return nil
+	}
+	return C.CString(str)
+}
 
-	gMut.Lock()
-	defer gMut.Unlock()
+func VariantTuple(v *glib.Variant, n int) []*glib.Variant {
+	_v := (*C.GVariant)(v.ToGVariant())
 
-	if u, ok := gUUID[key]; ok {
-		return u
+	params := make([]*glib.Variant, n)
+
+	for i := 0; i < n; i++ {
+		params[i] = glib.TakeVariant(unsafe.Pointer(
+			C.g_variant_get_child_value(_v, C.gsize(i)),
+		))
 	}
 
-	id := rand.Uint32() + offset
-	gUUID[key] = id
-
-	return id
+	return params
 }

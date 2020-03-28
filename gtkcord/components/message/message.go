@@ -275,6 +275,8 @@ func (m *Message) SetCondensedUnsafe(condensed bool) {
 }
 
 func (m *Message) setCondensed() {
+	defer m.main.ShowAll()
+
 	if m.Condensed {
 		m.style.AddClass("condensed")
 		m.timestamp.SetXAlign(1.0)
