@@ -151,6 +151,29 @@ func (a *Application) init() {
 	l.Show()
 	a.Main = l
 
+	var _folded bool
+
+	l.Connect("size-allocate", func() {
+		// If we're not ready:
+		if a.State == nil {
+			return
+		}
+
+		// Avoid repeating:
+		folded := l.GetFold() == handy.FOLD_FOLDED
+		if _folded == folded {
+			return
+		}
+		_folded = folded
+
+		// Fold the header too:
+		a.Header.Fold(folded)
+
+		// If folded, we expand those panels:
+		a.Channels.SetHExpand(folded)
+		a.Privates.SetHExpand(folded)
+	})
+
 	// Create a new Header:
 	h, _ := header.NewHeader()
 	h.Hamburger.LogOut = a.LogOut // bind
@@ -229,13 +252,6 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.Channels = c
 	a.Privates = p
 	a.Messages = m
-
-	// Expand the channel list on fold:
-	a.Header.OnFold = func(folded bool) {
-		// If folded, we expand those panels:
-		a.Channels.SetHExpand(folded)
-		a.Privates.SetHExpand(folded)
-	}
 
 	// Bind OnClick to trigger below callback:
 	a.Header.Back.OnClick = func() {

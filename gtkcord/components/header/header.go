@@ -2,17 +2,14 @@ package header
 
 import (
 	"html"
-	"time"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
 )
-
-const foldDelay = 150 * 2 * time.Millisecond
 
 type Header struct {
 	*handy.Leaflet
@@ -32,10 +29,6 @@ type Header struct {
 
 	// Unused
 	// Controller  *controller.Container
-
-	lastFold time.Time
-	Folded   bool
-	OnFold   func(folded bool)
 }
 
 func NewHeader() (*Header, error) {
@@ -69,6 +62,9 @@ func NewHeader() (*Header, error) {
 	hamseparator.Show()
 	left.Add(hamseparator)
 
+	// Calculate width for both:
+	width := channel.ChannelsWidth - 15
+
 	label, err := gtk.LabelNew("gtkcord3")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create guild name label")
@@ -76,7 +72,7 @@ func NewHeader() (*Header, error) {
 	label.Show()
 	label.SetXAlign(0.0)
 	label.SetMarginStart(15)
-	label.SetSizeRequest(channel.ChannelsWidth-15, -1)
+	label.SetSizeRequest(width, -1)
 	label.SetLines(1)
 	label.SetLineWrap(false)
 	label.SetEllipsize(pango.ELLIPSIZE_END)
@@ -96,9 +92,9 @@ func NewHeader() (*Header, error) {
 	right, _ := gtk.HeaderBarNew()
 	right.Show()
 	right.SetHExpand(true)
+	right.SetSizeRequest(width, -1)
 	right.SetShowCloseButton(true)
 	right.SetProperty("spacing", 0)
-	right.SetSizeRequest(message.MaxMessageWidth, -1) // so collapse works
 	l.Add(right)
 
 	body, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -121,9 +117,14 @@ func NewHeader() (*Header, error) {
 	// Channel menu button:
 	btn := NewChMenuButton()
 
+	rsep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	rsep.Show()
+	gtkutils.Margin2(rsep, 0, 4)
+
 	body.Add(back)
 	body.Add(chname)
 	body.Add(btn)
+	body.Add(rsep)
 
 	/*
 	 * Grid 4
@@ -145,25 +146,11 @@ func NewHeader() (*Header, error) {
 		ChMenuBtn:   btn,
 		// Controller:  cont,
 	}
-	l.Connect("size-allocate", func() {
-		h.onFold(l.GetFold() == handy.FOLD_FOLDED)
-	})
 
 	return h, nil
 }
 
-func (h *Header) onFold(folded bool) {
-	if now := time.Now(); h.lastFold.After(now.Add(-foldDelay)) {
-		return
-	} else {
-		h.lastFold = now
-	}
-
-	if h.Folded == folded {
-		return
-	}
-	h.Folded = folded
-
+func (h *Header) Fold(folded bool) {
 	// If folded, we reveal the back button.
 	h.Back.SetRevealChild(folded)
 
@@ -176,10 +163,6 @@ func (h *Header) onFold(folded bool) {
 		h.GuildName.SetSizeRequest(channel.ChannelsWidth-15, -1)
 		h.Separator.Show()
 		h.LeftSide.SetShowCloseButton(false)
-	}
-
-	if h.OnFold != nil {
-		h.OnFold(folded)
 	}
 }
 

@@ -12,6 +12,11 @@ const CSS = `
 		min-height: 0;
 	}
 
+	.codeblock {
+		background-color: alpha(@theme_bg_color, 0.25);
+		padding: 8px;
+	}
+
 	.status {
 		padding: 2px;
 		border-radius: 9999px;

@@ -4,9 +4,8 @@ import (
 	"regexp"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/icons"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
@@ -109,43 +108,18 @@ func (r *Renderer) insertEmoji(url string) {
 	// 	sz = LargeEmojiSize
 	// }
 
-	iter := r.Buffer.GetEndIter()
+	anchor := r.Buffer.CreateChildAnchor(r.Buffer.GetEndIter())
 
-	i := icons.GetIconUnsafe("image-missing", sz)
-	if i == nil {
-		e, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, sz, sz)
-		if err != nil {
-			r.Buffer.Insert(iter, "[?]")
-			return
-		}
+	img, _ := gtk.ImageNew()
+	img.Show()
+	img.SetSizeRequest(sz, sz)
+	gtkutils.ImageSetIcon(img, "image-missing", sz)
 
-		// set the empty pixbuf
-		i = e
-	}
-
-	// Preserve position:
-	lastIndex := iter.GetLineIndex()
-	lastLine := iter.GetLine()
-
-	// Insert Pixbuf after s.prev:
-	r.Buffer.InsertPixbuf(iter, i)
-
-	// Add to the waitgroup, so we know when to put the state back.
-	r.setGroup.Add(1)
+	r.View.AddChildAtAnchor(img, anchor)
 
 	go func() {
-		defer r.setGroup.Done()
-
-		pixbuf, err := cache.GetPixbufScaled(url+"?size=64", sz, sz)
-		if err != nil {
+		if err := cache.SetImageScaled(url+"?size=64", img, sz, sz); err != nil {
 			log.Errorln("Markdown: Failed to GET " + url)
-			return
-		}
-
-		r.setEmojis <- setEmoji{
-			pb:    pixbuf,
-			line:  lastLine,
-			index: lastIndex,
 		}
 	}()
 }

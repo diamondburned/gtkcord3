@@ -45,8 +45,6 @@ type Messages struct {
 
 	// Additional components
 	Input *Input
-
-	acked bool
 }
 
 func NewMessages(s *ningen.State) (*Messages, error) {
@@ -55,14 +53,11 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		m.Main = main
 		m.ExtendedWidget = main
+		m.Main = main
 
 		// Make the input and typing state:
 		m.Input = NewInput(m)
-
-		// For wrappping around listbox
-		c := handy.ColumnNew()
 
 		b, _ := gtk.ListBoxNew()
 		m.Messages = b
@@ -102,23 +97,20 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		s.SetProperty("window-placement", gtk.CORNER_BOTTOM_LEFT)
 		s.Show()
 
-		// Column actually contains the list:
-		c.SetMaximumWidth(MaxMessageWidth)
-		c.SetLinearGrowthWidth(MaxMessageWidth * 100 / 75) // 800 -> 600
-		c.SetHExpand(true)
-		c.SetVExpand(true)
-		c.Add(b)
-		c.Show()
-
 		// List should fill:
 		// b.SetSizeRequest(MaxMessageWidth, -1)
 
-		// Causes resize bugs:
+		// Column contains the list:
+		col := handy.ColumnNew()
+		col.SetMaximumWidth(MaxMessageWidth)
+		col.Add(b)
+		col.Show()
+
 		v.SetCanFocus(false)
 		v.SetVAlign(gtk.ALIGN_END)
 		v.SetProperty("vscroll-policy", gtkutils.SCROLL_NATURAL)
 		v.SetShadowType(gtk.SHADOW_NONE)
-		v.Add(c) // add col instead of list
+		v.Add(col) // add col instead of list
 		v.Show()
 
 		// Fractal does this, but Go is superior.
@@ -271,8 +263,6 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		}
 	})
 
-	// Mark for ack, check onEdgeReached
-	m.acked = false
 	m.resetting = false
 
 	return nil
@@ -324,25 +314,24 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
-	if m.acked {
+	chID := m.GetChannelID()
+
+	r := m.c.FindLastRead(chID)
+	if r == nil {
 		return
 	}
-	m.acked = true
 
-	go func() {
-		m.guard.Lock()
-		defer m.guard.Unlock()
+	lastID := m.LastID()
+	if !lastID.Valid() {
+		return
+	}
 
-		if len(m.messages) == 0 {
-			return
-		}
+	if r.LastMessageID == lastID {
+		return
+	}
 
-		msID := m.messages[len(m.messages)-1].ID
-		chID := m.channelID.Get()
-
-		// Find the latest message and ack it:
-		go m.c.MarkRead(chID, msID)
-	}()
+	// Find the latest message and ack it:
+	go m.c.MarkRead(chID, lastID)
 }
 
 // mainly used for fetching extra message when scrolled to the top
@@ -484,9 +473,6 @@ func (m *Messages) insert(message *discord.Message) {
 	if m.update(message) {
 		return
 	}
-
-	// Mark for ack, check onEdgeReached
-	m.acked = false
 
 	var w *Message
 	semaphore.IdleMust(func() {
