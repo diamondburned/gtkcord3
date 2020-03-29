@@ -80,8 +80,6 @@ func (m *Container) handleSync(ml *ningen.MemberList, guildID discord.Snowflake)
 		return
 	}
 
-	log.Println("handleSync called")
-
 	m.cleanup()
 	m.reset(ml, *guild)
 }

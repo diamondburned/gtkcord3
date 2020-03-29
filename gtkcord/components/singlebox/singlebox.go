@@ -1,7 +1,6 @@
 package singlebox
 
 import (
-	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -31,14 +30,12 @@ func (b *Box) Clear() {
 
 func (b *Box) Add(w gtk.IWidget) {
 	if b.Children != nil {
-		log.Println("Removing children")
 		b.Box.Remove(b.Children)
 	}
 
 	b.Children = w
 
 	if w == nil {
-		log.Println("Given widget is nil")
 		return
 	}
 

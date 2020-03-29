@@ -38,7 +38,7 @@ func (m *Messages) menuAddAdmin(msg *Message, menu gtkutils.Container) {
 		iEdit.Connect("activate", func() {
 			go func() {
 				if err := m.Input.editMessage(msg.ID); err != nil {
-					log.Println("Error editing message:", err)
+					log.Errorln("Error editing message:", err)
 				}
 			}()
 		})

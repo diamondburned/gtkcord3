@@ -30,13 +30,10 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	m.insert((*discord.Message)(c))
+	m.Upsert((*discord.Message)(c))
 
 	// Check typing
-	go m.Input.Typing.Remove(c.Author.ID)
+	m.Input.Typing.Remove(c.Author.ID)
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
@@ -44,10 +41,7 @@ func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
 		return
 	}
 
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
-	m.update((*discord.Message)(u))
+	m.Update((*discord.Message)(u))
 }
 
 func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {

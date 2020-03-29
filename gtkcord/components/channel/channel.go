@@ -63,8 +63,6 @@ func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 		}
 	}
 
-	log.Println("After FindLastRead")
-
 	return
 }
 

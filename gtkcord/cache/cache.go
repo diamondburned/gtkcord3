@@ -58,7 +58,7 @@ func cleanUpCache() {
 	for _, d := range dirs {
 		if strings.HasPrefix(d, CachePrefix+"-") && d != DirName {
 			path := filepath.Join(Temp, d)
-			log.Infoln("Deleting", path)
+			log.Infoln("Deleting old cache in", path)
 			os.RemoveAll(path)
 		}
 	}

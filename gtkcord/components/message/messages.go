@@ -103,6 +103,7 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		// Column contains the list:
 		col := handy.ColumnNew()
 		col.SetMaximumWidth(MaxMessageWidth)
+		col.SetLinearGrowthWidth(10000) // force as wide as possible
 		col.Add(b)
 		col.Show()
 
@@ -190,9 +191,6 @@ func (m *Messages) LastFromMe() *Message {
 }
 
 func (m *Messages) Last() *Message {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
 	if len(m.messages) == 0 {
 		return nil
 	}
@@ -273,7 +271,6 @@ func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
 }
 
 func (m *Messages) Cleanup() {
-	log.Infoln("Destroying messages from old channel.")
 	m.Input.Typing.Stop()
 
 	m.guard.Lock()
@@ -295,7 +292,6 @@ func (m *Messages) ScrollToBottom() {
 	// Set scroll:
 	vAdj := m.Scroll.GetVAdjustment()
 	to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
-	log.Println("scrolling to:", to)
 	vAdj.SetValue(to)
 }
 
@@ -321,17 +317,21 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
-	lastID := m.LastID()
-	if !lastID.Valid() {
-		return
-	}
+	// Run this in a goroutine to avoid the mutex acquire from locking the UI
+	// thread. Since goroutines are cheap, this isn't a huge issue.
+	go func() {
+		lastID := m.LastID()
+		if !lastID.Valid() {
+			return
+		}
 
-	if r.LastMessageID == lastID {
-		return
-	}
+		if r.LastMessageID == lastID {
+			return
+		}
 
-	// Find the latest message and ack it:
-	go m.c.MarkRead(chID, lastID)
+		// Find the latest message and ack it:
+		m.c.MarkRead(chID, lastID)
+	}()
 }
 
 // mainly used for fetching extra message when scrolled to the top
@@ -437,6 +437,9 @@ func (m *Messages) cleanOldMessages() {
 		return
 	}
 
+	m.guard.Lock()
+	defer m.guard.Unlock()
+
 	// Check the number of messages
 	if len(m.messages) <= m.fetch {
 		return
@@ -458,26 +461,26 @@ func (m *Messages) cleanOldMessages() {
 	})
 }
 
-func (m *Messages) Insert(message *discord.Message) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	m.insert(message)
-}
-
-func (m *Messages) insert(message *discord.Message) {
+func (m *Messages) Upsert(message *discord.Message) {
 	// Clean up old messages (thread-safe):
 	defer m.cleanOldMessages()
 
 	// Are we sure this is not our message?
-	if m.update(message) {
+	if m.Update(message) {
 		return
 	}
 
 	var w *Message
 	semaphore.IdleMust(func() {
 		w = newMessageUnsafe(m.c, message)
-		m._insert(w)
+	})
+
+	// Avoid the mutex from locking the UI thread when things are busy.
+	m.guard.Lock()
+	semaphore.IdleMust(m._insert, w)
+	m.guard.Unlock()
+
+	semaphore.IdleMust(func() {
 		w.updateAuthor(m.c, message.GuildID, message.Author)
 		w.updateExtras(m.c, message)
 	})
@@ -499,14 +502,9 @@ func (m *Messages) _insert(w *Message) {
 }
 
 func (m *Messages) Update(update *discord.Message) bool {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
-	return m.update(update)
-}
-
-func (m *Messages) update(update *discord.Message) bool {
 	var target *Message
+
+	m.guard.RLock()
 
 	for _, message := range m.messages {
 		if false ||
@@ -517,6 +515,8 @@ func (m *Messages) update(update *discord.Message) bool {
 			break
 		}
 	}
+
+	m.guard.RUnlock()
 
 	if target == nil {
 		return false

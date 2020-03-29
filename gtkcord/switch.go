@@ -251,9 +251,7 @@ func (a *Application) changeCol(c columnChange) {
 
 	// Replace the spinner with the actual channel:
 	semaphore.IdleMust(func() {
-		log.Println("Running setter.")
 		c.Setter(c.Widget)
-		log.Println("Setter ran.")
 		c.Widget.Show()
 	})
 

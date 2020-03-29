@@ -18,7 +18,7 @@ func LoadEnvs() {
 		message.MaxMessageWidth = w
 	}
 
-	if os.Getenv("GTKCORD_QUIET") != "" {
-		log.Quiet = true
+	if os.Getenv("GTKCORD_QUIET") == "0" {
+		log.Quiet = false
 	}
 }

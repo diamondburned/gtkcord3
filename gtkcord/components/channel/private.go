@@ -32,11 +32,15 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	var name = ch.Name
 	if name == "" {
 		var names = make([]string, len(ch.DMRecipients))
-		for i, p := range ch.DMRecipients {
-			names[i] = p.Username
+		for i := range ch.DMRecipients {
+			names[i] = ch.DMRecipients[i].Username
 		}
 
 		name = humanize.Strings(names)
+	}
+
+	if name == "" {
+		name = "Unnamed"
 	}
 
 	body := user.New()

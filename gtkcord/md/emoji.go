@@ -112,7 +112,8 @@ func (r *Renderer) insertEmoji(url string) {
 
 	img, _ := gtk.ImageNew()
 	img.Show()
-	img.SetSizeRequest(sz, sz)
+	img.SetSizeRequest(sz, 10) // 10 is the minimum height
+	img.SetProperty("yalign", 1.0)
 	gtkutils.ImageSetIcon(img, "image-missing", sz)
 
 	r.View.AddChildAtAnchor(img, anchor)

@@ -88,7 +88,7 @@ func Strings(list []string) string {
 	case 1:
 		return list[0]
 	default:
-		return strings.Join(list[len(list)-1:], ", ") + " and " + list[len(list)-1]
+		return strings.Join(list[:len(list)-1], ", ") + " and " + list[len(list)-1]
 	}
 }
 

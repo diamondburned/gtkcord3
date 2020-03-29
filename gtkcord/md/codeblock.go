@@ -305,21 +305,44 @@ func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser
 	// start+i accounts for everything before end (```)
 	var start, stop = segment.Start + pos, segment.Start + i
 
+	// Since we're assigning this segment a Start, IsEmpty() would fail if
+	// seg.End is not touched.
+	var seg = text.Segment{
+		Start:   start,
+		Padding: padding,
+	}
+
 	// If there's text:
 	if start < stop {
-		seg := text.NewSegmentPadding(start, stop, padding)
-		node.Lines().Append(seg)
+		seg.Stop = stop
 		r.AdvanceAndSetPadding(stop-start-1, padding)
 	}
 
+	defer func() {
+		// Append this at the end of the function, as the block below might
+		// reuse our text segment.
+		if !seg.IsEmpty() {
+			node.Lines().Append(seg)
+		}
+	}()
+
 	// If found:
 	if i != len(line) {
+		// Update the starting position:
+		pos = i
+
+		// Iterate until we're out of backticks:
 		for ; i < len(line) && line[i] == '`'; i++ {
 		}
 
+		// Do we have enough (3 or more) backticks?
+		// If yes, end the codeblock properly.
 		if length := i - pos; length >= fdata.length {
 			r.Advance(length)
 			return parser.Close
+		} else {
+			// No, treat the rest as text:
+			seg.Stop += length
 		}
 	}
 

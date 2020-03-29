@@ -40,9 +40,9 @@ func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *State
 	}
 
 	b.Connect("destroy", func() {
-		log.Infoln("Destroying stateful popup body")
+		log.Debugln("Destroying stateful popup body")
 		body.Destroy()
-		log.Infoln("Destroyed")
+		log.Debugln("Destroyed")
 	})
 
 	go body.initialize()
@@ -62,9 +62,9 @@ func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.Snow
 	}
 
 	b.Connect("destroy", func() {
-		log.Infoln("Destroying stateful popup body")
+		log.Debugln("Destroying stateful popup body")
 		body.Destroy()
-		log.Infoln("Destroyed")
+		log.Debugln("Destroyed")
 	})
 
 	go body.initialize()

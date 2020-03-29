@@ -62,8 +62,8 @@ func NewInput(m *Messages) (i *Input) {
 	i.Input = input
 	input.SetLeftMargin(10)
 	input.SetRightMargin(10)
-	input.SetPixelsAboveLines(5)
-	input.SetPixelsBelowLines(5)
+	input.SetProperty("bottom-margin", 5)
+	input.SetProperty("top-margin", 5)
 	input.SetHExpand(true)
 	input.AddEvents(int(gdk.KEY_PRESS_MASK))
 	input.Connect("key-press-event", i.keyDown)
@@ -81,6 +81,7 @@ func NewInput(m *Messages) (i *Input) {
 	col.SetHExpand(true)
 	col.SetSizeRequest(300, -1) // min width
 	col.SetMaximumWidth(MaxMessageWidth)
+	col.SetLinearGrowthWidth(10000) // force as wide as possible
 
 	style, _ := col.GetStyleContext()
 	i.Style = style
@@ -433,7 +434,7 @@ func (i *Input) send(content string) error {
 
 	// An invalid ID keeps the message invalid until it is sent.
 	m := i.makeMessage(content)
-	i.Messages.Insert(m)
+	i.Messages.Upsert(m)
 
 	_, err := i.Messages.c.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
 		Content: m.Content,
