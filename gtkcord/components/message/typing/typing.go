@@ -121,7 +121,7 @@ func NewState(s *state.State) *State {
 	t.Box.Add(t.Label)
 	t.Box.SetOpacity(0)
 
-	gtkutils.Margin2(t.Box, 0, 20)
+	gtkutils.Margin2(t.Box, 0, 10)
 
 	return t
 }

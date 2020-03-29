@@ -7,6 +7,11 @@ import (
 )
 
 const CSS = `
+	button.flat {
+		padding: 0;
+		min-height: 0;
+	}
+
 	.status {
 		padding: 2px;
 		border-radius: 9999px;

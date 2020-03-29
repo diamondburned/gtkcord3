@@ -87,12 +87,12 @@ func NewInput(m *Messages) (i *Input) {
 
 	ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	i.InputBox = ibox
-	gtkutils.Margin2(ibox, 4, 5)
+	gtkutils.Margin2(ibox, 4, 10)
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
 	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", InputIconSize)
 	i.Upload = upload
-	upload.SetVAlign(gtk.ALIGN_START)
+	upload.SetVAlign(gtk.ALIGN_BASELINE)
 	upload.SetRelief(gtk.RELIEF_NONE)
 	upload.Connect("clicked", func() {
 		SpawnUploader(i.upload)
@@ -100,7 +100,7 @@ func NewInput(m *Messages) (i *Input) {
 
 	send, _ := gtk.ButtonNewFromIconName("mail-send", InputIconSize)
 	i.Send = send
-	send.SetVAlign(gtk.ALIGN_START)
+	send.SetVAlign(gtk.ALIGN_BASELINE)
 	send.SetRelief(gtk.RELIEF_NONE)
 	send.Connect("clicked", func() {
 		text := i.popContent()
@@ -119,16 +119,17 @@ func NewInput(m *Messages) (i *Input) {
 	editRevealer, _ := gtk.RevealerNew()
 	i.EditRevealer = editRevealer
 	editRevealer.SetRevealChild(false)
-	editRevealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
-	editRevealer.SetTransitionDuration(50)
+	editRevealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_CROSSFADE)
+	editRevealer.SetTransitionDuration(100)
 
 	// Add the main box into the revealer:
 	editBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	gtkutils.Margin2(editBox, 0, 20)
+	gtkutils.Margin2(editBox, 0, 10)
 	editBox.SetHAlign(gtk.ALIGN_END)
 
 	editLabel, _ := gtk.LabelNew(`<span color="#3f7ce0" weight="bold">Editing</span>`)
 	i.EditLabel = editLabel
+	gtkutils.Margin2(editLabel, 0, 10)
 	editLabel.SetUseMarkup(true)
 
 	editCancel, _ := gtk.ButtonNewWithLabel("Cancel")
@@ -401,8 +402,7 @@ func (i *Input) paste(content string, pic *gdk.Pixbuf) error {
 func (i *Input) send(content string) error {
 	if i.Editing != nil {
 		edit := i.Editing
-		i.Editing = nil
-		semaphore.IdleMust(i.Style.RemoveClass, "editing")
+		semaphore.IdleMust(i.stopEditing)
 
 		if edit.Content == content {
 			return nil

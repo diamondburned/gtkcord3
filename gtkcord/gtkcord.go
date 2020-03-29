@@ -25,11 +25,11 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
-	"github.com/sasha-s/go-deadlock"
 )
 
 var HTTPClient = http.Client{
@@ -92,7 +92,7 @@ type Application struct {
 	LastAccess map[discord.Snowflake]discord.Snowflake
 	lastAccMut sync.Mutex
 
-	busy deadlock.Mutex
+	busy moreatomic.BusyMutex
 	// done chan int // exit code
 }
 

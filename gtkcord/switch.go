@@ -189,6 +189,11 @@ type columnChange struct {
 }
 
 func (a *Application) changeCol(c columnChange) {
+	// Check if busy, prevents a deadlock in the main thread:
+	if a.busy.IsBusy() {
+		return
+	}
+
 	// Lock and blur in the same thread so less race conditions occur:
 	semaphore.IdleMust(func() {
 		// We disable input first so no events can queue up:
