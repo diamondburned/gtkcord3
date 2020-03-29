@@ -6,7 +6,7 @@ require (
 	github.com/Xuanwo/go-locale v0.1.0
 	github.com/alecthomas/chroma v0.7.1
 	github.com/davecgh/go-spew v1.1.1
-	github.com/diamondburned/arikawa v0.1.6-0.20200327021125-00481b54904a
+	github.com/diamondburned/arikawa v0.1.6-0.20200329175037-1e400dfc277b
 	github.com/diamondburned/handy v0.0.0-20200329015645-35e37ca44a62
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0

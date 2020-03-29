@@ -150,15 +150,14 @@ const CSS = `
 		opacity: 1;
 	}
 	
-	.guild > image {
-	    /* box-shadow: 0px 0px 4px -1px rgba(0,0,0,0.5); */
+	.guild > image, .dmbutton > image {
 	    border-radius: 50%;
 	}
 	.guild.unread > image {
 		border: 2px solid @theme_fg_color;
 		padding: 2px;
 	}
-	.guild.pinged > image {
+	.guild.pinged > image, .dmbutton.pinged > image {
 		border: 2px solid rgb(240, 71, 71);
 		padding: 2px;
 	}

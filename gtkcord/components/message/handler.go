@@ -73,7 +73,7 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	if m.channelID.Get() != c.GuildID {
+	if m.guildID.Get() != c.GuildID {
 		return
 	}
 

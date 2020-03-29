@@ -100,7 +100,7 @@ func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 }
 
 func initGuilds(g *Guilds, s *ningen.State) {
-	dm := NewPMButton()
+	dm := NewPMButton(s)
 
 	semaphore.IdleMust(func() {
 		gw, _ := gtk.ScrolledWindowNew(nil, nil)
@@ -207,7 +207,6 @@ func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {
 	ch, err := s.Store.Channel(rs.ChannelID)
 	if err != nil {
-		// log.Errorln("Failed to find channel:", err)
 		return
 	}
 	if !ch.GuildID.Valid() {

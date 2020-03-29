@@ -2,7 +2,9 @@ package guild
 
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -16,7 +18,7 @@ type DMButton struct {
 }
 
 // thread-safe
-func NewPMButton() (dm *DMButton) {
+func NewPMButton(s *ningen.State) (dm *DMButton) {
 	semaphore.IdleMust(func() {
 		r, _ := gtk.ListBoxRowNew()
 		r.Show()
@@ -31,6 +33,7 @@ func NewPMButton() (dm *DMButton) {
 
 		i, _ := gtk.ImageNew()
 		i.Show()
+		i.SetSizeRequest(IconSize, IconSize)
 		i.SetHAlign(gtk.ALIGN_CENTER)
 		i.SetVAlign(gtk.ALIGN_CENTER)
 		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
@@ -41,6 +44,26 @@ func NewPMButton() (dm *DMButton) {
 			Style:      s,
 		}
 	})
+
+	go func() {
+		// Find and detect any unread channels:
+		chs, err := s.PrivateChannels()
+		if err != nil {
+			log.Errorln("Failed to get private channels for DMButton:", err)
+			return
+		}
+
+		for _, ch := range chs {
+			rs := s.FindLastRead(ch.ID)
+			if rs == nil {
+				continue
+			}
+			if rs.LastMessageID != ch.LastMessageID {
+				dm.setUnread(true)
+				break
+			}
+		}
+	}()
 
 	return
 }

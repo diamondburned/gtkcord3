@@ -1,7 +1,7 @@
 package ningen
 
 import (
-	"sync"
+	"sort"
 	"time"
 
 	"github.com/diamondburned/arikawa/api"
@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 func init() {
@@ -25,20 +26,20 @@ func init() {
 type State struct {
 	*state.State
 
-	mutedMutex    sync.RWMutex
+	mutedMutex    deadlock.RWMutex
 	mutedGuilds   map[discord.Snowflake]*Mute
 	mutedChannels map[discord.Snowflake]*Mute
 
-	readMutex sync.RWMutex
+	readMutex deadlock.RWMutex
 	lastAck   api.Ack
 	LastRead  map[discord.Snowflake]*gateway.ReadState
 
 	// rs is updated
-	callbackMut  sync.Mutex
+	callbackMut  deadlock.Mutex
 	OnReadChange []func(s *State, rs *gateway.ReadState, unread bool)
 	// OnGuildPosChange func(*gateway.UserSettings)
 
-	gmu    sync.Mutex
+	gmu    deadlock.Mutex
 	guilds map[discord.Snowflake]*guildState
 
 	MemberList *MemberListState
@@ -103,9 +104,6 @@ func ningen(s *state.State) *State {
 	})
 
 	s.AddHandler(func(c *gateway.MessageCreateEvent) {
-		if c.Author.ID == s.Ready.User.ID {
-			return
-		}
 		var mentions int
 		for _, u := range c.Mentions {
 			if u.ID == s.Ready.User.ID {
@@ -263,6 +261,19 @@ func (s *State) updateReadState(rs []gateway.ReadState) {
 	}
 }
 
+func (s *State) PrivateChannels() ([]discord.Channel, error) {
+	c, err := s.State.PrivateChannels()
+	if err != nil {
+		return nil, err
+	}
+
+	sort.SliceStable(c, func(i, j int) bool {
+		return c[i].LastMessageID > c[j].LastMessageID
+	})
+
+	return c, nil
+}
+
 func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	if s.ChannelMuted(channelID) {
 		return nil
@@ -281,7 +292,6 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
-	// log.Debugln(log.Trace(0), "MarkUnread")
 
 	// Check for a ReadState
 	st, ok := s.LastRead[chID]
@@ -292,7 +302,6 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 		s.LastRead[chID] = st
 	}
 	// Update ReadState
-	// st.LastMessageID = msgID
 	st.MentionCount += mentions
 
 	// Update the channel state:
@@ -301,18 +310,20 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 		s.Store.ChannelSet(ch)
 	}
 
-	go func() {
-		// Check if this is our message or not:
-		if m, err := s.Store.Message(chID, msgID); err == nil {
-			if m.Author.ID == s.Ready.User.ID {
-				// If it is, don't mark as unread.
-				return
-			}
+	// Check if this is our message or not:
+	if m, err := s.Store.Message(chID, msgID); err == nil {
+		if m.Author.ID == s.Ready.User.ID {
+			// If it is, we automatically mark our message as read:
+			st.LastMessageID = msgID
 		}
+	}
 
+	unread := st.LastMessageID != msgID
+
+	go func() {
 		// Announce that there's a read state change
 		for _, fn := range s.OnReadChange {
-			fn(s, st, true)
+			fn(s, st, unread)
 		}
 	}()
 }
@@ -320,7 +331,6 @@ func (s *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
-	// log.Debugln(log.Trace(0), "MarkRead")
 
 	// Check for a ReadState
 	st, ok := s.LastRead[chID]

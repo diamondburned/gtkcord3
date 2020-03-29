@@ -24,6 +24,8 @@ github.com/diamondburned/arikawa v0.1.6-0.20200327000414-85f8b44e7e97 h1:ncrDUMr
 github.com/diamondburned/arikawa v0.1.6-0.20200327000414-85f8b44e7e97/go.mod h1:jsdb1Uah8c0sD5/WjeYzjW5C1wWLhHtdg3rjXto53Uk=
 github.com/diamondburned/arikawa v0.1.6-0.20200327021125-00481b54904a h1:bp+LWBsdSOi+IYtB12ZHR6CzsEW0mn4SN/xHirI0DQI=
 github.com/diamondburned/arikawa v0.1.6-0.20200327021125-00481b54904a/go.mod h1:jsdb1Uah8c0sD5/WjeYzjW5C1wWLhHtdg3rjXto53Uk=
+github.com/diamondburned/arikawa v0.1.6-0.20200329175037-1e400dfc277b h1:4PC7aRYDLJAE6I0Nz9JvB88TrvJoCec2GUfxMTJVO1o=
+github.com/diamondburned/arikawa v0.1.6-0.20200329175037-1e400dfc277b/go.mod h1:jsdb1Uah8c0sD5/WjeYzjW5C1wWLhHtdg3rjXto53Uk=
 github.com/diamondburned/handy v0.0.0-20200323032954-59a7f405f43e h1:T0+QbeWWN8D3j5U/BW05IRT+53Nnyjt8syrhAvujdQE=
 github.com/diamondburned/handy v0.0.0-20200323032954-59a7f405f43e/go.mod h1:v7LYkOUfrXr7xNbJt1y4rUgLR3F9kaj5I4IcUMQLNuM=
 github.com/diamondburned/handy v0.0.0-20200329015645-35e37ca44a62 h1:VYioD5OQMvUmEaFzxXPDd75suPzuD/H3Us+YKUIH07E=

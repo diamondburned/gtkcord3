@@ -76,6 +76,7 @@ func newGuildRow(
 
 		i, _ := gtk.ImageNew()
 		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
+		i.SetSizeRequest(IconSize, IconSize)
 		i.SetHAlign(gtk.ALIGN_CENTER)
 		i.SetVAlign(gtk.ALIGN_CENTER)
 		r.Add(i)

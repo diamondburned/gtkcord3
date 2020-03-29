@@ -128,7 +128,10 @@ func (a *Application) SwitchDM() {
 			cleanup(a.Channels, a.Privates, a.Messages, a.Header.ChMenuBtn)
 		},
 		Loader: func() bool {
-			a.Privates.LoadChannels(a.State.Ready.PrivateChannels)
+			if err := a.Privates.LoadChannels(); err != nil {
+				log.Errorln("Failed to load Privates")
+				return false
+			}
 			return true
 		},
 		After: func() {

@@ -1,7 +1,6 @@
 package channel
 
 import (
-	"sort"
 	"strings"
 	"sync"
 
@@ -109,15 +108,16 @@ func (pcs *PrivateChannels) Cleanup() {
 }
 
 // thread-safe
-func (pcs *PrivateChannels) LoadChannels(channels []discord.Channel) {
+func (pcs *PrivateChannels) LoadChannels() error {
 	pcs.busy.Lock()
 	defer pcs.busy.Unlock()
 
-	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
+	channels, err := pcs.state.PrivateChannels()
+	if err != nil {
+		return err
+	}
 
-	sort.Slice(channels, func(i, j int) bool {
-		return channels[i].LastMessageID > channels[j].LastMessageID
-	})
+	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
 
 	semaphore.IdleMust(func() {
 		for _, channel := range channels {
@@ -145,6 +145,8 @@ func (pcs *PrivateChannels) LoadChannels(channels []discord.Channel) {
 			pcs.List.Insert(w, -1)
 		}
 	})
+
+	return nil
 }
 
 func (pcs *PrivateChannels) Selected() *PrivateChannel {
