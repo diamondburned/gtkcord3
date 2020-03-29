@@ -14,6 +14,7 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 	"github.com/sasha-s/go-deadlock"
 )
 
@@ -110,10 +111,12 @@ func NewState(s *state.State) *State {
 	t.Label, _ = gtk.LabelNew("")
 	t.Label.SetMarginStart(4)
 	t.Label.SetSingleLineMode(true)
+	t.Label.SetEllipsize(pango.ELLIPSIZE_END)
 
 	t.Box, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	t.Box.SetHAlign(gtk.ALIGN_START)
 	t.Box.SetVAlign(gtk.ALIGN_END)
+	t.Box.SetHExpand(true)
 	t.Box.Add(breathing)
 	t.Box.Add(t.Label)
 	t.Box.SetOpacity(0)

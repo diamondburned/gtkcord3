@@ -22,7 +22,7 @@ func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	go m.Typing.Add(t)
+	go m.Input.Typing.Add(t)
 }
 
 func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
@@ -36,7 +36,7 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 	m.insert((*discord.Message)(c))
 
 	// Check typing
-	go m.Typing.Remove(c.Author.ID)
+	go m.Input.Typing.Remove(c.Author.ID)
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -45,8 +44,7 @@ type Messages struct {
 	lastFetched  moreatomic.Time
 
 	// Additional components
-	Input  *Input
-	Typing *typing.State
+	Input *Input
 
 	acked bool
 }
@@ -62,7 +60,6 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 		// Make the input and typing state:
 		m.Input = NewInput(m)
-		m.Typing = typing.NewState(s.State)
 
 		// For wrappping around listbox
 		c := handy.ColumnNew()
@@ -137,10 +134,6 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 		// Add what's needed afterwards:
 		main.PackEnd(m.Input, false, false, 0)
-
-		// Hijack Input's box and add the typing indicator:
-		m.Input.Main.Add(m.Typing)
-		m.Typing.ShowAll()
 
 		// On any key-press, focus onto the input box:
 		m.Main.Connect("key-press-event", func(_ *gtk.Box, ev *gdk.Event) bool {
@@ -290,11 +283,11 @@ func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
 }
 
 func (m *Messages) Cleanup() {
+	log.Infoln("Destroying messages from old channel.")
+	m.Input.Typing.Stop()
+
 	m.guard.Lock()
 	defer m.guard.Unlock()
-
-	log.Infoln("Destroying messages from old channel.")
-	m.Typing.Stop()
 
 	semaphore.IdleMust(func() {
 		for _, msg := range m.messages {

@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/completer"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -29,63 +30,76 @@ type Input struct {
 	Main  *gtk.Box
 	Style *gtk.StyleContext
 
-	InputBox  *gtk.Box
 	Completer *completer.State
 
+	InputBox *gtk.Box
 	Input    *gtk.TextView
 	InputBuf *gtk.TextBuffer
 	Upload   *gtk.Button
 	Send     *gtk.Button
 
+	Bottom *gtk.Box
+	Typing *typing.State
+
+	// | Typing...      | Editing. _Cancel_ |
+	EditRevealer *gtk.Revealer
+	EditLabel    *gtk.Label
+	EditCancel   *gtk.Button
+
 	Editing *discord.Message
 }
 
 func NewInput(m *Messages) (i *Input) {
-	c := handy.ColumnNew()
-	c.Show()
-	c.SetMaximumWidth(MaxMessageWidth)
-	style, _ := c.GetStyleContext()
-
-	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	main.SetSizeRequest(MaxMessageWidth, -1) // fill
-
-	ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-
-	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", InputIconSize)
-	send, _ := gtk.ButtonNewFromIconName("mail-send", InputIconSize)
-
-	input, _ := gtk.TextViewNew()
-	ibuf, _ := input.GetBuffer()
-
 	i = &Input{
-		Column:   c,
 		Messages: m,
-		Main:     main,
-		Style:    style,
-		InputBox: ibox,
-		Upload:   upload,
-		Send:     send,
-		Input:    input,
-		InputBuf: ibuf,
 	}
 
+	// Make the inputs first:
+
+	input, _ := gtk.TextViewNew()
+	i.Input = input
+	gtkutils.Margin2(input, 4, 10)
+	input.AddEvents(int(gdk.KEY_PRESS_MASK))
+	input.Connect("key-press-event", i.keyDown)
+	input.SetWrapMode(gtk.WRAP_WORD_CHAR)
+	input.SetVAlign(gtk.ALIGN_CENTER)
+
+	ibuf, _ := input.GetBuffer()
+	i.InputBuf = ibuf
+
+	// Make the rest of the main widgets:
+
+	c := handy.ColumnNew()
+	i.Column = c
+	c.Show()
+	c.SetMaximumWidth(MaxMessageWidth)
+
+	style, _ := c.GetStyleContext()
+	i.Style = style
 	style.AddClass("message-input")
 
-	// Initialize the completer:
-	i.initCompleter()
-	// Prepend the completer box:
-	main.Add(i.Completer)
+	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	i.Main = main
+	main.SetSizeRequest(MaxMessageWidth, -1) // fill
 
-	// Prepare the message input box:
+	// Add the completer into the box:
+	i.Completer = completer.New(m.c, ibuf, m)
+
+	ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	i.InputBox = ibox
 	gtkutils.Margin2(ibox, 4, 5)
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
+	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", InputIconSize)
+	i.Upload = upload
 	upload.SetVAlign(gtk.ALIGN_START)
 	upload.SetRelief(gtk.RELIEF_NONE)
 	upload.Connect("clicked", func() {
 		SpawnUploader(i.upload)
 	})
 
+	send, _ := gtk.ButtonNewFromIconName("mail-send", InputIconSize)
+	i.Send = send
 	send.SetVAlign(gtk.ALIGN_START)
 	send.SetRelief(gtk.RELIEF_NONE)
 	send.Connect("clicked", func() {
@@ -98,37 +112,65 @@ func NewInput(m *Messages) (i *Input) {
 		}()
 	})
 
-	gtkutils.Margin2(input, 4, 10)
-	input.AddEvents(int(gdk.KEY_PRESS_MASK))
-	input.Connect("key-press-event", i.keyDown)
-	input.SetWrapMode(gtk.WRAP_WORD_CHAR)
-	input.SetVAlign(gtk.ALIGN_CENTER)
+	// Initialize the typing state:
+	i.Typing = typing.NewState(m.c.State)
 
-	// Add the message input box:
-	main.Add(ibox)
+	// Make the edit indicator widgets:
+	editRevealer, _ := gtk.RevealerNew()
+	i.EditRevealer = editRevealer
+	editRevealer.SetRevealChild(false)
+	editRevealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
+	editRevealer.SetTransitionDuration(50)
 
-	// Add the main box:
+	// Add the main box into the revealer:
+	editBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	gtkutils.Margin2(editBox, 0, 20)
+	editBox.SetHAlign(gtk.ALIGN_END)
+
+	editLabel, _ := gtk.LabelNew(`<span color="#3f7ce0" weight="bold">Editing</span>`)
+	i.EditLabel = editLabel
+	editLabel.SetUseMarkup(true)
+
+	editCancel, _ := gtk.ButtonNewWithLabel("Cancel")
+	i.EditCancel = editCancel
+	editCancel.SetRelief(gtk.RELIEF_NONE)
+	editCancel.Connect("clicked", i.stopEditing)
+
+	bottom, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	i.Bottom = bottom
+
+	// Adding things:
+
+	// Add into the column:
 	c.Add(main)
+
+	// Add into the main box:
+	main.Add(i.Completer)
+	main.Add(ibox)
+	main.Add(bottom)
 
 	// Separators between the message input box
 	s1, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	s2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 
+	// Add into the input box:
 	ibox.PackStart(upload, false, false, 0)
 	ibox.PackStart(s1, false, false, 2)
 	ibox.PackStart(input, true, true, 0)
 	ibox.PackStart(s2, false, false, 2)
 	ibox.PackStart(send, false, false, 0)
 
+	// Add the typing indicator and edit cancel boxes:
+	bottom.Add(i.Typing)
+	bottom.Add(i.EditRevealer)
+
+	// Add the edit widgets:
+	editRevealer.Add(editBox)
+	editBox.Add(editLabel)
+	editBox.Add(editCancel)
+
 	i.Main.ShowAll()
-
 	return
-}
-
-func (i *Input) initCompleter() {
-	if i.Completer == nil {
-		i.Completer = completer.New(i.Messages.c, i.InputBuf, i.Messages)
-	}
 }
 
 func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
@@ -140,7 +182,7 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 
 	// Send an OnTyping request. This does not acquire the mutex, but instead
 	// gets the ID atomically.
-	i.Messages.Typing.Type(i.Messages.GetChannelID())
+	i.Typing.Type(i.Messages.GetChannelID())
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
 	const cntrlMask = uint(gdk.GDK_CONTROL_MASK)
@@ -190,13 +232,7 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 
 	// If escape key is pressed and we're editing something:
 	if esc && i.Editing != nil {
-		// Clear the text box:
-		i.InputBuf.Delete(i.InputBuf.GetStartIter(), i.InputBuf.GetEndIter())
-
-		// Reset state:
-		i.Editing = nil
-		i.Style.RemoveClass("editing")
-
+		i.stopEditing()
 		return true
 	}
 
@@ -272,6 +308,18 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	return true
 }
 
+func (i *Input) stopEditing() {
+	// Clear the text box:
+	i.InputBuf.Delete(i.InputBuf.GetStartIter(), i.InputBuf.GetEndIter())
+
+	// Reset state:
+	i.Editing = nil
+	i.Style.RemoveClass("editing")
+
+	// Collapse the button:
+	i.EditRevealer.SetRevealChild(false)
+}
+
 func (i *Input) editMessage(id discord.Snowflake) error {
 	m, err := i.Messages.c.State.Store.Message(i.Messages.GetChannelID(), id)
 	if err != nil {
@@ -281,7 +329,13 @@ func (i *Input) editMessage(id discord.Snowflake) error {
 	i.Editing = m
 
 	semaphore.IdleMust(func() {
+		// Add class
 		i.Style.AddClass("editing")
+
+		// Reveal the cancel buttons:
+		i.EditRevealer.SetRevealChild(true)
+
+		// Set the content:
 		i.InputBuf.SetText(i.Editing.Content)
 	})
 
