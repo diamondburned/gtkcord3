@@ -7,7 +7,7 @@ import (
 )
 
 type DMButton struct {
-	gtkutils.ExtendedWidget
+	*gtk.ListBoxRow
 	Style *gtk.StyleContext
 
 	OnClick func()
@@ -37,8 +37,8 @@ func NewPMButton() (dm *DMButton) {
 		r.Add(i)
 
 		dm = &DMButton{
-			ExtendedWidget: r,
-			Style:          s,
+			ListBoxRow: r,
+			Style:      s,
 		}
 	})
 

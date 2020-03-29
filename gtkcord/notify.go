@@ -21,7 +21,7 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 	}
 
 	var (
-		title   = a.State.AuthorDisplayName(*msg) + "mentioned you"
+		title   = a.State.AuthorDisplayName(*msg) + " mentioned you"
 		content = humanize.TrimString(msg.Content, 256)
 		markup  = md.ParseToSimpleMarkupWithMessage([]byte(content), a.State.Store, msg)
 	)

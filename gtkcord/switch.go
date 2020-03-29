@@ -15,13 +15,19 @@ import (
 // SwitchToID returns true if it can find the channel.
 func (a *Application) SwitchToID(ch, guild discord.Snowflake) bool {
 	var row *gtk.ListBoxRow
+
 	if g, _ := a.Guilds.FindByID(guild); g != nil {
+		semaphore.IdleMust(a.Guilds.ListBox.SelectRow, g.Row)
 		a.SwitchGuild(g)
+
 		if channel := a.Channels.FindByID(ch); channel != nil {
 			row = channel.Row
 		}
+
 	} else {
+		semaphore.IdleMust(a.Privates.List.SelectRow, a.Guilds.DMButton.ListBoxRow)
 		a.SwitchDM()
+
 		if channel := a.Privates.FindByID(ch); channel != nil {
 			row = channel.ListBoxRow
 		}
