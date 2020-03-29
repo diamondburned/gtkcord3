@@ -1,13 +1,7 @@
 sources:
     - https://github.com/diamondburned/gtkcord3
-image: golang/1.14.1-buster
-packages:
-    - build-essential
-    - pkg-config
-    - libhandy-0.0-dev
-    - libglib2.0-dev
-    - libgtk-3-dev
-    - libgdk-pixbuf2.0-dev
+image: nixos/unstable
+environment:
+    GOPATH: '/tmp/gopath/'
 tasks:
-    - build: |
-        go build -v .
+    - build: 'cd gtkcord3/ && nix-shell --run "go build -v ."'

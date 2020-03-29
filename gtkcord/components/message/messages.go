@@ -20,7 +20,7 @@ import (
 
 const scrollMinDelta = 500
 
-var MaxMessageWidth = 800
+var MaxMessageWidth = 750
 
 type Messages struct {
 	gtkutils.ExtendedWidget
