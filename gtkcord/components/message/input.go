@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -23,7 +24,7 @@ import (
 const InputIconSize = gtk.ICON_SIZE_LARGE_TOOLBAR
 
 type Input struct {
-	gtkutils.ExtendedWidget
+	*handy.Column
 	Messages *Messages
 
 	Main  *gtk.Box
@@ -55,9 +56,15 @@ func NewInput(m *Messages) (i *Input) {
 
 	// Make the inputs first:
 
+	// TODO: wrap Input in a ScrolledWindow
+
 	input, _ := gtk.TextViewNew()
 	i.Input = input
-	gtkutils.Margin2(input, 4, 10)
+	input.SetLeftMargin(10)
+	input.SetRightMargin(10)
+	input.SetPixelsAboveLines(5)
+	input.SetPixelsBelowLines(5)
+	input.SetHExpand(true)
 	input.AddEvents(int(gdk.KEY_PRESS_MASK))
 	input.Connect("key-press-event", i.keyDown)
 	input.SetWrapMode(gtk.WRAP_WORD_CHAR)
@@ -68,14 +75,20 @@ func NewInput(m *Messages) (i *Input) {
 
 	// Make the rest of the main widgets:
 
-	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	i.Main = main
-	i.ExtendedWidget = main
-	main.SetHExpand(true) // fill
+	col := handy.ColumnNew()
+	i.Column = col
+	col.Show()
+	col.SetHExpand(true)
+	col.SetSizeRequest(300, -1) // min width
+	col.SetMaximumWidth(MaxMessageWidth)
 
-	style, _ := main.GetStyleContext()
+	style, _ := col.GetStyleContext()
 	i.Style = style
 	style.AddClass("message-input")
+
+	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	i.Main = main
+	main.SetHExpand(true) // fill
 
 	// Add the completer into the box:
 	i.Completer = completer.New(m.c, ibuf, m)
@@ -83,6 +96,7 @@ func NewInput(m *Messages) (i *Input) {
 	ibox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	i.InputBox = ibox
 	gtkutils.Margin2(ibox, 4, 10)
+	ibox.SetHExpand(true)
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
 	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", InputIconSize)
@@ -136,6 +150,8 @@ func NewInput(m *Messages) (i *Input) {
 	i.Bottom = bottom
 
 	// Adding things:
+
+	col.Add(main)
 
 	// Add into the main box:
 	main.Add(i.Completer)

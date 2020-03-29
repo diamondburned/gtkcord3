@@ -176,6 +176,8 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	mainEv.Add(message.main)
 	message.ListBoxRow.Add(mainEv)
 
+	message.main.SetHExpand(true)
+
 	// On message (which is in event box) right click:
 	mainEv.Connect("button-press-event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
 		btn := gdk.EventButtonNewFromEvent(ev)
@@ -236,6 +238,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", "")
 
 	message.right.Add(message.rightTop)
+	message.right.SetHExpand(true)
 
 	message.avatarEv.SetMarginTop(6)
 	message.right.SetMarginTop(6)

@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
+	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -17,6 +18,8 @@ import (
 )
 
 const scrollMinDelta = 500
+
+var MaxMessageWidth = 750
 
 type Messages struct {
 	gtkutils.ExtendedWidget
@@ -50,8 +53,8 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		m.Main = main
 		m.ExtendedWidget = main
+		m.Main = main
 
 		// Make the input and typing state:
 		m.Input = NewInput(m)
@@ -97,12 +100,17 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		// List should fill:
 		// b.SetSizeRequest(MaxMessageWidth, -1)
 
-		// Causes resize bugs:
+		// Column contains the list:
+		col := handy.ColumnNew()
+		col.SetMaximumWidth(MaxMessageWidth)
+		col.Add(b)
+		col.Show()
+
 		v.SetCanFocus(false)
 		v.SetVAlign(gtk.ALIGN_END)
 		v.SetProperty("vscroll-policy", gtkutils.SCROLL_NATURAL)
 		v.SetShadowType(gtk.SHADOW_NONE)
-		v.Add(b) // add col instead of list
+		v.Add(col) // add col instead of list
 		v.Show()
 
 		// Fractal does this, but Go is superior.

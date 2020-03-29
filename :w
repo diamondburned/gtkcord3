@@ -4,7 +4,6 @@ import (
 	"html"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -119,7 +118,6 @@ func NewHeader() (*Header, error) {
 
 	rsep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	rsep.Show()
-	gtkutils.Margin2(rsep, 0, 4)
 
 	body.Add(back)
 	body.Add(chname)
