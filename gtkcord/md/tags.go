@@ -312,14 +312,13 @@ type PressedEvent struct {
 func setHandler(fn func(PressedEvent)) func(*gtk.TextTag, *gtk.TextView, *gdk.Event) {
 	return func(_ *gtk.TextTag, tv *gtk.TextView, ev *gdk.Event) {
 		evButton := gdk.EventButtonNewFromEvent(ev)
-		if evButton.Type() != gdk.EVENT_BUTTON_RELEASE || evButton.Button() != 1 {
+		if evButton.Type() != gdk.EVENT_BUTTON_RELEASE || evButton.Button() != gdk.BUTTON_PRIMARY {
 			return
 		}
 
 		fn(PressedEvent{
 			EventButton: evButton,
-			// copy textview so we can still reuse mdState
-			TextView: tv,
+			TextView:    tv,
 		})
 	}
 }

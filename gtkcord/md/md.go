@@ -24,15 +24,15 @@ var (
 	UserPressed    func(ev PressedEvent, user *discord.GuildUser)
 )
 
-func ParseMessageContent(dst *gtk.TextBuffer, s state.Store, m *discord.Message) {
+func ParseMessageContent(dst *gtk.TextView, s state.Store, m *discord.Message) {
 	parseMessage([]byte(m.Content), dst, s, m, true)
 }
 
-func ParseWithMessage(content []byte, dst *gtk.TextBuffer, s state.Store, m *discord.Message) {
+func ParseWithMessage(content []byte, dst *gtk.TextView, s state.Store, m *discord.Message) {
 	parseMessage(content, dst, s, m, false)
 }
 
-func parseMessage(b []byte, dst *gtk.TextBuffer, s state.Store, m *discord.Message, ts bool) {
+func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message, ts bool) {
 	// Context to pass down messages:
 	ctx := parser.NewContext()
 	ctx.Set(messageCtx, m)
@@ -51,7 +51,7 @@ func parseMessage(b []byte, dst *gtk.TextBuffer, s state.Store, m *discord.Messa
 	r.insertWithTag([]byte(footer), r.tags.timestamp())
 }
 
-func Parse(content []byte, dst *gtk.TextBuffer, opts ...parser.ParseOption) {
+func Parse(content []byte, dst *gtk.TextView, opts ...parser.ParseOption) {
 	parse(content, NewRenderer(dst), opts...)
 }
 

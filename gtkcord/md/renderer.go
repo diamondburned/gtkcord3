@@ -2,10 +2,7 @@ package md
 
 import (
 	"io"
-	"sync"
 
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
@@ -13,65 +10,32 @@ import (
 
 // Render is a non-thread-safe TextBuffer renderer.
 type Renderer struct {
+	View   *gtk.TextView
 	Buffer *gtk.TextBuffer
 
 	tags TagState
-
-	// runs afterwards sequentially
-	setEmojis chan setEmoji
-	setGroup  sync.WaitGroup
 }
 
-type setEmoji struct {
-	pb    *gdk.Pixbuf
-	line  int
-	index int
-}
-
-func NewRenderer(buf *gtk.TextBuffer) *Renderer {
+func NewRenderer(tv *gtk.TextView) *Renderer {
+	buf, _ := tv.GetBuffer()
 	tags, _ := buf.GetTagTable()
 
 	return &Renderer{
+		View:   tv,
 		Buffer: buf,
 		tags: TagState{
 			table: tags,
 		},
-		setEmojis: make(chan setEmoji), // arbitrary 8
+		// setEmojis: make(chan setEmoji), // arbitrary 8
 	}
 }
 
 func (r *Renderer) Render(_ io.Writer, source []byte, n ast.Node) error {
+	r.Buffer.Delete(r.Buffer.GetStartIter(), r.Buffer.GetEndIter())
+
 	ast.Walk(n, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		return r.renderNode(source, n, enter)
 	})
-
-	// Start a cleanup goroutine
-	go func() {
-		r.setGroup.Wait()
-		close(r.setEmojis)
-	}()
-
-	go func() {
-		// Emoji tag that slightly offsets the emoji vertically.
-		emojiTag := r.tags.inlineEmojiTag()
-
-		for set := range r.setEmojis {
-			set := set
-
-			// Start setting emojis in the background.
-			semaphore.Async(func() {
-				last := r.Buffer.GetIterAtLineIndex(set.line, set.index)
-				fwdi := r.Buffer.GetIterAtLineIndex(set.line, set.index)
-				fwdi.ForwardChar()
-
-				r.Buffer.Delete(last, fwdi)
-				r.Buffer.InsertPixbuf(last, set.pb)
-
-				first := r.Buffer.GetIterAtLineIndex(set.line, set.index)
-				r.Buffer.ApplyTag(emojiTag, first, last)
-			})
-		}
-	}()
 
 	return nil
 }

@@ -32,13 +32,6 @@ const (
 	`
 )
 
-func clampWidth(width int) int {
-	if max := MaxMessageWidth - (AvatarSize + AvatarPadding*2) - (EmbedMargin * 3); width > max {
-		width = max
-	}
-	return width
-}
-
 func newExtraImageUnsafe(proxy, url string, w, h int, pp ...cache.Processor) *gtk.EventBox {
 	img, _ := gtk.ImageNew()
 	img.Show()
@@ -62,9 +55,6 @@ func newExtraImageUnsafe(proxy, url string, w, h int, pp ...cache.Processor) *gt
 }
 
 func maxSize(w, h, maxW, maxH int) (int, int) {
-	// cap width
-	maxW = clampWidth(maxW)
-
 	if w == 0 || h == 0 {
 		// shit
 		return maxW, maxH
@@ -370,17 +360,15 @@ func newNormalEmbedUnsafe(
 		))
 	}
 
-	// Calculate the embed width without padding:
-	var w = clampWidth(EmbedMaxWidth)
-	if widthHint > 0 && w > widthHint {
-		w = widthHint
-	}
-
 	// Wrap the content inside another box:
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	main.SetHAlign(gtk.ALIGN_START)
-	main.SetSizeRequest(w+(EmbedMargin*2), 0)
 	main.Add(content)
+
+	// Calculate the embed width if we can:
+	if widthHint > 0 {
+		main.SetSizeRequest(widthHint+EmbedMargin*2, 0)
+	}
 
 	// Apply margin to content:
 	content.SetMarginTop(EmbedMargin / 2)

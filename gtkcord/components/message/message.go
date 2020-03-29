@@ -386,7 +386,7 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
 	if update.Content != "" {
 		m.assertContentUnsafe()
-		md.ParseMessageContent(m.content, s.Store, update)
+		md.ParseMessageContent(m.textView, s.Store, update)
 	}
 
 	for _, mention := range update.Mentions {

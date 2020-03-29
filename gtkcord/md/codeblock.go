@@ -331,6 +331,18 @@ func (b fenced) Close(node ast.Node, r text.Reader, pc parser.Context) {
 	if fdata.node == node {
 		pc.Set(fencedCodeBlockInfoKey, nil)
 	}
+
+	lines := node.Lines()
+
+	if length := lines.Len(); length > 0 {
+		// Trim first whitespace
+		first := lines.At(0)
+		lines.Set(0, first.TrimLeftSpace(r.Source()))
+
+		// Trim last whitespace
+		last := lines.At(length - 1)
+		lines.Set(length-1, last.TrimRightSpace(r.Source()))
+	}
 }
 
 func (b fenced) CanInterruptParagraph() bool {

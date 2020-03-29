@@ -15,7 +15,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -24,7 +23,7 @@ import (
 const InputIconSize = gtk.ICON_SIZE_LARGE_TOOLBAR
 
 type Input struct {
-	*handy.Column
+	gtkutils.ExtendedWidget
 	Messages *Messages
 
 	Main  *gtk.Box
@@ -69,18 +68,14 @@ func NewInput(m *Messages) (i *Input) {
 
 	// Make the rest of the main widgets:
 
-	c := handy.ColumnNew()
-	i.Column = c
-	c.Show()
-	c.SetMaximumWidth(MaxMessageWidth)
-
-	style, _ := c.GetStyleContext()
-	i.Style = style
-	style.AddClass("message-input")
-
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	i.Main = main
-	main.SetSizeRequest(MaxMessageWidth, -1) // fill
+	i.ExtendedWidget = main
+	main.SetHExpand(true) // fill
+
+	style, _ := main.GetStyleContext()
+	i.Style = style
+	style.AddClass("message-input")
 
 	// Add the completer into the box:
 	i.Completer = completer.New(m.c, ibuf, m)
@@ -141,9 +136,6 @@ func NewInput(m *Messages) (i *Input) {
 	i.Bottom = bottom
 
 	// Adding things:
-
-	// Add into the column:
-	c.Add(main)
 
 	// Add into the main box:
 	main.Add(i.Completer)

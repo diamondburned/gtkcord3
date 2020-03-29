@@ -70,10 +70,7 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 			}
 
 			chs.Selected = chs.Channels[r.GetIndex()]
-			go func() {
-				chs.Selected.setUnread(false, false)
-				chs.OnSelect(chs.Selected)
-			}()
+			go chs.OnSelect(chs.Selected)
 		})
 	})
 

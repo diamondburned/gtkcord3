@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -98,7 +97,7 @@ func NewHeader() (*Header, error) {
 	right.SetHExpand(true)
 	right.SetShowCloseButton(true)
 	right.SetProperty("spacing", 0)
-	right.SetSizeRequest(message.MaxMessageWidth, -1) // so collapse works
+	right.SetSizeRequest(350, -1) // so collapse works
 	l.Add(right)
 
 	body, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
