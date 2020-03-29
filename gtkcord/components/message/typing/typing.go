@@ -18,7 +18,7 @@ import (
 	"github.com/sasha-s/go-deadlock"
 )
 
-const TypingTimeout = 8 * time.Second
+const TypingTimeout = 10 * time.Second
 
 var typingHandler chan *State
 
@@ -46,7 +46,10 @@ func handler() {
 		case t := <-typingHandler:
 			// Drain the ticker if it's not drained:
 			if !tick.Stop() {
-				<-tick.C
+				select {
+				case <-tick.C:
+				default:
+				}
 			}
 
 			if t != nil {
@@ -198,8 +201,6 @@ func (t *State) render() {
 
 	t.mu.Unlock()
 
-	log.Println("Rendered", text)
-
 	semaphore.IdleMust(func() {
 		t.Label.SetMarkup(text)
 		// Show or hide the breathing animation as well:
@@ -215,7 +216,6 @@ func (t *State) Update() {
 	select {
 	case typingHandler <- t:
 	default:
-		log.Println("Not updating typing indicator.")
 	}
 }
 
@@ -228,7 +228,7 @@ func (t *State) Shortest() time.Time {
 	}
 
 	t.sort()
-	return t.Users[0].Time.Add(-1)
+	return t.Users[0].Time.Add(-1 * time.Millisecond) // extra overhead just in case
 }
 
 func (t *State) cleanUp() {
