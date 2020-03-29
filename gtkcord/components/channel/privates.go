@@ -110,7 +110,7 @@ func (pcs *PrivateChannels) Cleanup() {
 // thread-safe
 func (pcs *PrivateChannels) LoadChannels() error {
 	pcs.busy.Lock()
-	defer pcs.busy.Unlock()
+	// defer at the end of the bottom goroutine.
 
 	channels, err := pcs.state.PrivateChannels()
 	if err != nil {
@@ -145,6 +145,24 @@ func (pcs *PrivateChannels) LoadChannels() error {
 			pcs.List.Insert(w, -1)
 		}
 	})
+
+	go func() {
+		// defer here last:
+		defer pcs.busy.Unlock()
+
+		for _, channel := range channels {
+			rs := pcs.state.FindLastRead(channel.ID)
+			if rs == nil {
+				continue
+			}
+
+			// Snowflakes have timestamps, which allow us to do this:
+			if channel.LastMessageID.Time().After(rs.LastMessageID.Time()) {
+				ch := pcs.Channels[channel.ID.String()]
+				semaphore.Async(ch.setUnread, true)
+			}
+		}
+	}()
 
 	return nil
 }
@@ -188,6 +206,10 @@ func (pcs *PrivateChannels) TraverseReadState(_ *ningen.State, rs *gateway.ReadS
 	// Read lock is used, as the size of the slice isn't directly modified.
 	pcs.busy.RLock()
 	defer pcs.busy.RUnlock()
+
+	if len(pcs.Channels) == 0 {
+		return
+	}
 
 	pc, ok := pcs.Channels[rs.ChannelID.String()]
 	if !ok {

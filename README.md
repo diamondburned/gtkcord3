@@ -17,7 +17,7 @@
 - Uses your prefered GTK theme
 
 ## Build gtkcord
-**Required:** `go` (1.13+), `gtk`, `pkgconfig` (refer to `shell.nix`)
+**Required:** `go` (1.13+), `gtk`, `libhandy`, `pkgconfig` (refer to `shell.nix`)
 
 ```sh
 go get github.com/diamondburned/gtkcord3 # auto updates

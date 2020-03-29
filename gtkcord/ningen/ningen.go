@@ -282,7 +282,7 @@ func (s *State) FindLastRead(channelID discord.Snowflake) *gateway.ReadState {
 	s.readMutex.RLock()
 	defer s.readMutex.RUnlock()
 
-	if s, ok := s.LastRead[channelID]; ok {
+	if s, ok := s.LastRead[channelID]; ok && s.LastMessageID.Valid() {
 		return s
 	}
 
@@ -349,12 +349,12 @@ func (s *State) MarkRead(chID, msgID discord.Snowflake) {
 	st.LastMessageID = msgID
 	st.MentionCount = 0
 
-	// Announce that there's a read state change
-	for _, fn := range s.OnReadChange {
-		fn(s, st, false)
-	}
-
 	go func() {
+		// Announce that there's a read state change
+		for _, fn := range s.OnReadChange {
+			fn(s, st, false)
+		}
+
 		// Check if this is our message or not:
 		if m, err := s.Store.Message(chID, msgID); err == nil {
 			if m.Author.ID == s.Ready.User.ID {

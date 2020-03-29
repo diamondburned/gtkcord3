@@ -541,14 +541,16 @@ func (m *Messages) update(update *discord.Message) bool {
 func (m *Messages) updateMessageAuthor(ns ...discord.Member) {
 	guildID := m.guildID.Get()
 
-	for _, n := range ns {
-		for _, message := range m.messages {
-			if message.AuthorID != n.User.ID {
-				continue
+	semaphore.IdleMust(func() {
+		for _, n := range ns {
+			for _, message := range m.messages {
+				if message.AuthorID != n.User.ID {
+					continue
+				}
+				message.updateMember(m.c, guildID, n)
 			}
-			message.UpdateMember(m.c, guildID, n)
 		}
-	}
+	})
 }
 
 func (m *Messages) Delete(ids ...discord.Snowflake) {

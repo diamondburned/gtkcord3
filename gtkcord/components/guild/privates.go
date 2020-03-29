@@ -58,7 +58,9 @@ func NewPMButton(s *ningen.State) (dm *DMButton) {
 			if rs == nil {
 				continue
 			}
-			if rs.LastMessageID != ch.LastMessageID {
+
+			// Snowflakes have timestamps, which allow us to do this:
+			if ch.LastMessageID.Time().After(rs.LastMessageID.Time()) {
 				dm.setUnread(true)
 				break
 			}
