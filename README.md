@@ -1,6 +1,6 @@
 <p align="center">
 	
-<img width="128" src="gtkcord/components/logo/logo.png" />
+<img width="128" src="logo.png" />
 <h1 align="center">gtkcord</h1>
 <p  align="center">A lightweight Discord client which uses GTK3 for the user interface.</p>
 

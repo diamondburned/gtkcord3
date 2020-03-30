@@ -9,6 +9,9 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
+// Changed on build.
+var Version = "(dev)"
+
 func Spawn() {
 	a, _ := gtk.AboutDialogNew()
 
@@ -23,6 +26,7 @@ func Spawn() {
 		`diamondburned: "Astolfo is cute."`,
 		"GitHub Contributors",
 	})
+	a.SetVersion("v" + Version)
 
 	a.SetCopyright("Copyright (C) 2020 diamondburned")
 	a.SetLicense("GNU General Public License v3.0")
