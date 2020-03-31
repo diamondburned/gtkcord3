@@ -4,6 +4,7 @@ import (
 	"html"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -17,7 +18,7 @@ type ChannelInfo struct {
 	Hash   *gtk.Label
 	Name   *gtk.Label
 
-	Description *gtk.Label
+	Description *gtk.TextView
 }
 
 func NewChannelInfo(ch discord.Channel) *ChannelInfo {
@@ -45,16 +46,14 @@ func NewChannelInfo(ch discord.Channel) *ChannelInfo {
 	name.SetLineWrap(true)
 	name.SetLineWrapMode(pango.WRAP_WORD_CHAR)
 
-	desc, _ := gtk.LabelNew(string(md.ParseToMarkup([]byte(ch.Topic))))
+	desc, _ := gtk.TextViewNew()
 	desc.Show()
-	desc.SetUseMarkup(true)
-	desc.SetMarginStart(CommonMargin)
-	desc.SetMarginEnd(CommonMargin)
-	desc.SetMarginBottom(CommonMargin)
-	desc.SetXAlign(0.0)
 	desc.SetHExpand(true)
-	desc.SetLineWrap(true)
-	desc.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	desc.SetWrapMode(gtk.WRAP_WORD_CHAR)
+	gtkutils.Margin4(desc, 0, CommonMargin, CommonMargin, CommonMargin)
+
+	// Parse the topic into markup/tags:
+	md.Parse([]byte(ch.Topic), desc)
 
 	box.Add(header)
 	box.Add(desc)

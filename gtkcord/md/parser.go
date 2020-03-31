@@ -8,14 +8,14 @@ import (
 func BlockParsers() []util.PrioritizedValue {
 	return []util.PrioritizedValue{
 		util.Prioritized(blockquote{}, 500),
-		util.Prioritized(fenced{}, 800), // code blocks
 		util.Prioritized(paragraph{}, 1000),
 	}
 }
 
 func InlineParsers() []util.PrioritizedValue {
 	return []util.PrioritizedValue{
-		util.Prioritized(&emoji{}, 200),
+		util.Prioritized(fenced{}, 100), // code blocks, prioritized
+		util.Prioritized(&emoji{}, 200), // (*emoji).Parse()
 		util.Prioritized(inline{}, 300),
 		util.Prioritized(mention{}, 400),
 		util.Prioritized(autolink{}, 500),

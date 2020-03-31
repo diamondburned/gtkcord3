@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -75,7 +76,7 @@ func (a *UserPopupActivity) UpdateUnsafe(ac discord.Activity) {
 	case discord.CustomActivity:
 		a.Custom = true
 		a.image(0, "", "")
-		a.header(ac.State)
+		a.header(ningen.EmojiString(ac.Emoji) + " " + ac.State)
 
 		return
 	}

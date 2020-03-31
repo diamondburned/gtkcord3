@@ -78,7 +78,8 @@ func (r *Renderer) renderCodeBlock(node *ast.FencedCodeBlock, source []byte) {
 
 	for i := 0; i < node.Lines().Len(); i++ {
 		line := node.Lines().At(i)
-		code = append(code, line.Value(source)...)
+		// Prepend 2 spaces at the start of line to fake indentation:
+		code = append(code, append([]byte{' ', ' '}, line.Value(source)...)...)
 	}
 
 	iterator, err := lexer.Tokenise(nil, string(code))
@@ -224,9 +225,26 @@ func (b fenced) Trigger() []byte {
 	return []byte{'`'}
 }
 
+func (b fenced) Parse(p ast.Node, r text.Reader, pc parser.Context) ast.Node {
+	n, _ := b.Open(p, r, pc)
+	if n == nil {
+		return nil
+	}
+
+	// Crawl until b.Continue is done:
+	for state := parser.Continue; state != parser.Close; state = b.Continue(n, r, pc) {
+	}
+
+	// Close:
+	b.Close(n, r, pc)
+
+	return n
+}
+
 func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
 	line, segment := r.PeekLine()
-	pos := pc.BlockOffset()
+	pos := 0 // TODO: figure out what pc.BlockOffset() is
+
 	if pos < 0 || (line[pos] != '`') {
 		return nil, parser.NoChildren
 	}
@@ -284,7 +302,7 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 	}
 
 	pc.Set(fencedCodeBlockInfoKey, &fenceData{findent, oFenceLength, node})
-	r.Advance(segment.Len() - pos - 1)
+	r.Advance(segment.Len() - pos)
 
 	return node, parser.NoChildren
 }
@@ -315,7 +333,7 @@ func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser
 	// If there's text:
 	if start < stop {
 		seg.Stop = stop
-		r.AdvanceAndSetPadding(stop-start-1, padding)
+		r.AdvanceAndSetPadding(stop-start, padding)
 	}
 
 	defer func() {
@@ -343,7 +361,7 @@ func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser
 		} else {
 			// No, treat the rest as text:
 			seg.Stop = segment.Stop
-			r.Advance(segment.Stop - stop - 1)
+			r.Advance(segment.Stop - stop)
 		}
 	}
 
