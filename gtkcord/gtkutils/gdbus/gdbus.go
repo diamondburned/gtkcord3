@@ -214,30 +214,3 @@ func (c *Connection) SignalUnsubscribe(id uint) {
 		C.uint(id),
 	)
 }
-
-func cstringOpt(str string) *C.gchar {
-	if str == "" {
-		return nil
-	}
-	return C.CString(str)
-}
-
-func freeNonNil(v unsafe.Pointer) {
-	if v != nil {
-		C.free(v)
-	}
-}
-
-func VariantTuple(v *glib.Variant, n int) []*glib.Variant {
-	_v := (*C.GVariant)(v.ToGVariant())
-
-	params := make([]*glib.Variant, n)
-
-	for i := 0; i < n; i++ {
-		params[i] = glib.TakeVariant(unsafe.Pointer(
-			C.g_variant_get_child_value(_v, C.gsize(i)),
-		))
-	}
-
-	return params
-}

@@ -222,6 +222,10 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 
 	pinged := rs.MentionCount > 0
 
+	if s.ChannelMuted(rs.ChannelID) {
+		unread = false
+	}
+
 	guild.busy.Lock()
 
 	if !unread {

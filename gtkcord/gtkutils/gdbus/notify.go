@@ -1,6 +1,5 @@
 package gdbus
 
-// #cgo pkg-config: glib-2.0 gio-2.0
 // #include <glib-2.0/glib.h>
 // #include <gio/gio.h>
 import "C"

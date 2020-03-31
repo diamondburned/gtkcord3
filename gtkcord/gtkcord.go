@@ -63,8 +63,10 @@ const (
 
 type Application struct {
 	*gtk.Application
+	Window *window.Container
+
 	Notifier *gdbus.Notifier
-	Window   *window.Container
+	MPRIS    *gdbus.MPRISWatcher
 
 	State *ningen.State
 
@@ -112,7 +114,9 @@ func (a *Application) Close() {
 
 func (a *Application) Activate() {
 	// Register the dbus connection:
-	a.Notifier = gdbus.NewNotifier(gdbus.FromApplication(&a.Application.Application))
+	conn := gdbus.FromApplication(&a.Application.Application)
+	a.Notifier = gdbus.NewNotifier(conn)
+	a.MPRIS = gdbus.NewMPRISWatcher(conn) // notify.go
 
 	// Activate the window singleton:
 	if err := window.WithApplication(a.Application); err != nil {
@@ -122,9 +126,6 @@ func (a *Application) Activate() {
 
 	a.leftCols = map[int]gtk.IWidget{}
 	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
-
-	// Pre-make some widgets but don't use them:
-	a.init()
 
 	// Use the spinner instead of the Leaflet:
 	s, _ := animations.NewSpinner(75)
@@ -182,6 +183,9 @@ func (a *Application) init() {
 
 func (a *Application) Ready(s *ningen.State) error {
 	a.State = s
+
+	// Make the main widgets:
+	semaphore.IdleMust(a.init)
 
 	// Store the token:
 	keyring.Set(s.Token)

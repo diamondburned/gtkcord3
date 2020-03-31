@@ -1,6 +1,8 @@
 package gtkcord
 
 import (
+	"fmt"
+
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
@@ -11,6 +13,7 @@ import (
 
 func (a *Application) bindNotifier() {
 	a.State.AddHandler(a.onMessageCreate)
+	a.MPRIS.OnMetadata = a.onMetadataChange
 }
 
 func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
@@ -56,5 +59,35 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 
 	if _, err := a.Notifier.Notify(notification); err != nil {
 		log.Errorln("Failed to notify:", err)
+	}
+}
+
+func (a *Application) onMetadataChange(m *gdbus.Metadata) {
+	if a.State == nil {
+		return
+	}
+
+	var status = discord.OnlineStatus
+
+	p, err := a.State.Presence(0, a.State.Ready.User.ID)
+	if err == nil {
+		status = p.Status
+	}
+
+	var artist = humanize.Strings(m.Artists)
+
+	data := gateway.UpdateStatusData{
+		Status: status,
+		AFK:    false,
+		Activities: []discord.Activity{{
+			Name:    artist,
+			Type:    discord.ListeningActivity,
+			Details: m.Title,
+			State:   fmt.Sprintf("%s (%s)", artist, m.Album),
+		}},
+	}
+
+	if err = a.State.Gateway.UpdateStatus(data); err != nil {
+		log.Errorln("Failed to update status:", err)
 	}
 }

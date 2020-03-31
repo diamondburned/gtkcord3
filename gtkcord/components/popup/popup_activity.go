@@ -60,22 +60,22 @@ func (a *UserPopupActivity) UpdateUnsafe(ac discord.Activity) {
 	switch ac.Type {
 	case discord.GameActivity:
 		a.Custom = false
-		a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
+		a.image(ac.ApplicationID, ac.Assets)
 		a.header("Playing " + ac.Name)
 
 	case discord.ListeningActivity:
 		a.Custom = false
-		a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
+		a.image(ac.ApplicationID, ac.Assets)
 		a.header("Listening to " + ac.Name)
 
 	case discord.StreamingActivity:
 		a.Custom = false
-		a.image(ac.ApplicationID, ac.Assets.LargeImage, ac.Assets.LargeText)
+		a.image(ac.ApplicationID, ac.Assets)
 		a.header("Streaming " + ac.Details)
 
 	case discord.CustomActivity:
 		a.Custom = true
-		a.image(0, "", "")
+		a.image(0, nil)
 		a.header(ningen.EmojiString(ac.Emoji) + " " + ac.State)
 
 		return
@@ -125,7 +125,13 @@ func (a *UserPopupActivity) header(name string) {
 	a.Header.SetMarkup(`<span size="smaller" weight="bold">` + name + `</span>`)
 }
 
-func (a *UserPopupActivity) image(id discord.Snowflake, asset, text string) {
+func (a *UserPopupActivity) image(id discord.Snowflake, assets *discord.ActivityAssets) {
+	var asset, text string
+	if assets != nil {
+		asset = assets.LargeImage
+		text = assets.LargeText
+	}
+
 	if asset == "" {
 		if a.Image != nil {
 			a.Remove(a.Image)
