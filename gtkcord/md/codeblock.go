@@ -342,7 +342,8 @@ func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser
 			return parser.Close
 		} else {
 			// No, treat the rest as text:
-			seg.Stop += length
+			seg.Stop = segment.Stop
+			r.Advance(segment.Stop - stop - 1)
 		}
 	}
 

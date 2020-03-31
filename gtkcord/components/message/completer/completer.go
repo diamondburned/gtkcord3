@@ -87,6 +87,7 @@ func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *S
 
 	listbox, _ := gtk.ListBoxNew()
 	listbox.Show()
+	listbox.SetAdjustment(scroll.GetVAdjustment())
 	listbox.SetFocusVAdjustment(scroll.GetVAdjustment())
 	gtkutils.InjectCSSUnsafe(listbox, "completer", "")
 
@@ -355,6 +356,7 @@ func (c *State) addCompletionEntry(w gtkutils.ExtendedWidget, text string) bool 
 
 	entry.ListBoxRow, _ = gtk.ListBoxRowNew()
 	entry.ListBoxRow.Add(w)
+	entry.ListBoxRow.SetFocusVAdjustment(c.Scroll.GetVAdjustment())
 
 	c.ListBox.Insert(entry, -1)
 	entry.ShowAll()

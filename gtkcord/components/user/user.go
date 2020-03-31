@@ -49,7 +49,7 @@ func New() *Container {
 	a.Show()
 	a.SetVAlign(gtk.ALIGN_CENTER)
 	a.SetHAlign(gtk.ALIGN_CENTER)
-	gtkutils.ImageSetIcon(a, "user-available", AvatarSize)
+	gtkutils.ImageSetIcon(a, "avatar-default-symbolic", AvatarSize)
 	gtkutils.Margin4(a, 2, 2, 8, 0)
 
 	s, _ := a.GetStyleContext()

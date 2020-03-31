@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 	"github.com/sasha-s/go-deadlock"
@@ -128,14 +129,16 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		// Add what's needed afterwards:
 		main.PackEnd(m.Input, false, false, 0)
 
-		// On any key-press, focus onto the input box:
-		m.Main.Connect("key-press-event", func(_ *gtk.Box, ev *gdk.Event) bool {
-			m.Focus()
-			// Pass the event in
-			m.Input.Input.Event(ev)
+		// On any primary key-press, focus onto the input box:
+		col.Connect("key-press-event", func(_ *glib.Object, ev *gdk.Event) bool {
+			if gtkutils.EventIsLeftClick(ev) {
+				m.Focus()
+				// Pass the event in
+				m.Input.Input.Event(ev)
+			}
 
-			// Stop the event from reaching the List:
-			return true
+			// Drain down the event;
+			return false
 		})
 	})
 
