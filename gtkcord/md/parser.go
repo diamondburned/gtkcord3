@@ -15,7 +15,7 @@ func BlockParsers() []util.PrioritizedValue {
 
 func InlineParsers() []util.PrioritizedValue {
 	return []util.PrioritizedValue{
-		util.Prioritized(emoji{}, 200),
+		util.Prioritized(&emoji{}, 200),
 		util.Prioritized(inline{}, 300),
 		util.Prioritized(mention{}, 400),
 		util.Prioritized(autolink{}, 500),

@@ -1,6 +1,7 @@
 package md
 
 import (
+	"bytes"
 	"regexp"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
@@ -53,7 +54,10 @@ func (e Emoji) EmojiURL() string {
 	return EmojiURL(string(e.ID), e.GIF)
 }
 
-type emoji struct{}
+type emoji struct {
+	searched bool // if a small/large check was done
+	large    bool
+}
 
 var emojiRegex = regexp.MustCompile(`<(a?):(.+?):(\d+)>`)
 
@@ -62,7 +66,7 @@ func (emoji) Trigger() []byte {
 	return []byte{'<'}
 }
 
-func (emoji) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
+func (state *emoji) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
 	match := matchInline(block, '<', '>')
 	if match == nil {
 		return nil
@@ -76,9 +80,31 @@ func (emoji) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.No
 	var emoji = &Emoji{
 		BaseInline: ast.BaseInline{},
 
-		GIF:  string(matches[1]) == "a",
-		Name: string(matches[2]),
-		ID:   string(matches[3]),
+		GIF:   string(matches[1]) == "a",
+		Name:  string(matches[2]),
+		ID:    string(matches[3]),
+		Large: state.large,
+	}
+
+	// Check if emojis should be small:
+	if !state.searched {
+		state.searched = true
+
+		// Get the entire text:
+		source := block.Source()
+
+		// Try and delete all emoji matches:
+		source = emojiRegex.ReplaceAll(source, nil)
+
+		// Trim spaces:
+		source = bytes.TrimSpace(source)
+
+		// Check if there are letters:
+		if len(source) == 0 {
+			// No, make our emojis big:
+			state.large = true
+			emoji.Large = true
+		}
 	}
 
 	return emoji
@@ -101,12 +127,12 @@ func (s *TagState) inlineEmojiTag() *gtk.TextTag {
 	return t
 }
 
-func (r *Renderer) insertEmoji(url string) {
+func (r *Renderer) insertEmoji(url string, large bool) {
 	// TODO
 	var sz = InlineEmojiSize
-	// if !s.hasText {
-	// 	sz = LargeEmojiSize
-	// }
+	if large {
+		sz = LargeEmojiSize
+	}
 
 	anchor := r.Buffer.CreateChildAnchor(r.Buffer.GetEndIter())
 

@@ -83,7 +83,7 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 
 	case *Emoji: // TODO
 		if enter {
-			r.insertEmoji(n.EmojiURL())
+			r.insertEmoji(n.EmojiURL(), n.Large)
 		}
 
 	case *Mention:
