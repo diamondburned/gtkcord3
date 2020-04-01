@@ -12,8 +12,12 @@ import (
 type MPRISWatcher struct {
 	*Connection
 
-	OnMetadata       func(m *Metadata)
-	OnPlaybackStatus func(playing bool)
+	// Last states
+	metadata Metadata
+	playing  bool
+
+	OnMetadata       func(m Metadata, playing bool)
+	OnPlaybackStatus func(m Metadata, playing bool)
 }
 
 // Metadata maps some fields from
@@ -27,10 +31,10 @@ type Metadata struct {
 func NewMPRISWatcher(c *Connection) *MPRISWatcher {
 	w := &MPRISWatcher{
 		Connection: c,
-		OnMetadata: func(m *Metadata) {
+		OnMetadata: func(m Metadata, playing bool) {
 			log.Println("MPRIS update:", m)
 		},
-		OnPlaybackStatus: func(playing bool) {
+		OnPlaybackStatus: func(m Metadata, playing bool) {
 			log.Println("Playing:", playing)
 		},
 	}
@@ -65,11 +69,24 @@ func NewMPRISWatcher(c *Connection) *MPRISWatcher {
 
 func (w *MPRISWatcher) onPlaybackStatusChange(vstring *C.GVariant) {
 	playing := variantString(vstring) == "Playing"
-	w.OnPlaybackStatus(playing)
+
+	w.playing = playing
+
+	// Don't update a zero-value
+	if w.metadata.Title == "" {
+		return
+	}
+
+	go w.OnPlaybackStatus(w.metadata, playing)
 }
 
 func (w *MPRISWatcher) onMetadataChange(array *C.GVariant) {
-	var meta Metadata
+	// Clear
+	w.metadata.Title = ""
+	w.metadata.Album = ""
+	w.metadata.Artists = w.metadata.Artists[:0]
+
+	w.playing = true
 
 	// array is a slice of dictionaries.
 
@@ -77,16 +94,16 @@ func (w *MPRISWatcher) onMetadataChange(array *C.GVariant) {
 	arrayIterKeyVariant(array, func(k string, v *C.GVariant) {
 		switch k {
 		case "xesam:title":
-			meta.Title = variantString(v)
+			w.metadata.Title = variantString(v)
 		case "xesam:album":
-			meta.Album = variantString(v)
+			w.metadata.Album = variantString(v)
 		case "xesam:artist":
 			arrayIter(v, func(v *C.GVariant) {
 				// We can probably get away with letting Go grow the slice:
-				meta.Artists = append(meta.Artists, variantString(v))
+				w.metadata.Artists = append(w.metadata.Artists, variantString(v))
 			})
 		}
 	})
 
-	w.OnMetadata(&meta)
+	go w.OnMetadata(w.metadata, w.playing)
 }

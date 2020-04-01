@@ -129,13 +129,19 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		// Add what's needed afterwards:
 		main.PackEnd(m.Input, false, false, 0)
 
-		// On any primary key-press, focus onto the input box:
-		col.Connect("key-press-event", func(_ *glib.Object, ev *gdk.Event) bool {
+		// On mouse-press, focus:
+		s.Connect("button-release-event", func(_ *gtk.ScrolledWindow, ev *gdk.Event) bool {
 			if gtkutils.EventIsLeftClick(ev) {
 				m.Focus()
-				// Pass the event in
-				m.Input.Input.Event(ev)
 			}
+			return false
+		})
+
+		// On any key-press, focus onto the input box:
+		col.Connect("key-press-event", func(_ *glib.Object, ev *gdk.Event) bool {
+			m.Focus()
+			// Pass the event in
+			m.Input.Input.Event(ev)
 
 			// Drain down the event;
 			return false

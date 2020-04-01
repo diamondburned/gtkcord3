@@ -67,6 +67,9 @@ func Connect(token string, onReady func(s *State)) (*State, error) {
 		return nil, errors.Wrap(err, "Failed to create a new Discord session")
 	}
 
+	// Disable retries:
+	s.Retries = 1
+
 	ningen := ningen(s)
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {

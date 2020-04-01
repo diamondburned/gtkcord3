@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"runtime/debug"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
@@ -15,6 +16,7 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	// Profiler
+	"net/http"
 	_ "net/http/pprof"
 )
 
@@ -119,10 +121,10 @@ func main() {
 		os.Exit(sig)
 	}
 
-	// if profile {
-	// 	// Profiler
-	// 	runtime.SetMutexProfileFraction(5)   // ???
-	// 	runtime.SetBlockProfileRate(5000000) // 5ms
-	// 	go http.ListenAndServe("localhost:6969", nil)
-	// }
+	if profile {
+		// Profiler
+		runtime.SetMutexProfileFraction(5)   // ???
+		runtime.SetBlockProfileRate(5000000) // 5ms
+		go http.ListenAndServe("localhost:6969", nil)
+	}
 }

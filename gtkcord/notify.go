@@ -13,7 +13,8 @@ import (
 
 func (a *Application) bindNotifier() {
 	a.State.AddHandler(a.onMessageCreate)
-	a.MPRIS.OnMetadata = a.onMetadataChange
+	a.MPRIS.OnMetadata = a.onMPRISEvent
+	a.MPRIS.OnPlaybackStatus = a.onMPRISEvent
 }
 
 func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
@@ -62,11 +63,33 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 	}
 }
 
-func (a *Application) onMetadataChange(m *gdbus.Metadata) {
+func (a *Application) onMPRISEvent(m gdbus.Metadata, playing bool) {
 	if a.State == nil {
 		return
 	}
 
+	// Are we playing?
+	if !playing || m.Title == "" {
+		a.updateStatus(nil)
+		return // no.
+	}
+
+	// Yes. Update.
+	a.updateMetadata(m)
+}
+
+func (a *Application) updateMetadata(m gdbus.Metadata) {
+	var artist = humanize.Strings(m.Artists)
+
+	a.updateStatus(&discord.Activity{
+		Name:    artist,
+		Type:    discord.ListeningActivity,
+		Details: m.Title,
+		State:   fmt.Sprintf("%s (%s)", artist, m.Album),
+	})
+}
+
+func (a *Application) updateStatus(activity *discord.Activity) {
 	var status = discord.OnlineStatus
 
 	p, err := a.State.Presence(0, a.State.Ready.User.ID)
@@ -74,17 +97,16 @@ func (a *Application) onMetadataChange(m *gdbus.Metadata) {
 		status = p.Status
 	}
 
-	var artist = humanize.Strings(m.Artists)
-
 	data := gateway.UpdateStatusData{
-		Status: status,
-		AFK:    false,
-		Activities: []discord.Activity{{
-			Name:    artist,
-			Type:    discord.ListeningActivity,
-			Details: m.Title,
-			State:   fmt.Sprintf("%s (%s)", artist, m.Album),
-		}},
+		Status:     status,
+		AFK:        false,
+		Activities: new([]discord.Activity),
+	}
+	*data.Activities = []discord.Activity{} // This needs to be a [] in the JSON.
+
+	// Because Discord is garbage.
+	if activity != nil {
+		*data.Activities = append(*data.Activities, *activity)
 	}
 
 	if err = a.State.Gateway.UpdateStatus(data); err != nil {

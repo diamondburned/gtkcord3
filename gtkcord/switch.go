@@ -13,22 +13,37 @@ import (
 )
 
 // SwitchToID returns true if it can find the channel.
-func (a *Application) SwitchToID(ch, guild discord.Snowflake) bool {
+func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 	var row *gtk.ListBoxRow
 
-	if g, _ := a.Guilds.FindByID(guild); g != nil {
-		semaphore.IdleMust(a.Guilds.ListBox.SelectRow, g.Row)
-		a.SwitchGuild(g)
+	guild, _ := a.Guilds.FindByID(guildID)
 
-		if channel := a.Channels.FindByID(ch); channel != nil {
+	semaphore.IdleMust(func() {
+		// Unselect everything first:
+		a.Guilds.UnselectAll(-1)
+		// Then select the row:
+		if guild != nil {
+			a.Guilds.ListBox.SelectRow(guild.Row)
+		} else {
+			a.Privates.List.SelectRow(a.Guilds.DMButton.ListBoxRow)
+		}
+	})
+
+	if guild != nil {
+		// Switch the channels view to the guild:
+		a.SwitchGuild(guild)
+
+		// Find the destination channel:
+		if channel := a.Channels.FindByID((chID)); channel != nil {
 			row = channel.Row
 		}
 
 	} else {
-		semaphore.IdleMust(a.Privates.List.SelectRow, a.Guilds.DMButton.ListBoxRow)
+		// Switch the channels away to the private ones:
 		a.SwitchDM()
 
-		if channel := a.Privates.FindByID(ch); channel != nil {
+		// Find the destination channel:
+		if channel := a.Privates.FindByID(chID); channel != nil {
 			row = channel.ListBoxRow
 		}
 	}

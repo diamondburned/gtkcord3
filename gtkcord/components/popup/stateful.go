@@ -251,7 +251,6 @@ func (s *StatefulPopupBody) Destroy() {
 		h()
 	}
 	s.UserPopupBody.Destroy()
-	s.UserPopupBody = nil
 }
 
 // thread-safe
