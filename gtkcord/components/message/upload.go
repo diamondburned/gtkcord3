@@ -41,6 +41,7 @@ func SpawnUploader(callback func(absolutePath []string)) {
 		defaultDir = glib.GetUserDataDir()
 	}
 
+	dialog.SetLocalOnly(false)
 	dialog.SetCurrentFolder(defaultDir)
 	dialog.SetSelectMultiple(true)
 

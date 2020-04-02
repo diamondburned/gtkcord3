@@ -95,7 +95,7 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 }
 
 func main() {
-	a, err := gtk.ApplicationNew("com.diamondburned.gtkcord", glib.APPLICATION_FLAGS_NONE)
+	a, err := gtk.ApplicationNew("com.github.diamondburned.gtkcord3", glib.APPLICATION_FLAGS_NONE)
 	if err != nil {
 		log.Fatalln("Failed to create a new *gtk.Application:", err)
 	}

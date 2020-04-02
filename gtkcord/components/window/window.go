@@ -16,18 +16,20 @@ type Container struct {
 	App   *gtk.Application
 	Accel *gtk.AccelGroup
 
-	Root   *gdk.Window
-	Widget gtk.IWidget
+	Screen    *gdk.Screen
+	Root      *gdk.Window
+	Clipboard *gtk.Clipboard
 
 	Header *Header
-
-	CSS       *gtk.CssProvider
-	Clipboard *gtk.Clipboard
+	Widget gtk.IWidget
 
 	// CursorDefault *gdk.Cursor
 	// CursorPointer *gdk.Cursor
 
 	Settings *gtk.Settings
+
+	// since files can be changed while the application is running:
+	fileCSS *gtk.CssProvider
 }
 
 func WithApplication(app *gtk.Application) error {
@@ -67,6 +69,7 @@ func WithApplication(app *gtk.Application) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get default screen")
 	}
+	Window.Screen = s
 
 	root, err := s.GetRootWindow()
 	if err != nil {
@@ -74,9 +77,8 @@ func WithApplication(app *gtk.Application) error {
 	}
 	Window.Root = root
 
-	if err := loadCSS(s); err != nil {
-		return errors.Wrap(err, "Failed to load CSS")
-	}
+	// Load CSS for the first time. The function works both ways.
+	ReloadCSS()
 
 	if err := animations.LoadCSS(s); err != nil {
 		return errors.Wrap(err, "Failed to load animations CSS")

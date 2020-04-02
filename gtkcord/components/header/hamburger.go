@@ -17,8 +17,9 @@ type MainHamburger struct {
 	gtkutils.ExtendedWidget
 	Button *gtk.MenuButton
 
-	State  *ningen.State
-	LogOut func()
+	State    *ningen.State
+	LogOut   func()
+	Settings func()
 }
 
 func NewMainHamburger() (*MainHamburger, error) {
@@ -98,9 +99,15 @@ func (h *MainHamburger) wrapHamburger(body *popup.UserPopupBody, destroy func())
 	statusBtn.SetProperty("menu-name", "status")
 	menu.Add(statusBtn)
 
+	propBtn := newButton("Properties", func() {
+		destroy()
+		h.Settings()
+	})
+	menu.Add(propBtn)
+
 	logoutBtn := newButton("Log Out", func() {
 		destroy()
-		go h.LogOut()
+		h.LogOut()
 	})
 	menu.Add(logoutBtn)
 

@@ -114,11 +114,11 @@ func KeyIsASCII(key uint) bool {
 	return key >= gdk.KEY_exclam && key <= gdk.KEY_asciitilde
 }
 
-type connector interface {
+type Connector interface {
 	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
 }
 
-func Connect(connector connector, event string, cb interface{}, data ...interface{}) {
+func Connect(connector Connector, event string, cb interface{}, data ...interface{}) {
 	semaphore.IdleMust(func() {
 		_, err := connector.Connect(event, cb, data...)
 		if err != nil {

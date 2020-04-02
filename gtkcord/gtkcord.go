@@ -177,7 +177,12 @@ func (a *Application) init() {
 
 	// Create a new Header:
 	h, _ := header.NewHeader()
-	h.Hamburger.LogOut = a.LogOut // bind
+	h.Hamburger.LogOut = func() {
+		go a.LogOut() // bind
+	}
+	h.Hamburger.Settings = func() {
+		a.spawnSettings()
+	}
 	a.Header = h
 }
 

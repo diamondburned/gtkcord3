@@ -12,6 +12,8 @@ import (
 type MPRISWatcher struct {
 	*Connection
 
+	enabled bool
+
 	// Last states
 	metadata Metadata
 	playing  bool
@@ -31,6 +33,7 @@ type Metadata struct {
 func NewMPRISWatcher(c *Connection) *MPRISWatcher {
 	w := &MPRISWatcher{
 		Connection: c,
+		enabled:    true,
 		OnMetadata: func(m Metadata, playing bool) {
 			log.Println("MPRIS update:", m)
 		},
@@ -44,6 +47,10 @@ func NewMPRISWatcher(c *Connection) *MPRISWatcher {
 		"PropertiesChanged", "/org/mpris/MediaPlayer2", "",
 		DBUS_SIGNAL_FLAGS_NONE,
 		func(_ *Connection, _, _, _, _ string, vparams *glib.Variant) {
+			if !w.enabled {
+				return
+			}
+
 			params := VariantTuple(vparams, 2)
 			if params[0].GetString() != "org.mpris.MediaPlayer2.Player" {
 				return
@@ -65,6 +72,16 @@ func NewMPRISWatcher(c *Connection) *MPRISWatcher {
 	)
 
 	return w
+}
+
+func (w *MPRISWatcher) SetEnabled(enabled bool) {
+	w.enabled = enabled
+
+	// Force pause if we're disabling:
+	if !enabled && w.playing {
+		w.playing = false
+		w.OnPlaybackStatus(w.metadata, false)
+	}
 }
 
 func (w *MPRISWatcher) onPlaybackStatusChange(vstring *C.GVariant) {
