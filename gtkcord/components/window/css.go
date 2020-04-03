@@ -191,7 +191,7 @@ var (
 // I don't like this:
 // list row:selected { box-shadow: inset 2px 0 0 0 white; }
 
-func ReloadCSS() {
+func initCSS() {
 	s := Window.Screen
 
 	stock, _ := gtk.CssProviderNew()
@@ -210,6 +210,15 @@ func ReloadCSS() {
 		log.Errorln("Failed to parse env var custom CSS:", err)
 	}
 
+	gtk.AddProviderForScreen(
+		s, env,
+		uint(gtk.STYLE_PROVIDER_PRIORITY_USER),
+	)
+}
+
+func ReloadCSS() {
+	s := Window.Screen
+
 	// Replace file CSS:
 	if Window.fileCSS != nil {
 		gtk.RemoveProviderForScreen(s, Window.fileCSS)
@@ -219,4 +228,9 @@ func ReloadCSS() {
 	if err := file.LoadFromPath(FileCSS); err != nil {
 		log.Errorln("Failed to parse file in "+FileCSS+":", err)
 	}
+
+	gtk.AddProviderForScreen(
+		s, file,
+		uint(gtk.STYLE_PROVIDER_PRIORITY_USER),
+	)
 }

@@ -28,12 +28,12 @@ func (a *Application) spawnSettings() {
 		}
 
 		// Apply anyway
-		a.applySettings(s)
+		a.applySettings(&s)
 	}
 	w.Show()
 }
 
-func (a *Application) applySettings(s settings.Settings) {
+func (a *Application) applySettings(s *settings.Settings) {
 	// Customizations
 	window.FileCSS = s.General.Customization.CSSFile
 	window.ReloadCSS()

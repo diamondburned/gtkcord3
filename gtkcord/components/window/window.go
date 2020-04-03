@@ -77,8 +77,8 @@ func WithApplication(app *gtk.Application) error {
 	}
 	Window.Root = root
 
-	// Load CSS for the first time. The function works both ways.
-	ReloadCSS()
+	// Load CSS for the first time.
+	initCSS()
 
 	if err := animations.LoadCSS(s); err != nil {
 		return errors.Wrap(err, "Failed to load animations CSS")

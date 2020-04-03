@@ -227,7 +227,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.rightTop.Add(message.author)
 	gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
 
-	timestampSize := AvatarSize - 1
+	timestampSize := AvatarSize - 2
 	message.timestamp.SetSizeRequest(timestampSize, -1)
 	message.timestamp.SetOpacity(0.5)
 	message.timestamp.SetYAlign(0.0)

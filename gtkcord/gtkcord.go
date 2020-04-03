@@ -140,6 +140,9 @@ func (a *Application) Activate() {
 	window.Resize(1200, 900)
 	window.SetTitle("gtkcord")
 	window.ShowAll()
+
+	// Apply settings:
+	a.applySettings(loadSettings())
 }
 
 func (a *Application) init() {

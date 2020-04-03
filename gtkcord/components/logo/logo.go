@@ -9,7 +9,7 @@ import (
 )
 
 func PNG() ([]byte, error) {
-	f, err := pkger.Open("/gtkcord/components/logo/logo.png")
+	f, err := pkger.Open("/logo.png")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to open logo")
 	}
