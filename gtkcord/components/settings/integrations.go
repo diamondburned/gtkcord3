@@ -16,7 +16,7 @@ func DefaultIntegrations() *Integrations {
 	return &Integrations{
 		RichPresence: RichPresence{
 			MPRIS:        true,
-			RichPresence: true,
+			RichPresence: false,
 		},
 		Plugins: Plugins{},
 	}
@@ -59,7 +59,8 @@ func (p *RichPresence) Initialize() {
 
 	rpcS, _ := gtk.SwitchNew()
 	rpcS.SetHAlign(gtk.ALIGN_END)
-	bindSwitch(rpcS, &p.RichPresence)
+	rpcS.SetSensitive(false) // WIP feature, TODO
+	// bindSwitch(rpcS, &p.RichPresence)
 
 	p.PreferencesGroup.Add(row(
 		"Rich Presence IPC",
