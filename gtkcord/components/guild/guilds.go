@@ -131,6 +131,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 
 			switch {
 			case index < 1:
+				g.UnselectAll(-1)
 				go g.DMButton.OnClick()
 				return
 			default:

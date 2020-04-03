@@ -456,18 +456,25 @@ func (m *Messages) cleanOldMessages() {
 
 	// Get the messages needed to be cleaned
 	cleanLen := len(m.messages) - m.fetch
-	cleaned := m.messages[:cleanLen]
 
-	// Clean the slice
-	m.messages = m.messages[cleanLen:]
-
-	// Destroy the messages:
+	// Destroy the messages before reslicing
 	semaphore.IdleMust(func() {
-		for i, r := range cleaned {
-			m.Messages.Remove(r.ListBoxRow)
-			cleaned[i] = nil
+		// Iterate from 0 to the oldest message to be kept:
+		for _, r := range m.messages[:cleanLen] {
+			m.Messages.Remove(r)
 		}
 	})
+
+	// Finally, clean the slice
+	m.messages = append(m.messages[:0], m.messages[cleanLen:]...)
+
+	// Apparently, Go's obscure slicihg behavior allows slicing to capacity, not
+	// length.
+	var excess = m.messages[len(m.messages) : len(m.messages)+cleanLen]
+	// Start setting them to nil for the GC to collect:
+	for i := range excess {
+		excess[i] = nil
+	}
 }
 
 func (m *Messages) Upsert(message *discord.Message) {

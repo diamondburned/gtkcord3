@@ -1,8 +1,6 @@
 package gtkcord
 
 import (
-	"fmt"
-
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
@@ -80,12 +78,16 @@ func (a *Application) onMPRISEvent(m gdbus.Metadata, playing bool) {
 
 func (a *Application) updateMetadata(m gdbus.Metadata) {
 	var artist = humanize.Strings(m.Artists)
+	var state = artist
+	if m.Album != "" {
+		state += " (" + m.Album + ")"
+	}
 
 	a.updateStatus(&discord.Activity{
 		Name:    artist,
 		Type:    discord.ListeningActivity,
 		Details: m.Title,
-		State:   fmt.Sprintf("%s (%s)", artist, m.Album),
+		State:   state,
 	})
 }
 

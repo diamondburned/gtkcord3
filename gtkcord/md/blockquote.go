@@ -28,7 +28,7 @@ func (b blockquote) process(reader text.Reader) bool {
 	// }
 
 	// Invalid behavior: >Thing
-	if !util.IsSpace(line[pos]) {
+	if pos < len(line) && !util.IsSpace(line[pos]) {
 		return false
 	}
 
