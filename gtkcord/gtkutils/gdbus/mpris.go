@@ -84,6 +84,10 @@ func (w *MPRISWatcher) SetEnabled(enabled bool) {
 	}
 }
 
+func (w *MPRISWatcher) IsEnabled() bool {
+	return w.enabled
+}
+
 func (w *MPRISWatcher) onPlaybackStatusChange(vstring *C.GVariant) {
 	playing := variantString(vstring) == "Playing"
 

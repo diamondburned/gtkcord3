@@ -88,6 +88,36 @@ func NewDynamicPopover(relative gtkutils.WidgetConnector, create PopoverCreator)
 	return p
 }
 
+func NewModelButton(markup string) *gtk.ModelButton {
+	// Create the button
+	btn, _ := gtk.ModelButtonNew()
+	btn.SetLabel(markup)
+
+	// Set the label
+	c, err := btn.GetChild()
+	if err != nil {
+		log.Errorln("Failed to get child of ModelButton")
+		return btn
+	}
+
+	l := &gtk.Label{Widget: *c}
+	l.SetUseMarkup(true)
+	l.SetHAlign(gtk.ALIGN_START)
+
+	btn.ShowAll()
+	return btn
+}
+
+func NewButton(markup string, callback func()) *gtk.ModelButton {
+	btn := NewModelButton(markup)
+	btn.Connect("button-release-event", func() bool {
+		callback()
+		return true
+	})
+
+	return btn
+}
+
 type UserPopup struct {
 	*Popover
 	*UserPopupBody

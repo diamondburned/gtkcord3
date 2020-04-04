@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/hamburger"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
@@ -20,7 +21,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
@@ -68,7 +68,12 @@ type Application struct {
 	Notifier *gdbus.Notifier
 	MPRIS    *gdbus.MPRISWatcher
 
+	Plugins []*Plugin
+
 	State *ningen.State
+
+	// Preferences window, hidden by default
+	Settings *Settings
 
 	// Main Grid, left is always LeftGrid - *gtk.Grid
 	Main  *handy.Leaflet // LeftGrid -- Right
@@ -100,8 +105,14 @@ type Application struct {
 
 // New is not thread-safe.
 func New(app *gtk.Application) *Application {
+	plugins, err := loadPlugins()
+	if err != nil {
+		log.Fatalln("Failed to load plugins:", err)
+	}
+
 	return &Application{
 		Application: app,
+		Plugins:     plugins,
 	}
 }
 
@@ -135,14 +146,15 @@ func (a *Application) Activate() {
 	h.SetTitle("Connecting to Discord.")
 	h.SetShowCloseButton(true)
 
+	// Create the preferences/settings window, which applies settings as a side
+	// effect:
+	a.Settings = a.makeSettings()
+
 	window.Display(s)
 	window.HeaderDisplay(h)
 	window.Resize(1200, 900)
 	window.SetTitle("gtkcord")
 	window.ShowAll()
-
-	// Apply settings:
-	a.applySettings(loadSettings())
 }
 
 func (a *Application) init() {
@@ -180,12 +192,6 @@ func (a *Application) init() {
 
 	// Create a new Header:
 	h, _ := header.NewHeader()
-	h.Hamburger.LogOut = func() {
-		go a.LogOut() // bind
-	}
-	h.Hamburger.Settings = func() {
-		a.spawnSettings()
-	}
 	a.Header = h
 }
 
@@ -206,17 +212,22 @@ func (a *Application) Ready(s *ningen.State) error {
 	semaphore.IdleMust(window.HeaderDisplay, a.Header) // restore header post login.
 	semaphore.IdleMust(window.Resize, 1200, 900)
 
-	// Set Markdown's highlighting theme
 	switch s.Ready.Settings.Theme {
 	case "dark":
-		md.ChangeStyle("monokai")
 		semaphore.IdleMust(window.PreferDarkTheme, true)
 	case "light":
-		md.ChangeStyle("monokailight")
 	}
 
-	// Have Hamburger use the state:
-	a.Header.Hamburger.UseState(s)
+	// Bind the hamburger:
+	hamburger.BindToButton(a.Header.Hamburger.Button, hamburger.Opts{
+		State: s,
+		Settings: func() {
+			a.Settings.Show()
+		},
+		LogOut: func() {
+			go a.LogOut()
+		},
+	})
 
 	// Bind stuff
 	a.bindActions()
@@ -351,6 +362,9 @@ func (a *Application) Ready(s *ningen.State) error {
 			},
 		})
 	})
+
+	// Finally, mark plugins as ready:
+	a.readyPlugins()
 
 	return nil
 }

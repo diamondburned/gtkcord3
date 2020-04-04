@@ -80,6 +80,15 @@ type StyleContextGetter interface {
 	GetStyleContext() (*gtk.StyleContext, error)
 }
 
+func WrapBox(orient gtk.Orientation, widgets ...gtk.IWidget) *gtk.Box {
+	var b, _ = gtk.BoxNew(orient, 0)
+	for _, w := range widgets {
+		b.Add(w)
+	}
+	b.ShowAll()
+	return b
+}
+
 func InjectCSSUnsafe(g StyleContextGetter, class, CSS string) {
 	style, _ := g.GetStyleContext()
 

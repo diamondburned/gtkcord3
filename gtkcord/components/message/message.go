@@ -235,6 +235,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.timestamp.SetMarginTop(2)
 	message.timestamp.SetMarginStart(AvatarPadding)
 	message.timestamp.SetMarginEnd(AvatarPadding)
+	message.timestamp.SetTooltipText(m.Timestamp.Format(time.Stamp))
 	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", "")
 
 	message.right.Add(message.rightTop)

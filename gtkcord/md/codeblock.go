@@ -2,6 +2,7 @@ package md
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"sync"
 
@@ -14,28 +15,29 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-var HighlightStyle = "monokai"
-
 var (
 	lexerMap = map[string]chroma.Lexer{}
 	lexerMut = sync.Mutex{}
 
 	fmtter = Formatter{}
-	style  = (*chroma.Style)(nil)
-	css    = map[chroma.TokenType]Tag{}
+
+	css      = map[chroma.TokenType]Tag{}
+	style    = ""
+	styleMut = sync.RWMutex{}
 )
 
-func ChangeStyle(styleName string) {
-	HighlightStyle = styleName
-	refreshStyle()
-}
+func ChangeStyle(styleName string) error {
+	s := styles.Get(styleName)
 
-func refreshStyle() {
-	style = styles.Get(HighlightStyle)
-	if style == nil {
-		panic("Unknown highlighting style: " + HighlightStyle)
+	styleMut.Lock()
+	defer styleMut.Unlock()
+
+	css = styleToCSS(s)
+
+	if s == styles.Fallback {
+		return errors.New("Unknown style")
 	}
-	css = styleToCSS(style)
+	return nil
 }
 
 func getLexer(_lang []byte) chroma.Lexer {
@@ -100,11 +102,13 @@ type Formatter struct {
 	highlightRanges [][2]int
 }
 
-func (f *Formatter) Reset() {
+func (f *Formatter) reset() {
 	f.highlightRanges = f.highlightRanges[:0]
 }
 
 func (f *Formatter) Format(r *Renderer, iterator chroma.Iterator) {
+	f.reset()
+
 	tokens := iterator.Tokens()
 	lines := chroma.SplitTokensIntoLines(tokens)
 	highlightIndex := 0
@@ -161,18 +165,20 @@ func (f *Formatter) shouldHighlight(highlightIndex, line int) (bool, bool) {
 }
 
 func (f *Formatter) styleAttr(tt chroma.TokenType) Tag {
+	styleMut.RLock()
+	defer styleMut.RUnlock()
+
 	if _, ok := css[tt]; !ok {
 		tt = tt.SubCategory()
 	}
 	if _, ok := css[tt]; !ok {
 		tt = tt.Category()
 	}
-
-	tg, ok := css[tt]
-	if !ok {
-		return EmptyTag
+	if t, ok := css[tt]; ok {
+		return t
 	}
-	return tg
+
+	return EmptyTag
 }
 
 func styleToCSS(style *chroma.Style) map[chroma.TokenType]Tag {
