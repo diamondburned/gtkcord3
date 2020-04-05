@@ -1,10 +1,12 @@
 package gtkcord
 
 import (
+	"os"
 	"path/filepath"
 	"plugin"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/config"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/pkg/errors"
 )
 
@@ -30,6 +32,24 @@ func (a *Application) readyPlugins() {
 	}
 }
 
+func (a *Application) removePlugin(path string) bool {
+	for i, plugin := range a.Plugins {
+		if plugin.Path == path {
+			// Remove from list
+			a.Plugins = append(a.Plugins[:i], a.Plugins[i+1:]...)
+
+			// Remove from the filesystem:
+			if err := os.Remove(path); err != nil {
+				log.Errorln("Failed to remove", path+":", err)
+			}
+
+			return true
+		}
+	}
+
+	return false
+}
+
 func loadPlugins() ([]*Plugin, error) {
 	files, path, err := config.MustRead("plugins")
 	if err != nil {
@@ -44,13 +64,13 @@ func loadPlugins() ([]*Plugin, error) {
 		}
 
 		p := loadPlugin(filepath.Join(path, f.Name()))
-		plugins = append(plugins, &p)
+		plugins = append(plugins, p)
 	}
 
 	return plugins, nil
 }
 
-func loadPlugin(path string) Plugin {
+func loadPlugin(path string) *Plugin {
 	p, err := plugin.Open(path)
 	if err != nil {
 		return newErrPlugin(path, err)
@@ -66,9 +86,10 @@ func loadPlugin(path string) Plugin {
 		return newErrPlugin(path, errors.New("Ready() is not func(*gtkcord.Application)"))
 	}
 
-	plugin := Plugin{
+	plugin := &Plugin{
 		Path:    path,
 		OnReady: rd,
+		Name:    filepath.Base(path),
 	}
 
 	// Everything beyond is optional
@@ -87,9 +108,9 @@ func loadPlugin(path string) Plugin {
 	return plugin
 }
 
-func newErrPlugin(path string, err error) Plugin {
-	return Plugin{
-		Name: "",
+func newErrPlugin(path string, err error) *Plugin {
+	return &Plugin{
+		Name: filepath.Base(path),
 		Path: path,
 		Err:  err,
 	}

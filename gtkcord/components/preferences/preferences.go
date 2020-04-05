@@ -5,6 +5,7 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 )
 
 func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
@@ -20,12 +21,18 @@ func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
 		gtkutils.TraverseWidget(r, func(w *gtk.Widget) {
 			// Labels have use-markup
 			if !gtkutils.HasProperty(w, "use-markup") {
-				log.Println("Not label")
 				return
 			}
 
-			w.SetProperty("use-markup", true)
+			label := &gtk.Label{Widget: *w}
+			label.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+			label.SetEllipsize(pango.ELLIPSIZE_NONE)
+			label.SetUseMarkup(true)
 		})
+	}
+
+	if w == nil {
+		return r
 	}
 
 	r.Add(w)
@@ -75,6 +82,12 @@ func BindEntry(e *gtk.Entry, s *string, updaters ...func()) {
 		}
 
 		*s = t
+		update(updaters)
+	})
+}
+
+func BindButton(b *gtk.Button, updaters ...func()) {
+	b.Connect("clicked", func() {
 		update(updaters)
 	})
 }

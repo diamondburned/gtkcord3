@@ -1,6 +1,8 @@
 package gtkcord
 
 import (
+	"strings"
+
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/preferences"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
@@ -204,7 +206,31 @@ func (s *Settings) initWidgets(a *Application) {
 
 			g.PreferencesGroup = handy.PreferencesGroupNew()
 			g.PreferencesGroup.SetTitle("Plugins")
-			g.PreferencesGroup.ShowAll()
+			g.PreferencesGroup.SetDescription("Plugins are read from ~/.config/gtkcord/plugins/")
+
+			// Render all plugins:
+			for i := 0; i < len(a.Plugins); i++ {
+				plugin := a.Plugins[i]
+
+				var desc = plugin.Author
+				if plugin.Err != nil {
+					err := strings.Split(plugin.Err.Error(), ": ")
+					desc = `<span color="red">` + err[len(err)-1] + `</span>`
+				}
+
+				remove, _ := gtk.ButtonNewFromIconName("user-trash-symbolic", gtk.ICON_SIZE_MENU)
+
+				row := preferences.Row(plugin.Name, desc, remove)
+				row.SetTooltipText(plugin.Path)
+				g.PreferencesGroup.Add(row)
+
+				preferences.BindButton(remove, func() {
+					// If the plugin is removed, remove it from the list too.
+					if a.removePlugin(plugin.Path) {
+						row.Destroy()
+					}
+				})
+			}
 		}
 
 		p.Add(p.RichPresence)
