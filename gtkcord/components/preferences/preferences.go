@@ -1,6 +1,7 @@
 package preferences
 
 import (
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
@@ -10,12 +11,37 @@ func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
 	r := handy.ActionRowNew()
 	r.SetTitle(title)
 	r.SetSubtitle(subtitle)
-	r.SetActivatableWidget(w)
+	r.Show()
+
+	// Set the proper orientation:
+	if w, err := r.GetChild(); err == nil {
+		w.SetProperty("orientation", gtk.ORIENTATION_HORIZONTAL)
+		// Set all labels to have markup:
+		gtkutils.TraverseWidget(r, func(w *gtk.Widget) {
+			// Labels have use-markup
+			if !gtkutils.HasProperty(w, "use-markup") {
+				log.Println("Not label")
+				return
+			}
+
+			w.SetProperty("use-markup", true)
+		})
+	}
+
 	r.Add(w)
-	r.ShowAll()
+
+	// Properly align the children:
+	if a, ok := w.(interface{ SetVAlign(gtk.Align) }); ok {
+		a.SetVAlign(gtk.ALIGN_CENTER)
+	}
+	if m, ok := w.(gtkutils.Marginator); ok {
+		m.SetMarginEnd(12)
+	}
 
 	return r
 }
+
+// func FileChooser()
 
 func BindSwitch(s *gtk.Switch, b *bool, updaters ...func()) {
 	s.SetActive(*b)

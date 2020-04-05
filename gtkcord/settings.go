@@ -1,10 +1,10 @@
 package gtkcord
 
 import (
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/preferences"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/config"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
@@ -18,6 +18,13 @@ type Settings struct {
 
 	General struct {
 		*handy.PreferencesPage `json:"-"`
+
+		Behavior struct {
+			*handy.PreferencesGroup `json:"-"`
+
+			// Embed message.Opts, which contains zerowidth and ontyping.
+			message.Opts
+		}
 
 		Customization struct {
 			*handy.PreferencesGroup `json:"-"`
@@ -76,6 +83,41 @@ func (s *Settings) initWidgets(a *Application) {
 		p.PreferencesPage.SetTitle("General")
 
 		{
+			g := &p.Behavior
+
+			g.PreferencesGroup = handy.PreferencesGroupNew()
+			g.PreferencesGroup.SetTitle("Behavior")
+
+			ontp, _ := gtk.SwitchNew()
+			preferences.BindSwitch(ontp, &g.InputOnTyping, func() {
+				// This might be called before Ready, so we should have this
+				// check.
+				if a.Messages != nil {
+					a.Messages.InputOnTyping = g.InputOnTyping
+				}
+			})
+
+			g.Add(preferences.Row(
+				"Send typing events",
+				"Announce that you're typing in a channel.",
+				ontp,
+			))
+
+			zwsp, _ := gtk.SwitchNew()
+			preferences.BindSwitch(zwsp, &g.InputZeroWidth, func() {
+				if a.Messages != nil {
+					a.Messages.InputZeroWidth = g.InputZeroWidth
+				}
+			})
+
+			g.Add(preferences.Row(
+				"Insert zero-width spaces",
+				"\"Obfuscate\" sent messages with zero-width spaces to reduce telemetry.",
+				zwsp,
+			))
+		}
+
+		{
 			g := &p.Customization
 
 			g.PreferencesGroup = handy.PreferencesGroupNew()
@@ -93,45 +135,41 @@ func (s *Settings) initWidgets(a *Application) {
 				window.ReloadCSS()
 			})
 
+			const cssInfo = `Refer to the <a href="` +
+				"https://developer.gnome.org/gtk3/stable/chap-css-overview.html" + `">` +
+				"Gtk+ CSS Overview" + "</a>" + "."
+
 			g.Add(preferences.Row(
 				"Custom CSS File",
-				"Refer to the Gtk+ CSS Reference Manual for more information.",
+				cssInfo,
 				cfileW,
 			))
-
-			hlErr, _ := gtk.LabelNew("")
-			hlErr.SetMarginStart(3)
-			hlErr.SetMarginEnd(3)
-
-			hlErrRevealer, _ := gtk.RevealerNew()
-			hlErrRevealer.SetRevealChild(false)
-			hlErrRevealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_LEFT)
-			hlErrRevealer.SetTransitionDuration(50)
-			hlErrRevealer.Add(hlErr)
 
 			hlEntry, _ := gtk.EntryNew()
 			hlEntry.SetHExpand(true)
 			hlEntry.SetPlaceholderText("Fallback highlighting")
 			preferences.BindEntry(hlEntry, &g.HighlightStyle, func() {
 				if err := md.ChangeStyle(g.HighlightStyle); err != nil {
-					// shitty padding at the end
-					hlErr.SetMarkup(`<span color="red">` + err.Error() + `</span>`)
-					hlErrRevealer.SetRevealChild(true)
+					// shitty error icon at the end
+					hlEntry.SetIconFromIconName(gtk.ENTRY_ICON_SECONDARY, "dialog-error")
+					hlEntry.SetIconTooltipText(gtk.ENTRY_ICON_SECONDARY, err.Error())
 				} else {
-					hlErrRevealer.SetRevealChild(false)
+					hlEntry.RemoveIcon(gtk.ENTRY_ICON_SECONDARY)
 				}
 			})
 
+			const schemeInfo = `Refer to the <a href="` +
+				"https://xyproto.github.io/splash/docs/all.html" + `">` +
+				"Chroma Style Gallery" + "</a>" + "."
+
 			g.Add(preferences.Row(
 				"Highlight color scheme",
-				"Refer to https://xyproto.github.io/splash/docs/all.html",
-				gtkutils.WrapBox(
-					gtk.ORIENTATION_HORIZONTAL,
-					hlEntry, hlErrRevealer,
-				),
+				schemeInfo,
+				hlEntry,
 			))
 		}
 
+		p.Add(p.Behavior)
 		p.Add(p.Customization)
 	}
 
@@ -183,6 +221,7 @@ func (s *Settings) initWidgets(a *Application) {
 
 func (a *Application) makeSettings() *Settings {
 	s := &Settings{}
+	s.General.Behavior.InputOnTyping = true
 	s.General.Customization.HighlightStyle = "monokai"
 	s.Integrations.RichPresence.MPRIS = true
 

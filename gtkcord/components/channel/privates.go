@@ -2,7 +2,6 @@ package channel
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -11,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type PrivateChannels struct {
@@ -25,7 +25,7 @@ type PrivateChannels struct {
 	// Channels map[discord.Snowflake]*PrivateChannel
 	Channels map[string]*PrivateChannel
 
-	busy  sync.RWMutex
+	busy  deadlock.RWMutex
 	state *ningen.State
 
 	OnSelect func(pm *PrivateChannel)

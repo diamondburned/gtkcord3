@@ -184,7 +184,7 @@ const CSS = `
 `
 
 var (
-	CustomCSS string // raw CSS
+	CustomCSS string // raw CSS, once
 	FileCSS   string // path
 )
 
@@ -227,7 +227,10 @@ func ReloadCSS() {
 	file, _ := gtk.CssProviderNew()
 	if err := file.LoadFromPath(FileCSS); err != nil {
 		log.Errorln("Failed to parse file in "+FileCSS+":", err)
+		return
 	}
+
+	Window.fileCSS = file
 
 	gtk.AddProviderForScreen(
 		s, file,

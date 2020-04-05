@@ -1,8 +1,6 @@
 package channel
 
 import (
-	"sync"
-
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
@@ -12,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -34,7 +33,7 @@ type Channels struct {
 	Channels []*Channel
 	Selected *Channel
 
-	busy  sync.RWMutex
+	busy  deadlock.RWMutex
 	state *ningen.State
 
 	OnSelect func(ch *Channel)

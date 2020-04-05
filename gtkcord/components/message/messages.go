@@ -23,6 +23,7 @@ const scrollMinDelta = 500
 var MaxMessageWidth = 750
 
 type Messages struct {
+	Opts
 	gtkutils.ExtendedWidget
 	channelID moreatomic.Snowflake
 	guildID   moreatomic.Snowflake
@@ -48,9 +49,19 @@ type Messages struct {
 	Input *Input
 }
 
-func NewMessages(s *ningen.State) (*Messages, error) {
+type Opts struct {
+	// Whether or not the sent messages should be "obfuscated" with zero-width
+	// space characters, which avoids telemetry somewhat.
+	InputZeroWidth bool `json:"zero_width"` // true
+
+	// Whether or not gtkcord should send typing events to the Discord server
+	// and announce it.
+	InputOnTyping bool `json:"on_typing"` // true
+}
+
+func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 	// guildID == 1 is a hack to fix DM.
-	m := &Messages{c: s, fetch: s.Store.MaxMessages(), guildID: 1}
+	m := &Messages{Opts: opts, c: s, fetch: s.Store.MaxMessages(), guildID: 1}
 
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)

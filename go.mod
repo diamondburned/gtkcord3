@@ -7,7 +7,7 @@ require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/diamondburned/arikawa v0.1.6-0.20200401034556-b5f7af70f347
-	github.com/diamondburned/handy v0.0.0-20200402023538-3f3d2eefa213
+	github.com/diamondburned/handy v0.0.0-20200405001554-1cdc15eec9a8
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
 	github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd

@@ -22,21 +22,21 @@ var (
 	fmtter = Formatter{}
 
 	css      = map[chroma.TokenType]Tag{}
-	style    = ""
 	styleMut = sync.RWMutex{}
 )
 
 func ChangeStyle(styleName string) error {
 	s := styles.Get(styleName)
 
+	// styleName == "" => no highlighting, not an error
+	if s == styles.Fallback && styleName != "" {
+		return errors.New("Unknown style")
+	}
+
 	styleMut.Lock()
 	defer styleMut.Unlock()
 
 	css = styleToCSS(s)
-
-	if s == styles.Fallback {
-		return errors.New("Unknown style")
-	}
 	return nil
 }
 
@@ -268,6 +268,9 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 		return nil, parser.NoChildren
 	}
 
+	// Advance through the backticks
+	r.Advance(oFenceLength)
+
 	var node = ast.NewFencedCodeBlock(nil)
 
 	// If this isn't the last thing in the line: (```<language>)
@@ -277,44 +280,32 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 		// If not white-space?
 		if len(rest) > 0 {
 			infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
-			if infoStart != infoStop {
-				switch {
-				case bytes.HasSuffix(rest, []byte("```")):
-					// Single line code:
-					seg := text.NewSegment(infoStart, infoStop)
-					seg.Stop -= 3 // len("```")
-					node.Lines().Append(seg)
-
-				case bytes.IndexByte(bytes.TrimSpace(rest), ' ') == -1:
-					// Account for the trailing whitespaces:
-					left := util.TrimLeftSpaceLength(rest)
-					right := util.TrimRightSpaceLength(rest)
-					// If value does not contain spaces, it's probably the language
-					// part.
-					if left < right {
-						node.Info = ast.NewTextSegment(
-							text.NewSegment(infoStart+left, infoStop-right),
-						)
-					}
-
-				default:
-					// Invalid codeblock, but we're parsing it anyway. It will
-					// just render the entire thing as a codeblock according to
-					// CommonMark specs.
-					node.Lines().Append(text.NewSegment(infoStart, infoStop))
+			if infoStart != infoStop && bytes.IndexByte(bytes.TrimSpace(rest), '\n') > -1 {
+				// Account for the trailing whitespaces:
+				left := util.TrimLeftSpaceLength(rest)
+				right := util.TrimRightSpaceLength(rest)
+				// If value does not contain spaces, it's probably the language
+				// part.
+				if left < right {
+					seg := text.NewSegment(infoStart+left, infoStop-right)
+					node.Info = ast.NewTextSegment(seg)
+					r.Advance(seg.Len())
 				}
 			}
 		}
 	}
 
 	pc.Set(fencedCodeBlockInfoKey, &fenceData{findent, oFenceLength, node})
-	r.Advance(segment.Len() - pos)
 
 	return node, parser.NoChildren
 }
 
 func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	line, segment := r.PeekLine()
+	if len(line) == 0 {
+		return parser.Close
+	}
+
 	fdata := pc.Get(fencedCodeBlockInfoKey).(*fenceData)
 	_, pos := util.IndentWidth(line, r.LineOffset())
 

@@ -264,7 +264,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Messages
 
-	m, err := message.NewMessages(s)
+	m, err := message.NewMessages(s, a.Settings.General.Behavior.Opts)
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}
