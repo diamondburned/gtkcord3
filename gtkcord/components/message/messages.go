@@ -337,18 +337,18 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
+	lastID := m.LastID()
+	if !lastID.Valid() {
+		return
+	}
+
+	if r.LastMessageID == lastID {
+		return
+	}
+
 	// Run this in a goroutine to avoid the mutex acquire from locking the UI
 	// thread. Since goroutines are cheap, this isn't a huge issue.
 	go func() {
-		lastID := m.LastID()
-		if !lastID.Valid() {
-			return
-		}
-
-		if r.LastMessageID == lastID {
-			return
-		}
-
 		// Find the latest message and ack it:
 		m.c.MarkRead(chID, lastID)
 	}()

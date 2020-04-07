@@ -9,6 +9,31 @@ import (
 	"github.com/pkg/errors"
 )
 
+const SwitchFade = 200 // 200ms to fade between main view and loading screen.
+
+func newStack() (*gtk.Stack, error) {
+	s, err := gtk.StackNew()
+	if err != nil {
+		return nil, err
+	}
+	s.Show()
+	s.SetTransitionDuration(SwitchFade)
+	s.SetTransitionType(gtk.STACK_TRANSITION_TYPE_CROSSFADE)
+	return s, nil
+}
+
+func stackRemove(s *gtk.Stack, name string) {
+	if w := s.GetChildByName(name); w != nil {
+		s.Remove(w)
+	}
+}
+
+func stackSet(s *gtk.Stack, name string, w gtk.IWidget) {
+	stackRemove(s, name)
+	s.AddNamed(w, name)
+	s.SetVisibleChildName(name)
+}
+
 var Window *Container
 
 type Container struct {
@@ -21,7 +46,7 @@ type Container struct {
 	Clipboard *gtk.Clipboard
 
 	Header *Header
-	Widget gtk.IWidget
+	Main   *gtk.Stack
 
 	// CursorDefault *gdk.Cursor
 	// CursorPointer *gdk.Cursor
@@ -30,6 +55,9 @@ type Container struct {
 
 	// since files can be changed while the application is running:
 	fileCSS *gtk.CssProvider
+
+	// loading = true when NowLoading is called.
+	loading bool
 }
 
 func WithApplication(app *gtk.Application) error {
@@ -105,6 +133,19 @@ func WithApplication(app *gtk.Application) error {
 		return errors.Wrap(err, "Failed to make a headerbar")
 	}
 
+	// Make the main view: the stack.
+	main, err := newStack()
+	if err != nil {
+		return errors.Wrap(err, "Failed to make stack")
+	}
+	Window.Main = main
+
+	// Add the stack into the window:
+	w.Add(main)
+
+	// Play the loading animation:
+	NowLoading()
+
 	// Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
 	// if err != nil {
 	// 	return errors.Wrap(err, "Failed to create a default cursor")
@@ -145,12 +186,11 @@ func Resize(w, h int) {
 }
 
 func Display(w gtk.IWidget) {
-	if Window.Widget != nil {
-		Window.Window.Remove(Window.Widget)
+	// Check if loading:
+	if Window.loading {
+		stackRemove(Window.Main, "loading")
 	}
-
-	Window.Widget = w
-	Window.Window.Add(w)
+	stackSet(Window.Main, "main", w)
 }
 
 func Show() {

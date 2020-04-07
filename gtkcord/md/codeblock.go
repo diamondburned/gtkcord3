@@ -75,7 +75,6 @@ func (r *Renderer) renderCodeBlock(node *ast.FencedCodeBlock, source []byte) {
 
 	if lexer == nil {
 		lexer = lexers.Fallback
-		code = lang
 	}
 
 	for i := 0; i < node.Lines().Len(); i++ {
@@ -280,7 +279,7 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 		// If not white-space?
 		if len(rest) > 0 {
 			infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
-			if infoStart != infoStop && bytes.IndexByte(bytes.TrimSpace(rest), '\n') > -1 {
+			if infoStart < infoStop && bytes.IndexByte(rest, '\n') > -1 {
 				// Account for the trailing whitespaces:
 				left := util.TrimLeftSpaceLength(rest)
 				right := util.TrimRightSpaceLength(rest)
@@ -289,7 +288,7 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 				if left < right {
 					seg := text.NewSegment(infoStart+left, infoStop-right)
 					node.Info = ast.NewTextSegment(seg)
-					r.Advance(seg.Len())
+					r.Advance(infoStop - infoStart)
 				}
 			}
 		}

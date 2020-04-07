@@ -77,6 +77,11 @@ func Connect(token string, onReady func(s *State)) (*State, error) {
 		onReady(ningen)
 	})
 
+	// Treat resumed the same as ready:
+	s.AddHandler(func(r *gateway.ResumedEvent) {
+		onReady(ningen)
+	})
+
 	// s.Gateway.OP = make(chan *gateway.OP)
 	// go func() {
 	// 	for ev := range s.Gateway.OP {

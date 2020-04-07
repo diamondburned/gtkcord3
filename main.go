@@ -111,14 +111,14 @@ func main() {
 		g.Close()
 	})
 
-	if sig := a.Run(os.Args); sig > 0 {
-		os.Exit(sig)
-	}
-
 	if profile {
 		// Profiler
 		runtime.SetMutexProfileFraction(5)   // ???
 		runtime.SetBlockProfileRate(5000000) // 5ms
 		go http.ListenAndServe("localhost:6969", nil)
+	}
+
+	if sig := a.Run(os.Args); sig > 0 {
+		os.Exit(sig)
 	}
 }

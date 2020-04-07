@@ -52,8 +52,17 @@ func Insert(into string) string {
 			}
 
 		case ' ':
+			// Set paused to false, as we know spaces never happen inside <> or
+			// a URL.
+			if paused {
+				paused = false
+			}
+
 			// Skip spaces.
 			continue
+
+		case 'h': // [h]ttp
+
 		}
 
 		// Don't obfuscate if paused is true. This could be that we're in a

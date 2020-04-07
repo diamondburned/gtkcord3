@@ -60,6 +60,8 @@ func wrapHamburger(body *popup.UserPopupBody, destroy func(), opts Opts) {
 	stack, _ := gtk.StackNew()
 	stack.AddNamed(menu, "main")
 	stack.AddNamed(newStatusPage(opts.State, destroy), "status")
+	stack.SetTransitionDuration(150)
+	stack.SetTransitionType(gtk.STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT)
 	stack.Show()
 	main.Add(stack)
 

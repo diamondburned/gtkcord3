@@ -9,7 +9,6 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/hamburger"
@@ -117,6 +116,9 @@ func New(app *gtk.Application) *Application {
 }
 
 func (a *Application) Close() {
+	// Mark application as exited:
+	a.Application = nil
+
 	// Close session on exit:
 	if a.State != nil {
 		a.State.Close()
@@ -138,23 +140,13 @@ func (a *Application) Activate() {
 	a.leftCols = map[int]gtk.IWidget{}
 	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
 
-	// Use the spinner instead of the Leaflet:
-	s, _ := animations.NewSpinner(75)
-
-	// Use a custom header instead of the actual Header:
-	h, _ := gtk.HeaderBarNew()
-	h.SetTitle("Connecting to Discord.")
-	h.SetShowCloseButton(true)
+	// Set the window specs:
+	window.Resize(1200, 900)
+	window.SetTitle("gtkcord")
 
 	// Create the preferences/settings window, which applies settings as a side
 	// effect:
 	a.Settings = a.makeSettings()
-
-	window.Display(s)
-	window.HeaderDisplay(h)
-	window.Resize(1200, 900)
-	window.SetTitle("gtkcord")
-	window.ShowAll()
 }
 
 func (a *Application) init() {
@@ -196,10 +188,24 @@ func (a *Application) init() {
 }
 
 func (a *Application) Ready(s *ningen.State) error {
+	// Acquire the mutex:
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
 	a.State = s
 
-	// Make the main widgets:
-	semaphore.IdleMust(a.init)
+	// When the websocket closes, the screen must be changed to a busy one. The
+	// websocket may close if it's disconnected unexpectedly.
+	s.Gateway.AfterClose = func(error) {
+		// Is the application already dead?
+		if a.Application == nil {
+			return
+		}
+
+		// Run this asynchronously. This guarantees that the UI thread would
+		// never be hardlocked.
+		semaphore.Async(window.NowLoading)
+	}
 
 	// Store the token:
 	keyring.Set(s.Token)
@@ -209,8 +215,12 @@ func (a *Application) Ready(s *ningen.State) error {
 		log.Errorln(err)
 	}
 
-	semaphore.IdleMust(window.HeaderDisplay, a.Header) // restore header post login.
-	semaphore.IdleMust(window.Resize, 1200, 900)
+	semaphore.IdleMust(func() {
+		// Make the main widgets:
+		a.init()
+		window.HeaderDisplay(a.Header) // restore header post login.
+		window.Resize(1200, 900)
+	})
 
 	switch s.Ready.Settings.Theme {
 	case "dark":
@@ -386,11 +396,8 @@ func (a *Application) LogOut() {
 	// Then we delete the keyrings:
 	keyring.Delete()
 
-	// Then we reinitialize some widgets:
-	a.init()
-
 	// Then we call the login dialog and exit without waiting:
-	go semaphore.IdleMust(func() {
+	semaphore.Async(func() {
 		l := login.NewLogin(func(s *ningen.State) {
 			if err := a.Ready(s); err != nil {
 				log.Fatalln("Failed to re-login:", err)
