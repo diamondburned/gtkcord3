@@ -127,10 +127,10 @@ func (s *TagState) inlineEmojiTag() *gtk.TextTag {
 	return t
 }
 
-func (r *Renderer) insertEmoji(url string, large bool) {
+func (r *Renderer) insertEmoji(e *Emoji) {
 	// TODO
 	var sz = InlineEmojiSize
-	if large {
+	if e.Large {
 		sz = LargeEmojiSize
 	}
 
@@ -138,15 +138,18 @@ func (r *Renderer) insertEmoji(url string, large bool) {
 
 	img, _ := gtk.ImageNew()
 	img.Show()
+	img.SetTooltipText(e.Name)
 	img.SetSizeRequest(sz, 10) // 10 is the minimum height
 	img.SetProperty("yalign", 1.0)
 	gtkutils.ImageSetIcon(img, "image-missing", sz)
 
 	r.View.AddChildAtAnchor(img, anchor)
 
+	url := e.EmojiURL() + "?size=64"
+
 	go func() {
-		if err := cache.SetImageScaled(url+"?size=64", img, sz, sz); err != nil {
-			log.Errorln("Markdown: Failed to GET " + url)
+		if err := cache.SetImageScaled(url, img, sz, sz); err != nil {
+			log.Errorln("Markdown: Failed to GET "+url+":", err)
 		}
 	}()
 }

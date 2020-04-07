@@ -20,5 +20,6 @@ func LoadEnvs() {
 
 	if os.Getenv("GTKCORD_QUIET") == "0" {
 		log.Quiet = false
+		profile = true
 	}
 }

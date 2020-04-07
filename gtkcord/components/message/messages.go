@@ -23,6 +23,7 @@ const scrollMinDelta = 500
 var MaxMessageWidth = 750
 
 type Messages struct {
+	Opts
 	gtkutils.ExtendedWidget
 	channelID moreatomic.Snowflake
 	guildID   moreatomic.Snowflake
@@ -48,9 +49,19 @@ type Messages struct {
 	Input *Input
 }
 
-func NewMessages(s *ningen.State) (*Messages, error) {
+type Opts struct {
+	// Whether or not the sent messages should be "obfuscated" with zero-width
+	// space characters, which avoids telemetry somewhat.
+	InputZeroWidth bool `json:"zero_width"` // true
+
+	// Whether or not gtkcord should send typing events to the Discord server
+	// and announce it.
+	InputOnTyping bool `json:"on_typing"` // true
+}
+
+func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 	// guildID == 1 is a hack to fix DM.
-	m := &Messages{c: s, fetch: s.Store.MaxMessages(), guildID: 1}
+	m := &Messages{Opts: opts, c: s, fetch: s.Store.MaxMessages(), guildID: 1}
 
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
@@ -129,13 +140,19 @@ func NewMessages(s *ningen.State) (*Messages, error) {
 		// Add what's needed afterwards:
 		main.PackEnd(m.Input, false, false, 0)
 
-		// On any primary key-press, focus onto the input box:
-		col.Connect("key-press-event", func(_ *glib.Object, ev *gdk.Event) bool {
+		// On mouse-press, focus:
+		s.Connect("button-release-event", func(_ *gtk.ScrolledWindow, ev *gdk.Event) bool {
 			if gtkutils.EventIsLeftClick(ev) {
 				m.Focus()
-				// Pass the event in
-				m.Input.Input.Event(ev)
 			}
+			return false
+		})
+
+		// On any key-press, focus onto the input box:
+		col.Connect("key-press-event", func(_ *glib.Object, ev *gdk.Event) bool {
+			m.Focus()
+			// Pass the event in
+			m.Input.Input.Event(ev)
 
 			// Drain down the event;
 			return false
@@ -320,18 +337,18 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
+	lastID := m.LastID()
+	if !lastID.Valid() {
+		return
+	}
+
+	if r.LastMessageID == lastID {
+		return
+	}
+
 	// Run this in a goroutine to avoid the mutex acquire from locking the UI
 	// thread. Since goroutines are cheap, this isn't a huge issue.
 	go func() {
-		lastID := m.LastID()
-		if !lastID.Valid() {
-			return
-		}
-
-		if r.LastMessageID == lastID {
-			return
-		}
-
 		// Find the latest message and ack it:
 		m.c.MarkRead(chID, lastID)
 	}()
@@ -450,18 +467,25 @@ func (m *Messages) cleanOldMessages() {
 
 	// Get the messages needed to be cleaned
 	cleanLen := len(m.messages) - m.fetch
-	cleaned := m.messages[:cleanLen]
 
-	// Clean the slice
-	m.messages = m.messages[cleanLen:]
-
-	// Destroy the messages:
+	// Destroy the messages before reslicing
 	semaphore.IdleMust(func() {
-		for i, r := range cleaned {
-			m.Messages.Remove(r.ListBoxRow)
-			cleaned[i] = nil
+		// Iterate from 0 to the oldest message to be kept:
+		for _, r := range m.messages[:cleanLen] {
+			m.Messages.Remove(r)
 		}
 	})
+
+	// Finally, clean the slice
+	m.messages = append(m.messages[:0], m.messages[cleanLen:]...)
+
+	// Apparently, Go's obscure slicihg behavior allows slicing to capacity, not
+	// length.
+	var excess = m.messages[len(m.messages) : len(m.messages)+cleanLen]
+	// Start setting them to nil for the GC to collect:
+	for i := range excess {
+		excess[i] = nil
+	}
 }
 
 func (m *Messages) Upsert(message *discord.Message) {

@@ -49,7 +49,7 @@ func NewHeader() (*Header, error) {
 	left.SetCustomTitle(empty())
 	l.Add(left)
 
-	hamburger, err := NewMainHamburger()
+	hamburger, err := newMainHamburger()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create hamburger")
 	}

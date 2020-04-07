@@ -48,6 +48,8 @@ func NewChannelInfo(ch discord.Channel) *ChannelInfo {
 
 	desc, _ := gtk.TextViewNew()
 	desc.Show()
+	desc.SetEditable(false)
+	desc.SetCursorVisible(false)
 	desc.SetHExpand(true)
 	desc.SetWrapMode(gtk.WRAP_WORD_CHAR)
 	gtkutils.Margin4(desc, 0, CommonMargin, CommonMargin, CommonMargin)

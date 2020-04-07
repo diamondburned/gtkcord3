@@ -9,10 +9,12 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-var application *gtkcord.Application
+var (
+	Name   = "Example plugin"
+	Author = "Bluskript"
+)
 
 func Ready(a *gtkcord.Application) {
-	application = a
 	a.State.AddHandler(onTypingStart)
 	semaphore.IdleMust(func() {
 		a.Channels.Main.Add(pluginButton())
@@ -20,7 +22,7 @@ func Ready(a *gtkcord.Application) {
 }
 
 func pluginButton() *gtk.Button {
-	// Gtk errors can be ignored, things will SEGFAULT on their own anyway.
+	// Gtk errors can be ignored, things will panic on their own anyway.
 	pb, _ := gtk.ButtonNew()
 	pb.SetLabel("BOTTOM TEXT")
 	pb.SetSizeRequest(128, 128)

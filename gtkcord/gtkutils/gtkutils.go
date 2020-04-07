@@ -2,6 +2,7 @@ package gtkutils
 
 import (
 	"html"
+	"unsafe"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -43,16 +44,29 @@ type WidgetSizeRequester interface {
 	SetHExpand(bool)
 }
 
+type Namer interface {
+	GetName() (string, error)
+	SetName(string)
+}
+
 type Container interface {
 	gtk.IWidget
 	Add(gtk.IWidget)
 	Remove(gtk.IWidget)
+	GetChildren() *glib.List
+}
+
+type Object interface {
+	GetProperty(string) (interface{}, error)
+	GetPropertyType(string) (glib.Type, error)
+	SetProperty(string, interface{}) error
 }
 
 // Safe-guard
 var _ ExtendedWidget = (*gtk.Box)(nil)
 var _ WidgetDestroyer = (*gtk.Box)(nil)
 var _ WidgetConnector = (*gtk.Box)(nil)
+var _ Object = (*glib.Object)(nil)
 
 type Marginator interface {
 	SetMarginStart(int)
@@ -76,8 +90,72 @@ func Margin(w Marginator, sz int) {
 	Margin2(w, sz, sz)
 }
 
+func AsContainer(w gtk.IWidget) *gtk.Container {
+	widget := w.ToWidget()
+	// Check the property that only Container has:
+	if !HasProperty(widget, "border-width") {
+		return nil
+	}
+	return &gtk.Container{Widget: *widget}
+}
+
+func NthChildren(container Container, i int) *gtk.Widget {
+	list := container.GetChildren()
+	if list == nil {
+		return nil
+	}
+	v := list.NthData(0)
+	if v == nil {
+		return nil
+	}
+	if w, ok := v.(gtk.IWidget); ok {
+		log.Println("NthChildren is widget")
+		return w.ToWidget()
+	}
+	return &gtk.Widget{
+		InitiallyUnowned: glib.InitiallyUnowned{
+			Object: glib.Take(v.(unsafe.Pointer)),
+		},
+	}
+}
+
+func HasProperty(obj Object, name string) bool {
+	t, err := obj.GetPropertyType(name)
+	return err == nil && t != glib.TYPE_INVALID
+}
+
+// fn() == true => break
+func TraverseWidget(container Container, fn func(*gtk.Widget)) {
+	list := container.GetChildren()
+	if list == nil {
+		return
+	}
+	list.Foreach(func(v interface{}) {
+		wd, ok := v.(gtk.IWidget)
+		if !ok {
+			return
+		}
+
+		fn(wd.ToWidget())
+
+		// Recurse
+		if c := AsContainer(wd); c != nil {
+			TraverseWidget(c, fn)
+		}
+	})
+}
+
 type StyleContextGetter interface {
 	GetStyleContext() (*gtk.StyleContext, error)
+}
+
+func WrapBox(orient gtk.Orientation, widgets ...gtk.IWidget) *gtk.Box {
+	var b, _ = gtk.BoxNew(orient, 0)
+	for _, w := range widgets {
+		b.Add(w)
+	}
+	b.ShowAll()
+	return b
 }
 
 func InjectCSSUnsafe(g StyleContextGetter, class, CSS string) {
@@ -114,11 +192,11 @@ func KeyIsASCII(key uint) bool {
 	return key >= gdk.KEY_exclam && key <= gdk.KEY_asciitilde
 }
 
-type connector interface {
+type Connector interface {
 	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
 }
 
-func Connect(connector connector, event string, cb interface{}, data ...interface{}) {
+func Connect(connector Connector, event string, cb interface{}, data ...interface{}) {
 	semaphore.IdleMust(func() {
 		_, err := connector.Connect(event, cb, data...)
 		if err != nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/zwsp"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -190,9 +191,11 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		return false
 	}
 
-	// Send an OnTyping request. This does not acquire the mutex, but instead
-	// gets the ID atomically.
-	i.Typing.Type(i.Messages.GetChannelID())
+	if i.Messages.InputOnTyping {
+		// Send an OnTyping request. This does not acquire the mutex, but instead
+		// gets the ID atomically.
+		i.Typing.Type(i.Messages.GetChannelID())
+	}
 
 	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
 	const cntrlMask = uint(gdk.GDK_CONTROL_MASK)
@@ -387,6 +390,10 @@ func (i *Input) popContent() string {
 }
 
 func (i *Input) makeMessage(content string) *discord.Message {
+	if i.Messages.InputZeroWidth {
+		content = zwsp.Insert(content)
+	}
+
 	return &discord.Message{
 		Type:      discord.DefaultMessage,
 		ChannelID: i.Messages.GetChannelID(),

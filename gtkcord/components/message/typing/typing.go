@@ -293,7 +293,17 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 		}
 	}
 
-	// Attempt 3: just use the ID
+	// Attempt 3: Check the DM channel:
+	if c, err := t.state.Channel(typing.ChannelID); err == nil {
+		for _, r := range c.DMRecipients {
+			if r.ID == typing.UserID {
+				user.Name = r.Username
+				break
+			}
+		}
+	}
+
+	// Attempt 4: just use the ID
 	if user.Name == "" {
 		user.Name = typing.UserID.String()
 	}

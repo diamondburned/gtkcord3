@@ -2,7 +2,6 @@ package guild
 
 import (
 	"html"
-	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -12,6 +11,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -35,7 +35,7 @@ type Guild struct {
 	ID   discord.Snowflake
 	Name string
 
-	busy       sync.Mutex
+	busy       deadlock.Mutex
 	stateClass string
 	unreadChs  map[discord.Snowflake]bool
 }

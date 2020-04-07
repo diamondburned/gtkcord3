@@ -1,9 +1,8 @@
 package window
 
 import (
-	"github.com/gotk3/gotk3/gdk"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
 )
 
 const CSS = `
@@ -184,25 +183,57 @@ const CSS = `
 	}
 `
 
-var CustomCSS string
+var (
+	CustomCSS string // raw CSS, once
+	FileCSS   string // path
+)
 
 // I don't like this:
 // list row:selected { box-shadow: inset 2px 0 0 0 white; }
 
-func loadCSS(s *gdk.Screen) error {
-	css, err := gtk.CssProviderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to make a CSS provider")
+func initCSS() {
+	s := Window.Screen
+
+	stock, _ := gtk.CssProviderNew()
+	if err := stock.LoadFromData(CSS); err != nil {
+		log.Fatalln("Failed to parse stock CSS:", err)
 	}
 
-	if err := css.LoadFromData(CSS + CustomCSS); err != nil {
-		return errors.Wrap(err, "Failed to parse CSS")
+	gtk.AddProviderForScreen(
+		s, stock,
+		uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION),
+	)
+
+	// Add env var CSS:
+	env, _ := gtk.CssProviderNew()
+	if err := env.LoadFromData(CustomCSS); err != nil {
+		log.Errorln("Failed to parse env var custom CSS:", err)
 	}
 
-	Window.CSS = css
+	gtk.AddProviderForScreen(
+		s, env,
+		uint(gtk.STYLE_PROVIDER_PRIORITY_USER),
+	)
+}
 
-	gtk.AddProviderForScreen(s, css,
-		uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
+func ReloadCSS() {
+	s := Window.Screen
 
-	return nil
+	// Replace file CSS:
+	if Window.fileCSS != nil {
+		gtk.RemoveProviderForScreen(s, Window.fileCSS)
+	}
+
+	file, _ := gtk.CssProviderNew()
+	if err := file.LoadFromPath(FileCSS); err != nil {
+		log.Errorln("Failed to parse file in "+FileCSS+":", err)
+		return
+	}
+
+	Window.fileCSS = file
+
+	gtk.AddProviderForScreen(
+		s, file,
+		uint(gtk.STYLE_PROVIDER_PRIORITY_USER),
+	)
 }

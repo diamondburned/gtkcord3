@@ -115,7 +115,8 @@ func (s *StatefulPopupBody) initialize() {
 		s.state.RequestMember(s.Guild, s.Prefetch.ID)
 	}
 
-	m, err := s.state.Store.Member(s.Guild, s.Prefetch.ID)
+	// Permit fetching member through the API.
+	m, err := s.state.Member(s.Guild, s.Prefetch.ID)
 	if err != nil {
 		// If no member:
 		return
@@ -251,7 +252,6 @@ func (s *StatefulPopupBody) Destroy() {
 		h()
 	}
 	s.UserPopupBody.Destroy()
-	s.UserPopupBody = nil
 }
 
 // thread-safe

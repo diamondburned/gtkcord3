@@ -11,11 +11,6 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-func init() {
-	// Refresh code highlighting styles
-	refreshStyle()
-}
-
 var (
 	messageCtx = parser.NewContextKey()
 	sessionCtx = parser.NewContextKey()

@@ -1,2 +1,4 @@
 result/
 gtkcord3
+*.so
+*.dll

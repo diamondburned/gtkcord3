@@ -28,7 +28,7 @@ func (b blockquote) process(reader text.Reader) bool {
 	// }
 
 	// Invalid behavior: >Thing
-	if !util.IsSpace(line[pos]) {
+	if pos < len(line) && !util.IsSpace(line[pos]) {
 		return false
 	}
 
@@ -45,10 +45,16 @@ func (b blockquote) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node
 	if b.process(r) {
 		node := ast.NewBlockquote()
 
-		// SO UGLY AAAAAAAAAAAAA
+		// Try and parse the block as a paragraph:
 		para, state := _paragraph.Open(node, r, pc)
-		node.AppendChild(node, para)
 
+		// If there's no paragraph, make a blank one:
+		if para == nil {
+			para = ast.NewParagraph()
+		}
+
+		// Add and return the paragraph anyway, maybe the first line is just empty.
+		node.AppendChild(node, para)
 		return node, state
 	}
 
@@ -78,7 +84,10 @@ func (b blockquote) Continue(node ast.Node, r text.Reader, pc parser.Context) pa
 }
 
 func (b blockquote) Close(node ast.Node, r text.Reader, pc parser.Context) {
-	para := node.FirstChild().(*ast.Paragraph)
+	para, ok := node.FirstChild().(*ast.Paragraph)
+	if !ok { // if not a paragraph:
+		return
+	}
 
 	lines := para.Lines()
 

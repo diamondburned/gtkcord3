@@ -2,12 +2,12 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"runtime/debug"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/plugin"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -15,6 +15,7 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	// Profiler
+	"net/http"
 	_ "net/http/pprof"
 )
 
@@ -84,16 +85,11 @@ func Finish(a *gtkcord.Application) func(s *ningen.State) {
 		if err := a.Ready(s); err != nil {
 			log.Fatalln("Failed to get gtkcord ready:", err)
 		}
-
-		if err := plugin.StartPlugins(a); err != nil {
-			// TODO: plugin manager
-			log.Errorln("Failed to initialize plugins:", err)
-		}
 	}
 }
 
 func main() {
-	a, err := gtk.ApplicationNew("com.diamondburned.gtkcord", glib.APPLICATION_FLAGS_NONE)
+	a, err := gtk.ApplicationNew("com.github.diamondburned.gtkcord3", glib.APPLICATION_FLAGS_NONE)
 	if err != nil {
 		log.Fatalln("Failed to create a new *gtk.Application:", err)
 	}
@@ -115,14 +111,14 @@ func main() {
 		g.Close()
 	})
 
+	if profile {
+		// Profiler
+		runtime.SetMutexProfileFraction(5)   // ???
+		runtime.SetBlockProfileRate(5000000) // 5ms
+		go http.ListenAndServe("localhost:6969", nil)
+	}
+
 	if sig := a.Run(os.Args); sig > 0 {
 		os.Exit(sig)
 	}
-
-	// if profile {
-	// 	// Profiler
-	// 	runtime.SetMutexProfileFraction(5)   // ???
-	// 	runtime.SetBlockProfileRate(5000000) // 5ms
-	// 	go http.ListenAndServe("localhost:6969", nil)
-	// }
 }

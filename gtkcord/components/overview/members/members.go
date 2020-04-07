@@ -39,7 +39,7 @@ func New(s *ningen.State) (m *Container) {
 	s.MemberList.OnSync = m.handleSync
 
 	// unreference these things
-	list.Connect("destroy", m.cleanup)
+	// list.Connect("destroy", m.cleanup)
 
 	list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		i := r.GetIndex()

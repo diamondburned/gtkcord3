@@ -9,6 +9,31 @@ import (
 	"github.com/pkg/errors"
 )
 
+const SwitchFade = 200 // 200ms to fade between main view and loading screen.
+
+func newStack() (*gtk.Stack, error) {
+	s, err := gtk.StackNew()
+	if err != nil {
+		return nil, err
+	}
+	s.Show()
+	s.SetTransitionDuration(SwitchFade)
+	s.SetTransitionType(gtk.STACK_TRANSITION_TYPE_CROSSFADE)
+	return s, nil
+}
+
+func stackRemove(s *gtk.Stack, name string) {
+	if w := s.GetChildByName(name); w != nil {
+		s.Remove(w)
+	}
+}
+
+func stackSet(s *gtk.Stack, name string, w gtk.IWidget) {
+	stackRemove(s, name)
+	s.AddNamed(w, name)
+	s.SetVisibleChildName(name)
+}
+
 var Window *Container
 
 type Container struct {
@@ -16,18 +41,20 @@ type Container struct {
 	App   *gtk.Application
 	Accel *gtk.AccelGroup
 
-	Root   *gdk.Window
-	Widget gtk.IWidget
+	Screen    *gdk.Screen
+	Root      *gdk.Window
+	Clipboard *gtk.Clipboard
 
 	Header *Header
-
-	CSS       *gtk.CssProvider
-	Clipboard *gtk.Clipboard
+	Main   *gtk.Stack
 
 	// CursorDefault *gdk.Cursor
 	// CursorPointer *gdk.Cursor
 
 	Settings *gtk.Settings
+
+	// since files can be changed while the application is running:
+	fileCSS *gtk.CssProvider
 }
 
 func WithApplication(app *gtk.Application) error {
@@ -67,6 +94,7 @@ func WithApplication(app *gtk.Application) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get default screen")
 	}
+	Window.Screen = s
 
 	root, err := s.GetRootWindow()
 	if err != nil {
@@ -74,9 +102,8 @@ func WithApplication(app *gtk.Application) error {
 	}
 	Window.Root = root
 
-	if err := loadCSS(s); err != nil {
-		return errors.Wrap(err, "Failed to load CSS")
-	}
+	// Load CSS for the first time.
+	initCSS()
 
 	if err := animations.LoadCSS(s); err != nil {
 		return errors.Wrap(err, "Failed to load animations CSS")
@@ -102,6 +129,19 @@ func WithApplication(app *gtk.Application) error {
 	if err := initHeader(); err != nil {
 		return errors.Wrap(err, "Failed to make a headerbar")
 	}
+
+	// Make the main view: the stack.
+	main, err := newStack()
+	if err != nil {
+		return errors.Wrap(err, "Failed to make stack")
+	}
+	Window.Main = main
+
+	// Add the stack into the window:
+	w.Add(main)
+
+	// Play the loading animation:
+	NowLoading()
 
 	// Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
 	// if err != nil {
@@ -143,12 +183,11 @@ func Resize(w, h int) {
 }
 
 func Display(w gtk.IWidget) {
-	if Window.Widget != nil {
-		Window.Window.Remove(Window.Widget)
+	// Check if loading:
+	if Window.Main.GetVisibleChildName() == "loading" {
+		defer stackRemove(Window.Main, "loading")
 	}
-
-	Window.Widget = w
-	Window.Window.Add(w)
+	stackSet(Window.Main, "main", w)
 }
 
 func Show() {

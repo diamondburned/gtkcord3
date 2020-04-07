@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -49,4 +50,43 @@ func MustRead(dir string) (files []os.FileInfo, path string, err error) {
 	}
 
 	return []os.FileInfo{}, dir, nil
+}
+
+func MarshalToFile(file string, from interface{}) error {
+	file = filepath.Join(Path, file)
+
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_SYNC|os.O_TRUNC, 0644)
+	if err != nil {
+		return errors.Wrap(err, "Failed to open file")
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "\t")
+
+	if err := enc.Encode(from); err != nil {
+		return errors.Wrap(err, "Failed to marshal given struct")
+	}
+
+	return nil
+}
+
+func UnmarshalFromFile(file string, to interface{}) error {
+	file = filepath.Join(Path, file)
+
+	f, err := os.OpenFile(file, os.O_RDONLY, 0644)
+	if err != nil {
+		// Ignore does not exist error, leave struct as it is.
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+
+	if err := json.NewDecoder(f).Decode(to); err != nil {
+		return errors.Wrap(err, "Failed to unmarshal to given struct")
+	}
+
+	return nil
 }

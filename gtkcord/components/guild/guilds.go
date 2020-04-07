@@ -131,6 +131,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 
 			switch {
 			case index < 1:
+				g.UnselectAll(-1)
 				go g.DMButton.OnClick()
 				return
 			default:
@@ -140,14 +141,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 			var row = g.Guilds[index]
 
 			// Unselect all guild folders except the current one:
-			for i, r := range g.Guilds {
-				if i == index {
-					continue
-				}
-				if f, ok := r.(*GuildFolder); ok {
-					f.List.SelectRow(nil)
-				}
-			}
+			g.UnselectAll(index)
 
 			// load the guild, then subscribe to typing events
 			d, ok := row.(*Guild)
@@ -163,6 +157,18 @@ func initGuilds(g *Guilds, s *ningen.State) {
 	})
 
 	s.AddReadChange(g.TraverseReadState)
+}
+
+func (guilds *Guilds) UnselectAll(except int) {
+	// Unselect all guild folders except the current one:
+	for i, r := range guilds.Guilds {
+		if i == except {
+			continue
+		}
+		if f, ok := r.(*GuildFolder); ok {
+			f.List.SelectRow(nil)
+		}
+	}
 }
 
 func (guilds *Guilds) onFolderSelect(g *Guild) {
@@ -221,6 +227,10 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 	}
 
 	pinged := rs.MentionCount > 0
+
+	if s.ChannelMuted(rs.ChannelID) {
+		unread = false
+	}
 
 	guild.busy.Lock()
 

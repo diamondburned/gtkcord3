@@ -2,6 +2,7 @@ package md
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"sync"
 
@@ -14,28 +15,29 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-var HighlightStyle = "monokai"
-
 var (
 	lexerMap = map[string]chroma.Lexer{}
 	lexerMut = sync.Mutex{}
 
 	fmtter = Formatter{}
-	style  = (*chroma.Style)(nil)
-	css    = map[chroma.TokenType]Tag{}
+
+	css      = map[chroma.TokenType]Tag{}
+	styleMut = sync.RWMutex{}
 )
 
-func ChangeStyle(styleName string) {
-	HighlightStyle = styleName
-	refreshStyle()
-}
+func ChangeStyle(styleName string) error {
+	s := styles.Get(styleName)
 
-func refreshStyle() {
-	style = styles.Get(HighlightStyle)
-	if style == nil {
-		panic("Unknown highlighting style: " + HighlightStyle)
+	// styleName == "" => no highlighting, not an error
+	if s == styles.Fallback && styleName != "" {
+		return errors.New("Unknown style")
 	}
-	css = styleToCSS(style)
+
+	styleMut.Lock()
+	defer styleMut.Unlock()
+
+	css = styleToCSS(s)
+	return nil
 }
 
 func getLexer(_lang []byte) chroma.Lexer {
@@ -73,7 +75,6 @@ func (r *Renderer) renderCodeBlock(node *ast.FencedCodeBlock, source []byte) {
 
 	if lexer == nil {
 		lexer = lexers.Fallback
-		code = lang
 	}
 
 	for i := 0; i < node.Lines().Len(); i++ {
@@ -100,11 +101,13 @@ type Formatter struct {
 	highlightRanges [][2]int
 }
 
-func (f *Formatter) Reset() {
+func (f *Formatter) reset() {
 	f.highlightRanges = f.highlightRanges[:0]
 }
 
 func (f *Formatter) Format(r *Renderer, iterator chroma.Iterator) {
+	f.reset()
+
 	tokens := iterator.Tokens()
 	lines := chroma.SplitTokensIntoLines(tokens)
 	highlightIndex := 0
@@ -161,18 +164,20 @@ func (f *Formatter) shouldHighlight(highlightIndex, line int) (bool, bool) {
 }
 
 func (f *Formatter) styleAttr(tt chroma.TokenType) Tag {
+	styleMut.RLock()
+	defer styleMut.RUnlock()
+
 	if _, ok := css[tt]; !ok {
 		tt = tt.SubCategory()
 	}
 	if _, ok := css[tt]; !ok {
 		tt = tt.Category()
 	}
-
-	tg, ok := css[tt]
-	if !ok {
-		return EmptyTag
+	if t, ok := css[tt]; ok {
+		return t
 	}
-	return tg
+
+	return EmptyTag
 }
 
 func styleToCSS(style *chroma.Style) map[chroma.TokenType]Tag {
@@ -262,6 +267,9 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 		return nil, parser.NoChildren
 	}
 
+	// Advance through the backticks
+	r.Advance(oFenceLength)
+
 	var node = ast.NewFencedCodeBlock(nil)
 
 	// If this isn't the last thing in the line: (```<language>)
@@ -271,44 +279,32 @@ func (b fenced) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, pa
 		// If not white-space?
 		if len(rest) > 0 {
 			infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
-			if infoStart != infoStop {
-				switch {
-				case bytes.HasSuffix(rest, []byte("```")):
-					// Single line code:
-					seg := text.NewSegment(infoStart, infoStop)
-					seg.Stop -= 3 // len("```")
-					node.Lines().Append(seg)
-
-				case bytes.IndexByte(bytes.TrimSpace(rest), ' ') == -1:
-					// Account for the trailing whitespaces:
-					left := util.TrimLeftSpaceLength(rest)
-					right := util.TrimRightSpaceLength(rest)
-					// If value does not contain spaces, it's probably the language
-					// part.
-					if left < right {
-						node.Info = ast.NewTextSegment(
-							text.NewSegment(infoStart+left, infoStop-right),
-						)
-					}
-
-				default:
-					// Invalid codeblock, but we're parsing it anyway. It will
-					// just render the entire thing as a codeblock according to
-					// CommonMark specs.
-					node.Lines().Append(text.NewSegment(infoStart, infoStop))
+			if infoStart < infoStop && bytes.IndexByte(rest, '\n') > -1 {
+				// Account for the trailing whitespaces:
+				left := util.TrimLeftSpaceLength(rest)
+				right := util.TrimRightSpaceLength(rest)
+				// If value does not contain spaces, it's probably the language
+				// part.
+				if left < right {
+					seg := text.NewSegment(infoStart+left, infoStop-right)
+					node.Info = ast.NewTextSegment(seg)
+					r.Advance(infoStop - infoStart)
 				}
 			}
 		}
 	}
 
 	pc.Set(fencedCodeBlockInfoKey, &fenceData{findent, oFenceLength, node})
-	r.Advance(segment.Len() - pos)
 
 	return node, parser.NoChildren
 }
 
 func (b fenced) Continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	line, segment := r.PeekLine()
+	if len(line) == 0 {
+		return parser.Close
+	}
+
 	fdata := pc.Get(fencedCodeBlockInfoKey).(*fenceData)
 	_, pos := util.IndentWidth(line, r.LineOffset())
 

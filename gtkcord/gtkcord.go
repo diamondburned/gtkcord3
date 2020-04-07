@@ -9,9 +9,9 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/hamburger"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
@@ -20,7 +20,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
@@ -63,10 +62,17 @@ const (
 
 type Application struct {
 	*gtk.Application
+	Window *window.Container
+
 	Notifier *gdbus.Notifier
-	Window   *window.Container
+	MPRIS    *gdbus.MPRISWatcher
+
+	Plugins []*Plugin
 
 	State *ningen.State
+
+	// Preferences window, hidden by default
+	Settings *Settings
 
 	// Main Grid, left is always LeftGrid - *gtk.Grid
 	Main  *handy.Leaflet // LeftGrid -- Right
@@ -98,12 +104,21 @@ type Application struct {
 
 // New is not thread-safe.
 func New(app *gtk.Application) *Application {
+	plugins, err := loadPlugins()
+	if err != nil {
+		log.Fatalln("Failed to load plugins:", err)
+	}
+
 	return &Application{
 		Application: app,
+		Plugins:     plugins,
 	}
 }
 
 func (a *Application) Close() {
+	// Mark application as exited:
+	a.Application = nil
+
 	// Close session on exit:
 	if a.State != nil {
 		a.State.Close()
@@ -112,7 +127,9 @@ func (a *Application) Close() {
 
 func (a *Application) Activate() {
 	// Register the dbus connection:
-	a.Notifier = gdbus.NewNotifier(gdbus.FromApplication(&a.Application.Application))
+	conn := gdbus.FromApplication(&a.Application.Application)
+	a.Notifier = gdbus.NewNotifier(conn)
+	a.MPRIS = gdbus.NewMPRISWatcher(conn) // notify.go
 
 	// Activate the window singleton:
 	if err := window.WithApplication(a.Application); err != nil {
@@ -123,22 +140,13 @@ func (a *Application) Activate() {
 	a.leftCols = map[int]gtk.IWidget{}
 	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
 
-	// Pre-make some widgets but don't use them:
-	a.init()
-
-	// Use the spinner instead of the Leaflet:
-	s, _ := animations.NewSpinner(75)
-
-	// Use a custom header instead of the actual Header:
-	h, _ := gtk.HeaderBarNew()
-	h.SetTitle("Connecting to Discord.")
-	h.SetShowCloseButton(true)
-
-	window.Display(s)
-	window.HeaderDisplay(h)
+	// Set the window specs:
 	window.Resize(1200, 900)
 	window.SetTitle("gtkcord")
-	window.ShowAll()
+
+	// Create the preferences/settings window, which applies settings as a side
+	// effect:
+	a.Settings = a.makeSettings()
 }
 
 func (a *Application) init() {
@@ -176,12 +184,28 @@ func (a *Application) init() {
 
 	// Create a new Header:
 	h, _ := header.NewHeader()
-	h.Hamburger.LogOut = a.LogOut // bind
 	a.Header = h
 }
 
 func (a *Application) Ready(s *ningen.State) error {
+	// Acquire the mutex:
+	a.busy.Lock()
+	defer a.busy.Unlock()
+
 	a.State = s
+
+	// When the websocket closes, the screen must be changed to a busy one. The
+	// websocket may close if it's disconnected unexpectedly.
+	s.Gateway.AfterClose = func(error) {
+		// Is the application already dead?
+		if a.Application == nil {
+			return
+		}
+
+		// Run this asynchronously. This guarantees that the UI thread would
+		// never be hardlocked.
+		semaphore.Async(window.NowLoading)
+	}
 
 	// Store the token:
 	keyring.Set(s.Token)
@@ -191,20 +215,29 @@ func (a *Application) Ready(s *ningen.State) error {
 		log.Errorln(err)
 	}
 
-	semaphore.IdleMust(window.HeaderDisplay, a.Header) // restore header post login.
-	semaphore.IdleMust(window.Resize, 1200, 900)
+	semaphore.IdleMust(func() {
+		// Make the main widgets:
+		a.init()
+		window.HeaderDisplay(a.Header) // restore header post login.
+		window.Resize(1200, 900)
+	})
 
-	// Set Markdown's highlighting theme
 	switch s.Ready.Settings.Theme {
 	case "dark":
-		md.ChangeStyle("monokai")
 		semaphore.IdleMust(window.PreferDarkTheme, true)
 	case "light":
-		md.ChangeStyle("monokailight")
 	}
 
-	// Have Hamburger use the state:
-	a.Header.Hamburger.UseState(s)
+	// Bind the hamburger:
+	hamburger.BindToButton(a.Header.Hamburger.Button, hamburger.Opts{
+		State: s,
+		Settings: func() {
+			a.Settings.Show()
+		},
+		LogOut: func() {
+			go a.LogOut()
+		},
+	})
 
 	// Bind stuff
 	a.bindActions()
@@ -241,7 +274,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Messages
 
-	m, err := message.NewMessages(s)
+	m, err := message.NewMessages(s, a.Settings.General.Behavior.Opts)
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}
@@ -340,6 +373,9 @@ func (a *Application) Ready(s *ningen.State) error {
 		})
 	})
 
+	// Finally, mark plugins as ready:
+	a.readyPlugins()
+
 	return nil
 }
 
@@ -360,11 +396,8 @@ func (a *Application) LogOut() {
 	// Then we delete the keyrings:
 	keyring.Delete()
 
-	// Then we reinitialize some widgets:
-	a.init()
-
 	// Then we call the login dialog and exit without waiting:
-	go semaphore.IdleMust(func() {
+	semaphore.Async(func() {
 		l := login.NewLogin(func(s *ningen.State) {
 			if err := a.Ready(s); err != nil {
 				log.Fatalln("Failed to re-login:", err)
