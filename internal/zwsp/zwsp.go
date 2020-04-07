@@ -38,6 +38,7 @@ func Insert(into string) string {
 			}
 
 		case '<':
+			// Skip until the next closer:
 			paused = true
 		case '>':
 			paused = false
@@ -62,7 +63,15 @@ func Insert(into string) string {
 			continue
 
 		case 'h': // [h]ttp
+			// Check if prefix is proper URL:
+			if prefix := readAhead(runes, i, 8); isURLPrefix(prefix) {
+				// Skip i until end of word, or until the next space character:
+				for ; i < len(runes) && runes[i] != ' '; i++ {
+				}
 
+				// Skip the space character:
+				continue
+			}
 		}
 
 		// Don't obfuscate if paused is true. This could be that we're in a
@@ -97,6 +106,17 @@ func Insert(into string) string {
 // Delete removes all zero-width spaces from a string.
 func Delete(from string) string {
 	return strings.Replace(from, "\u200b", "", -1)
+}
+
+var URLPrefixes = []string{"https://" /* max len 8 */, "http://"}
+
+func isURLPrefix(input string) bool {
+	for _, prefix := range URLPrefixes {
+		if strings.HasPrefix(input, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // peak the next rune in the slice, except -1 is returned if the next index is

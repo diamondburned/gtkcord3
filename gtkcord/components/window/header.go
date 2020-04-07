@@ -41,8 +41,9 @@ func initHeader() error {
 
 func HeaderDisplay(w gtkutils.ExtendedWidget) {
 	// Check if loading:
-	if Window.loading {
-		stackRemove(Window.Header.Main, "loading")
+	if Window.Header.Main.GetVisibleChildName() == "loading" {
+		// Remove the loading screen last:
+		defer stackRemove(Window.Header.Main, "loading")
 	}
 	stackSet(Window.Header.Main, "main", w)
 }

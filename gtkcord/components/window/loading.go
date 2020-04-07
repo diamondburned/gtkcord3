@@ -9,8 +9,6 @@ const LoadingTitle = "Connecting to Discord."
 
 // NowLoading fades the internal stack view to show a spinning circle.
 func NowLoading() {
-	Window.loading = true
-
 	// Use a spinner:
 	s, _ := animations.NewSpinner(75)
 
@@ -18,6 +16,7 @@ func NowLoading() {
 	h, _ := gtk.HeaderBarNew()
 	h.SetTitle(LoadingTitle)
 	h.SetShowCloseButton(true)
+	h.ShowAll()
 
 	// Set the loading animation:
 	stackSet(Window.Main, "loading", s)

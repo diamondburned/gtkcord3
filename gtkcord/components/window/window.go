@@ -55,9 +55,6 @@ type Container struct {
 
 	// since files can be changed while the application is running:
 	fileCSS *gtk.CssProvider
-
-	// loading = true when NowLoading is called.
-	loading bool
 }
 
 func WithApplication(app *gtk.Application) error {
@@ -187,8 +184,8 @@ func Resize(w, h int) {
 
 func Display(w gtk.IWidget) {
 	// Check if loading:
-	if Window.loading {
-		stackRemove(Window.Main, "loading")
+	if Window.Main.GetVisibleChildName() == "loading" {
+		defer stackRemove(Window.Main, "loading")
 	}
 	stackSet(Window.Main, "main", w)
 }
