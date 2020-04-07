@@ -11,7 +11,7 @@ package main
 func main() {
 	// long comment aaaaaa
 }
-` + "``` **bold ***italicized and bold*** lol** *italics* `test code block asdasdasd` <@29039481294823842390402348234832>"
+` + "``` **bold ***italicized and bold*** lol** *italics* `test code block asdasdasd` <@29039481294823842390402348234832> https://dklqyfdsfsdf.com/joemama/io23eu238e8238e23edloooool"
 
 func TestInsert(t *testing.T) {
 	s := Insert(testString)
