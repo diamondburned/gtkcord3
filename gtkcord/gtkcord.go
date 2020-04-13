@@ -260,17 +260,15 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Channels and DMs
 
-	c := channel.NewChannels(s)
-	c.OnSelect = func(ch *channel.Channel) {
+	c := channel.NewChannels(s, func(ch *channel.Channel) {
 		a.SwitchChannel(ch)
 		a.FocusMessages()
-	}
+	})
 
-	p := channel.NewPrivateChannels(s)
-	p.OnSelect = func(ch *channel.PrivateChannel) {
+	p := channel.NewPrivateChannels(s, func(ch *channel.PrivateChannel) {
 		a.SwitchChannel(ch)
 		a.FocusMessages()
-	}
+	})
 
 	// Messages
 
@@ -364,7 +362,7 @@ func (a *Application) Ready(s *ningen.State) error {
 			State: s,
 			OnGuild: func(id discord.Snowflake) {
 				if g, _ := a.Guilds.FindByID(id); g != nil {
-					semaphore.IdleMust(g.Row.Activate)
+					g.Row.Activate()
 				}
 			},
 			OnChannel: func(ch, guild discord.Snowflake) {

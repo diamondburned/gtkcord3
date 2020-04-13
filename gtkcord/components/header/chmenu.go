@@ -6,7 +6,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -58,9 +57,7 @@ func (b *ChMenuButton) SetSpawner(fn func(p *gtk.Popover) gtkutils.WidgetDestroy
 }
 
 func (b *ChMenuButton) Cleanup() {
-	semaphore.IdleMust(func() {
-		b.SetRevealChild(false)
-	})
+	b.SetRevealChild(false)
 }
 
 func NewChMenuBody(p *gtk.Popover, s *ningen.State, gID, chID discord.Snowflake) *gtk.Box {

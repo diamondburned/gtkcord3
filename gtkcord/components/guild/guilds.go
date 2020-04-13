@@ -132,7 +132,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 			switch {
 			case index < 1:
 				g.UnselectAll(-1)
-				go g.DMButton.OnClick()
+				g.DMButton.OnClick()
 				return
 			default:
 				index--
@@ -182,7 +182,7 @@ func (guilds *Guilds) onSelect(g *Guild) {
 	}
 
 	guilds.Current = g
-	go guilds.OnSelect(g)
+	guilds.OnSelect(g)
 }
 
 func (guilds *Guilds) FindByID(guildID discord.Snowflake) (*Guild, *GuildFolder) {

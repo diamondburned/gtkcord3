@@ -39,7 +39,7 @@ type Channels struct {
 	OnSelect func(ch *Channel)
 }
 
-func NewChannels(state *ningen.State) (chs *Channels) {
+func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels) {
 	semaphore.IdleMust(func() {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		main.Show()
@@ -61,6 +61,7 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 			Main:           main,
 			ChList:         cl,
 			state:          state,
+			OnSelect:       onSelect,
 		}
 
 		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -69,44 +70,13 @@ func NewChannels(state *ningen.State) (chs *Channels) {
 			}
 
 			chs.Selected = chs.Channels[r.GetIndex()]
-			go chs.OnSelect(chs.Selected)
+			chs.OnSelect(chs.Selected)
 		})
 	})
 
 	state.AddReadChange(chs.TraverseReadState)
 	return
 }
-
-// // messageCreate handler for unreads
-// func (chs *Channels) messageCreate(c *gateway.MessageCreateEvent) {
-// 	// If the guild ID doesn't match:
-// 	if c.GuildID != chs.GuildID {
-// 		return
-// 	}
-// 	// If the message is the user's:
-// 	if c.Author.ID == chs.state.Ready.User.ID {
-// 		return
-// 	}
-
-// 	chs.busy.Lock()
-// 	defer chs.busy.Unlock()
-
-// 	// If the current channel is selected:
-// 	if chs.Selected != nil && chs.Selected.ID == c.ChannelID {
-// 		if !chs.Selected.unread {
-
-// 		}
-// 		return
-// 	}
-
-// 	// Find the channel:
-// 	ch := chs.FindByID(c.ChannelID)
-// 	// If no channel is found:
-// 	if ch == nil {
-// 		return
-// 	}
-
-// }
 
 func (chs *Channels) Cleanup() {
 	chs.busy.Lock()
@@ -117,11 +87,10 @@ func (chs *Channels) Cleanup() {
 	}
 
 	// Remove old channels
-	semaphore.IdleMust(func() {
-		for _, ch := range chs.Channels {
-			chs.ChList.Remove(ch)
-		}
-	})
+	for _, ch := range chs.Channels {
+		chs.ChList.Remove(ch)
+	}
+
 	chs.Selected = nil
 	chs.Channels = nil
 }
@@ -147,11 +116,9 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 
 	chs.Channels = transformChannels(chs.state, channels)
 
-	semaphore.IdleMust(func() {
-		for _, ch := range chs.Channels {
-			chs.ChList.Insert(ch, -1)
-		}
-	})
+	for _, ch := range chs.Channels {
+		chs.ChList.Insert(ch, -1)
+	}
 
 	return nil
 }

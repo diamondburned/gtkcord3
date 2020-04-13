@@ -88,6 +88,11 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		main.SetHExpand(true)
 		main.SetVExpand(true)
 
+		b.SetSelectionMode(gtk.SELECTION_NONE)
+		b.SetVExpand(true)
+		b.SetHExpand(true)
+		b.Show()
+
 		gtkutils.InjectCSSUnsafe(b, "messages", `
 			.messages {
 				padding-bottom: 4px;
@@ -103,11 +108,6 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		s.SetProperty("min-content-height", 300)
 		s.SetProperty("window-placement", gtk.CORNER_BOTTOM_LEFT)
 		s.Show()
-
-		b.SetSelectionMode(gtk.SELECTION_NONE)
-		b.SetVExpand(true)
-		b.SetHExpand(true)
-		b.Show()
 
 		// List should fill:
 		// b.SetSizeRequest(MaxMessageWidth, -1)
@@ -129,6 +129,7 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		// Fractal does this, but Go is superior.
 		adj := s.GetVAdjustment()
 		adj.Connect("value-changed", m.onScroll)
+		v.SetFocusVAdjustment(adj)
 
 		s.Add(v)
 		s.Show()
@@ -138,10 +139,6 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 
 		// Add what's needed afterwards:
 		main.PackEnd(m.Input, false, false, 0)
-
-		// Set the proper scrolls
-		b.SetFocusHAdjustment(s.GetHAdjustment())
-		b.SetFocusVAdjustment(s.GetVAdjustment())
 
 		// On mouse-press, focus:
 		s.Connect("button-release-event", func(_ *gtk.ScrolledWindow, ev *gdk.Event) bool {
@@ -269,18 +266,20 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 	// var loads = make([])
 
 	// Iterate from earliest to latest, in a thread-safe function.
-	for i := 0; i < len(messages); i++ {
-		message := &messages[i]
+	semaphore.IdleMust(func() {
+		for i := 0; i < len(messages); i++ {
+			message := &messages[i]
 
-		w := newMessageUnsafe(m.c, message)
-		w.updateAuthor(m.c, message.GuildID, message.Author)
-		m._insert(w)
-	}
+			w := newMessageUnsafe(m.c, message)
+			w.updateAuthor(m.c, message.GuildID, message.Author)
+			m._insert(w)
+		}
 
-	// Iterate backwards, from latest to earliest:
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		m.messages[i].updateExtras(m.c, &messages[i])
-	}
+		// Iterate backwards, from latest to earliest:
+		for i := len(m.messages) - 1; i >= 0; i-- {
+			m.messages[i].updateExtras(m.c, &messages[i])
+		}
+	})
 
 	m.resetting = false
 
@@ -297,20 +296,19 @@ func (m *Messages) Cleanup() {
 	m.guard.Lock()
 	defer m.guard.Unlock()
 
-	for _, msg := range m.messages {
-		// DESTROY!!!!
-		// https://stackoverflow.com/questions/2862509/free-object-widget-in-gtk
-		m.Messages.Remove(msg)
-	}
+	semaphore.IdleMust(func() {
+		for _, msg := range m.messages {
+			// DESTROY!!!!
+			// https://stackoverflow.com/questions/2862509/free-object-widget-in-gtk
+			m.Messages.Remove(msg)
+		}
+	})
 
 	// Destroy the slice in Go as well, but the GC will pick it up:
 	m.messages = nil
 }
 
 func (m *Messages) ScrollToBottom() {
-	// Focus:
-	m.Messages.SetFocusChild(m.last())
-
 	// Set scroll:
 	vAdj := m.Scroll.GetVAdjustment()
 	to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
@@ -333,7 +331,7 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	}
 	// If there are no messages.
 	if len(m.messages) == 0 {
-		return
+		return nil
 	}
 
 	chID := m.GetChannelID()
@@ -343,7 +341,13 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 		return
 	}
 
-	lastID := m.messages[len(m.messages)-1].ID
+	return m.messages[len(m.messages)-1]
+
+	lastID := m.lastID()
+	if !lastID.Valid() {
+		return
+	}
+
 	if r.LastMessageID == lastID {
 		return
 	}
@@ -528,9 +532,6 @@ func (m *Messages) _insert(w *Message) {
 	m.messages = append(m.messages, w)
 
 	w.ShowAll()
-
-	// Gtk is hella buggy.
-	w.CheckResize()
 }
 
 func (m *Messages) Update(update *discord.Message) bool {

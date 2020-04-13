@@ -6,6 +6,9 @@ import (
 )
 
 const CSS = `
+	@define-color color_discord rgb(114, 137, 218);
+	@define-color color_pinged  rgb(240, 71, 71);
+
 	button.flat {
 		padding: 0;
 		min-height: 0;
@@ -41,8 +44,6 @@ const CSS = `
 	}
 
 	.quickswitcher list { background-color: transparent; }
-
-	@define-color color_pinged rgb(240, 71, 71);
 
 	headerbar { padding: 0; }
 	headerbar button { box-shadow: none; }
@@ -132,7 +133,7 @@ const CSS = `
 		transition: 75ms background-image linear;
 	}
 	.message-input.editing {
-		background-image: linear-gradient(transparent, rgba(114, 137, 218, 0.3) 60px);
+		background-image: linear-gradient(transparent, alpha(@color_discord, 0.3) 60px);
 	}
 
 	.message-input .completer {
@@ -180,6 +181,15 @@ const CSS = `
 
 	.member-section list {
 		background-color: transparent;
+	}
+
+	.reactions > flowboxchild {
+		margin: 0;
+		padding: 1px;
+	}
+	button.reaction:checked {
+		background-color: alpha(@color_discord, 0.2);
+		color: @color_discord;
 	}
 `
 

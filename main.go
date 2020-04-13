@@ -68,7 +68,6 @@ func Login(finish func(s *ningen.State)) error {
 	}
 
 	// No, so we need to display the login window:
-	log.Println("Summoning the Login window")
 	semaphore.IdleMust(func() {
 		l := login.NewLogin(finish)
 		l.LastError = lastErr

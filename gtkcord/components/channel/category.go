@@ -6,7 +6,6 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 )
 
 type _sortStructure struct {
@@ -101,19 +100,17 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 
 	var channels = make([]*Channel, 0, len(chs))
 
-	semaphore.IdleMust(func() {
-		for i := range list {
-			sch := list[i]
+	for i := range list {
+		sch := list[i]
 
-			if sch.parent.ID.Valid() {
-				channels = append(channels, createChannelRead(&sch.parent, s))
-			}
-
-			for i := range sch.children {
-				channels = append(channels, createChannelRead(&sch.children[i], s))
-			}
+		if sch.parent.ID.Valid() {
+			channels = append(channels, createChannelRead(&sch.parent, s))
 		}
-	})
+
+		for i := range sch.children {
+			channels = append(channels, createChannelRead(&sch.children[i], s))
+		}
+	}
 
 	return channels
 }

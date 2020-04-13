@@ -197,9 +197,9 @@ func (d *Dialog) onActivate(_ *gtk.ListBox, r *gtk.ListBoxRow) {
 
 	switch entry := d.list[i]; {
 	case entry.ChannelID.Valid() && d.OnChannel != nil:
-		go d.OnChannel(entry.ChannelID, entry.GuildID)
+		d.OnChannel(entry.ChannelID, entry.GuildID)
 	case entry.GuildID.Valid() && d.OnGuild != nil:
-		go d.OnGuild(entry.GuildID)
+		d.OnGuild(entry.GuildID)
 	}
 
 	// Close the dialog:

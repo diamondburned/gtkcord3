@@ -37,8 +37,8 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	w := window.Window.GetAllocatedWidth()
 	h := window.Window.GetAllocatedHeight()
-	w = int(float64(w) / 1.25)
-	h = int(float64(h) / 1.25)
+	w = int(float64(w) * 0.85)
+	h = int(float64(h) * 0.8)
 
 	d := handy.DialogNew(window.Window)
 	if !d.GetNarrow() {

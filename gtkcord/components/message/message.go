@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/reactions"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
@@ -57,6 +58,7 @@ type Message struct {
 	rightBottom *gtk.Box
 	textView    *gtk.TextView
 	content     *gtk.TextBuffer
+	reactions   *reactions.Container
 	extras      []gtk.IWidget // embeds, images, etc
 
 	Condensed      bool
@@ -117,6 +119,10 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 		message.setAvailableUnsafe(false)
 	}
 
+	// Add reactions
+	message.reactions = reactions.NewContainer(s, m)
+	message.rightBottom.Add(message.reactions)
+
 	return message
 }
 
@@ -143,6 +149,9 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 
 		author, _    = gtk.LabelNew("???")
 		timestamp, _ = gtk.LabelNew("")
+
+		msgTv, _ = gtk.TextViewNew()
+		msgTb, _ = msgTv.GetBuffer()
 	)
 
 	gtkutils.ImageSetIcon(avatar, "user-info", AvatarSize)
@@ -170,6 +179,8 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		author:      author,
 		timestamp:   timestamp,
 		rightBottom: rightBottom,
+		textView:    msgTv,
+		content:     msgTb,
 	}
 
 	// Wrap main around an event box
@@ -244,8 +255,15 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.avatarEv.SetMarginTop(6)
 	message.right.SetMarginTop(6)
 
-	message.setCondensed()
+	msgTv.Show()
+	msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
+	msgTv.SetHAlign(gtk.ALIGN_FILL)
+	msgTv.SetCursorVisible(false)
+	msgTv.SetEditable(false)
+	msgTv.SetCanFocus(false)
 
+	message.rightBottom.Add(msgTv)
+	message.setCondensed()
 	return
 }
 
@@ -377,8 +395,6 @@ func (m *Message) UpdateAvatar(url string) {
 }
 
 func (m *Message) customContentUnsafe(s string) {
-	m.assertContentUnsafe()
-
 	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
 	m.content.InsertMarkup(m.content.GetEndIter(), s)
 }
@@ -389,7 +405,6 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 
 func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
 	if update.Content != "" {
-		m.assertContentUnsafe()
 		md.ParseMessageContent(m.textView, s.Store, update)
 	}
 
@@ -398,24 +413,6 @@ func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) 
 			m.style.AddClass("mentioned")
 			return
 		}
-	}
-}
-
-func (m *Message) assertContentUnsafe() {
-	if m.textView == nil {
-		msgTv, _ := gtk.TextViewNew()
-		msgTv.Show()
-		m.textView = msgTv
-		msgTb, _ := msgTv.GetBuffer()
-		m.content = msgTb
-
-		msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-		msgTv.SetHAlign(gtk.ALIGN_FILL)
-		msgTv.SetCursorVisible(false)
-		msgTv.SetEditable(false)
-		msgTv.SetCanFocus(false)
-
-		m.rightBottom.Add(msgTv)
 	}
 }
 

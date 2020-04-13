@@ -83,7 +83,7 @@ type State struct {
 	*gtk.Box
 	Label *gtk.Label
 
-	mu deadlock.Mutex
+	mu deadlock.RWMutex
 
 	Users []typingUser
 
@@ -146,8 +146,8 @@ func (t *State) Type(chID discord.Snowflake) {
 }
 
 func (t *State) Empty() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	return len(t.Users) == 0
 }
@@ -159,10 +159,8 @@ func (t *State) Reset() {
 	t.lastTyped = time.Time{} // zero out
 	t.Users = t.Users[:0]
 
-	semaphore.IdleMust(func() {
-		t.Label.SetText("")
-		t.Box.SetOpacity(0)
-	})
+	t.Label.SetText("")
+	t.Box.SetOpacity(0)
 }
 
 func (t *State) Stop() {
@@ -170,7 +168,7 @@ func (t *State) Stop() {
 }
 
 func (t *State) render() {
-	t.mu.Lock()
+	t.mu.RLock()
 
 	t.cleanUp()
 
@@ -199,7 +197,7 @@ func (t *State) render() {
 		text = "Several people are typing..."
 	}
 
-	t.mu.Unlock()
+	t.mu.RUnlock()
 
 	semaphore.IdleMust(func() {
 		t.Label.SetMarkup(text)
@@ -220,8 +218,8 @@ func (t *State) Update() {
 }
 
 func (t *State) Shortest() time.Time {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	if len(t.Users) == 0 {
 		return time.Time{}

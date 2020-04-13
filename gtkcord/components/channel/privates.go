@@ -32,7 +32,7 @@ type PrivateChannels struct {
 }
 
 // thread-safe
-func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
+func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs *PrivateChannels) {
 	semaphore.IdleMust(func() {
 		l, _ := gtk.ListBoxNew()
 		l.Show()
@@ -58,7 +58,8 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 			Scroll: cs,
 			Search: e,
 
-			state: s,
+			state:    s,
+			OnSelect: onSelect,
 		}
 
 		e.Connect("changed", func() {
@@ -84,7 +85,7 @@ func NewPrivateChannels(s *ningen.State) (pcs *PrivateChannels) {
 				return
 			}
 
-			go pcs.OnSelect(rw)
+			pcs.OnSelect(rw)
 		})
 	})
 
@@ -97,11 +98,9 @@ func (pcs *PrivateChannels) Cleanup() {
 	defer pcs.busy.Unlock()
 
 	if pcs.Channels != nil {
-		semaphore.IdleMust(func() {
-			for _, ch := range pcs.Channels {
-				pcs.List.Remove(ch)
-			}
-		})
+		for _, ch := range pcs.Channels {
+			pcs.List.Remove(ch)
+		}
 
 		pcs.Channels = nil
 	}
@@ -110,6 +109,7 @@ func (pcs *PrivateChannels) Cleanup() {
 // thread-safe
 func (pcs *PrivateChannels) LoadChannels() error {
 	pcs.busy.Lock()
+	defer pcs.busy.Unlock()
 	// defer at the end of the bottom goroutine.
 
 	channels, err := pcs.state.PrivateChannels()
@@ -119,35 +119,33 @@ func (pcs *PrivateChannels) LoadChannels() error {
 
 	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
 
-	semaphore.IdleMust(func() {
-		for _, channel := range channels {
-			w := newPrivateChannel(channel)
+	for _, channel := range channels {
+		w := newPrivateChannel(channel)
 
-			if channel.Type == discord.DirectMessage && len(channel.DMRecipients) == 1 {
-				user := channel.DMRecipients[0]
-				w.updateAvatar(user.AvatarURL())
+		if channel.Type == discord.DirectMessage && len(channel.DMRecipients) == 1 {
+			user := channel.DMRecipients[0]
+			w.updateAvatar(user.AvatarURL())
 
-				if p, _ := pcs.state.Presence(0, user.ID); p != nil {
-					var game = p.Game
-					if game == nil && len(p.Activities) > 0 {
-						game = &p.Activities[0]
-					}
-
-					w.updateStatus(p.Status)
-					w.updateActivity(game)
+			if p, _ := pcs.state.Presence(0, user.ID); p != nil {
+				var game = p.Game
+				if game == nil && len(p.Activities) > 0 {
+					game = &p.Activities[0]
 				}
 
-			} else if channel.Icon != "" {
-				w.updateAvatar(channel.IconURL())
+				w.updateStatus(p.Status)
+				w.updateActivity(game)
 			}
 
-			pcs.Channels[channel.ID.String()] = w
-			pcs.List.Insert(w, -1)
+		} else if channel.Icon != "" {
+			w.updateAvatar(channel.IconURL())
 		}
-	})
+
+		pcs.Channels[channel.ID.String()] = w
+		pcs.List.Insert(w, -1)
+	}
 
 	go func() {
-		// defer here last:
+		pcs.busy.Lock()
 		defer pcs.busy.Unlock()
 
 		for _, channel := range channels {

@@ -16,23 +16,22 @@ func (a *Application) bindNotifier() {
 }
 
 func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
-	var msg = (*discord.Message)(create)
 
-	if !a.State.MessageMentions(*msg) {
+	if !a.State.MessageMentions(create.Message) {
 		return
 	}
 
 	var (
-		title   = a.State.AuthorDisplayName(*msg) + " mentioned you"
-		content = humanize.TrimString(msg.Content, 256)
-		markup  = md.ParseToSimpleMarkupWithMessage([]byte(content), a.State.Store, msg)
+		title   = a.State.AuthorDisplayName(create) + " mentioned you"
+		content = humanize.TrimString(create.Content, 256)
+		markup  = md.ParseToSimpleMarkupWithMessage([]byte(content), a.State.Store, &create.Message)
 	)
 
-	if ch, _ := a.State.Store.Channel(msg.ChannelID); ch != nil {
+	if ch, _ := a.State.Store.Channel(create.ChannelID); ch != nil {
 		var suffix = " (#" + ch.Name + ")"
 
-		if msg.GuildID.Valid() {
-			if g, _ := a.State.Store.Guild(msg.GuildID); g != nil {
+		if create.GuildID.Valid() {
+			if g, _ := a.State.Store.Guild(create.GuildID); g != nil {
 				suffix = " (#" + ch.Name + ", " + g.Name + ")"
 			}
 		}

@@ -7,7 +7,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -18,16 +17,14 @@ func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 
 	guild, _ := a.Guilds.FindByID(guildID)
 
-	semaphore.IdleMust(func() {
-		// Unselect everything first:
-		a.Guilds.UnselectAll(-1)
-		// Then select the row:
-		if guild != nil {
-			a.Guilds.ListBox.SelectRow(guild.Row)
-		} else {
-			a.Privates.List.SelectRow(a.Guilds.DMButton.ListBoxRow)
-		}
-	})
+	// Unselect everything first:
+	a.Guilds.UnselectAll(-1)
+	// Then select the row:
+	if guild != nil {
+		a.Guilds.ListBox.SelectRow(guild.Row)
+	} else {
+		a.Privates.List.SelectRow(a.Guilds.DMButton.ListBoxRow)
+	}
 
 	if guild != nil {
 		// Switch the channels view to the guild:
@@ -49,7 +46,7 @@ func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 	}
 
 	if row != nil {
-		semaphore.IdleMust(row.Activate)
+		row.Activate()
 		return true
 	}
 
@@ -61,9 +58,7 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	if g == nil {
 		c, ok := a.Privates.Channels[a.lastAccess(0, 0).String()]
 		if ok {
-			semaphore.IdleMust(func() {
-				a.Privates.List.SelectRow(c.ListBoxRow)
-			})
+			a.Privates.List.SelectRow(c.ListBoxRow)
 			a.SwitchChannel(c)
 		}
 
@@ -80,22 +75,18 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	}
 
 	if lastCh != nil {
-		semaphore.IdleMust(func() {
-			a.Channels.ChList.SelectRow(lastCh.Row)
-		})
+		a.Channels.ChList.SelectRow(lastCh.Row)
 		a.SwitchChannel(lastCh)
 	}
 }
 
 func (a *Application) FocusMessages() {
-	semaphore.IdleMust(func() {
-		// Set the default visible widget to the right container:
-		a.Main.SetVisibleChild(a.Right)
-		a.Header.SetVisibleChild(a.Header.RightSide)
+	// Set the default visible widget to the right container:
+	a.Main.SetVisibleChild(a.Right)
+	a.Header.SetVisibleChild(a.Header.RightSide)
 
-		// Grab the message input's focus:
-		a.Messages.Focus()
-	})
+	// Grab the message input's focus:
+	a.Messages.Focus()
 }
 
 func (a *Application) SwitchGuild(g *guild.Guild) {
@@ -122,7 +113,7 @@ func (a *Application) SwitchGuild(g *guild.Guild) {
 			return true
 		},
 		After: func() {
-			semaphore.IdleMust(a.Header.UpdateGuild, g.Name)
+			a.Header.UpdateGuild(g.Name)
 		},
 	})
 }
@@ -150,7 +141,7 @@ func (a *Application) SwitchDM() {
 			return true
 		},
 		After: func() {
-			semaphore.IdleMust(a.Header.UpdateGuild, "Private Messages")
+			a.Header.UpdateGuild("Private Messages")
 		},
 	})
 }
@@ -186,27 +177,26 @@ func (a *Application) SwitchChannel(ch Channel) {
 
 			name, _ := ch.ChannelInfo()
 
-			semaphore.IdleMust(func() {
-				a.Header.UpdateChannel(name)
-				window.SetTitle("#" + name + " - gtkcord")
+			a.Header.UpdateChannel(name)
+			window.SetTitle("#" + name + " - gtkcord")
 
-				// Show the channel menu if we're in a guild:
-				if a.Messages.GetGuildID().Valid() {
-					a.Header.ChMenuBtn.SetRevealChild(true)
-				}
+			// Show the channel menu if we're in a guild:
+			if a.Messages.GetGuildID().Valid() {
+				a.Header.ChMenuBtn.SetRevealChild(true)
+			}
 
-				// Always scroll to bottom:
-				a.Messages.ScrollToBottom()
-			})
+			// Always scroll to bottom:
+			a.Messages.ScrollToBottom()
 		},
 	})
 }
 
+// EVERYTHING IS THREAD-SAFE AND WILL BLOCK UI!!!!
 type columnChange struct {
 	Widget  gtkutils.ExtendedWidget
 	Width   int
-	Checker func() bool            // true == switch
-	Setter  func(wnew gtk.IWidget) // thread-safe
+	Checker func() bool // true == switch
+	Setter  func(wnew gtk.IWidget)
 	Before  func()
 	Loader  func() bool
 	After   func() // only if succeed
@@ -218,23 +208,8 @@ func (a *Application) changeCol(c columnChange) {
 		return
 	}
 
-	// Lock and blur in the same thread so less race conditions occur:
-	semaphore.IdleMust(func() {
-		// We disable input first so no events can queue up:
-		a.LeftGrid.SetSensitive(false)
-
-		// Then we acquire the lock:
-		a.busy.Lock()
-	})
-
-	// We defer in a similar way, but we do the opposite:
-	defer semaphore.IdleMust(func() {
-		// Unlock first, so incoming events don't lock:
-		a.busy.Unlock()
-
-		// Then allow events:
-		a.LeftGrid.SetSensitive(true)
-	})
+	a.busy.Lock()
+	defer a.busy.Unlock()
 
 	if !c.Checker() {
 		c.After()
@@ -244,31 +219,17 @@ func (a *Application) changeCol(c columnChange) {
 	// Clean up channels
 	c.Before()
 
-	// We're not adding a spinner anymore. The message view now loads so fast a
-	// spinner is practically useless and is more likely to induce epilepsy than
-	// looking cool.
-
-	// semaphore.IdleMust(func() {
-	// 	spinner, _ := animations.NewSizedSpinner(SpinnerSize)
-	// 	spinner.SetSizeRequest(c.Width, -1)
-	// 	c.Setter(spinner)
-	// })
-
 	if !c.Loader() {
-		semaphore.IdleMust(func() {
-			sadface, _ := animations.NewSizedSadFace()
-			sadface.SetSizeRequest(c.Width, -1)
-			c.Setter(sadface)
-		})
+		sadface, _ := animations.NewSizedSadFace()
+		sadface.SetSizeRequest(c.Width, -1)
+		c.Setter(sadface)
 
 		return
 	}
 
 	// Replace the spinner with the actual channel:
-	semaphore.IdleMust(func() {
-		c.Setter(c.Widget)
-		c.Widget.Show()
-	})
+	c.Setter(c.Widget)
+	c.Widget.Show()
 
 	c.After()
 }

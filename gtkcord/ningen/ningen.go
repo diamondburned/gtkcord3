@@ -50,10 +50,6 @@ type Mute struct {
 	All      bool
 	Everyone bool // @everyone, guild only
 
-	// 3 - Guild defaults
-	// 2 - Nothing
-	// 1 - Only mentions
-	// 0 - All
 	Notifications gateway.UserNotification // some sort of constant?
 }
 

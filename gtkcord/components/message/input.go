@@ -57,8 +57,6 @@ func NewInput(m *Messages) (i *Input) {
 
 	// Make the inputs first:
 
-	// TODO: wrap Input in a ScrolledWindow
-
 	input, _ := gtk.TextViewNew()
 	i.Input = input
 	input.SetLeftMargin(10)
@@ -73,6 +71,18 @@ func NewInput(m *Messages) (i *Input) {
 
 	ibuf, _ := input.GetBuffer()
 	i.InputBuf = ibuf
+
+	// wrap Input inside a ScrolledWindow
+	isw, _ := gtk.ScrolledWindowNew(nil, nil)
+	isw.SetProperty("propagate-natural-height", true)
+	isw.SetProperty("max-content-height", 144) // from Discord
+	isw.SetProperty("min-content-height", 24)  // arbitrary
+	isw.SetProperty("window-placement", gtk.CORNER_BOTTOM_LEFT)
+	isw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+	isw.Add(input)
+
+	input.SetFocusVAdjustment(isw.GetVAdjustment())
+	input.SetFocusHAdjustment(isw.GetHAdjustment())
 
 	// Make the rest of the main widgets:
 
@@ -167,7 +177,7 @@ func NewInput(m *Messages) (i *Input) {
 	// Add into the input box:
 	ibox.PackStart(upload, false, false, 0)
 	ibox.PackStart(s1, false, false, 2)
-	ibox.PackStart(input, true, true, 0)
+	ibox.PackStart(isw, true, true, 0)
 	ibox.PackStart(s2, false, false, 2)
 	ibox.PackStart(send, false, false, 0)
 
