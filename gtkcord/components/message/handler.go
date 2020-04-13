@@ -110,6 +110,9 @@ func (m *Messages) react(r *gateway.MessageReactionAddEvent) {
 	}
 
 	m.find(r.MessageID, func(m *Message) {
+		if m.reactions == nil {
+			return
+		}
 		m.reactions.ReactAdd(r)
 	})
 }

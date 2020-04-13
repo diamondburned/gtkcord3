@@ -78,6 +78,7 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 	// defer log.Benchmark("newMessage")()
 
 	message := newMessageCustomUnsafe(m)
+	message.reactions.SetState(s)
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
@@ -118,10 +119,6 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 		message.customContentUnsafe(`<i>` + messageText + `</i>`)
 		message.setAvailableUnsafe(false)
 	}
-
-	// Add reactions
-	message.reactions = reactions.NewContainer(s, m)
-	message.rightBottom.Add(message.reactions)
 
 	return message
 }
@@ -263,6 +260,11 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	msgTv.SetCanFocus(false)
 
 	message.rightBottom.Add(msgTv)
+
+	// Add a placeholder for reactions
+	message.reactions = reactions.NewContainer(m)
+	message.rightBottom.Add(message.reactions)
+
 	message.setCondensed()
 	return
 }

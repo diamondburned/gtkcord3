@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -207,7 +206,7 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 
 	var gif = strings.Contains(url, ".gif")
 
-	return setImageStream(r.Body, img, gif, w, h)
+	return setImageStream(r.Body, img, gif, w, h, true)
 }
 
 func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
@@ -297,14 +296,15 @@ func setImageFromFile(img *gtk.Image, path string, gif bool, w, h int) error {
 	}
 	defer f.Close()
 
-	return setImageStream(f, img, gif, w, h)
+	return setImageStream(f, img, gif, w, h, false)
 }
 
-func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
+func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int, stream bool) error {
 	l, err := gdk.PixbufLoaderNew()
 	if err != nil {
 		return errors.Wrap(err, "Failed to create a pixbuf_loader")
 	}
+	defer l.Close()
 
 	if w > 0 && h > 0 {
 		gtkutils.Connect(l, "size-prepared", func(_ interface{}, imgW, imgH int) {
@@ -317,18 +317,14 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
 
 			// If the image's size hasn't been set before, we set it:
 			if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
-				semaphore.IdleMust(img.SetSizeRequest, w, h)
+				semaphore.Async(img.SetSizeRequest, w, h)
 			}
 		})
 	}
 
 	var p interface{}
-	var pMu sync.Mutex
 
 	gtkutils.Connect(l, "area-prepared", func() {
-		pMu.Lock()
-		defer pMu.Unlock()
-
 		if gif {
 			p, err = l.GetAnimation()
 			if err != nil || p == nil {
@@ -344,27 +340,23 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int) error {
 		}
 	})
 
-	gtkutils.Connect(l, "area-updated", func() {
-		pMu.Lock()
-		defer pMu.Unlock()
+	var event = "area-updated"
+	if !stream {
+		// If we're not streaming anything big, calling "closed" would be
+		// faster.
+		event = "closed"
+	}
 
+	gtkutils.Connect(l, event, func() {
 		switch {
 		case p == nil:
 			return
 		case gif:
-			// img.SetFromAnimation(p.(*gdk.PixbufAnimation))
-			semaphore.IdleMust(img.SetFromAnimation, p)
+			semaphore.Async(img.SetFromAnimation, p)
 		default:
-			// img.SetFromPixbuf(p.(*gdk.Pixbuf))
-			semaphore.IdleMust(img.SetFromPixbuf, p)
+			semaphore.Async(img.SetFromPixbuf, p)
 		}
 	})
-
-	if err != nil {
-		return err
-	}
-
-	defer l.Close()
 
 	if _, err := io.Copy(l, r); err != nil {
 		return errors.Wrap(err, "Failed to stream to pixbuf_loader")

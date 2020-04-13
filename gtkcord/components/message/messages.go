@@ -308,13 +308,13 @@ func (m *Messages) Cleanup() {
 }
 
 func (m *Messages) ScrollToBottom() {
-	// Focus:
-	m.Messages.SetFocusChild(m.last())
-
 	// Set scroll:
 	vAdj := m.Scroll.GetVAdjustment()
 	to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
 	vAdj.SetValue(to)
+
+	// Focus:
+	m.Messages.SetFocusChild(m.last())
 }
 
 func (m *Messages) onScroll(adj *gtk.Adjustment) {

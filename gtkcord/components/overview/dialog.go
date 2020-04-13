@@ -14,7 +14,6 @@ func SpawnDialog(c *Container) {
 	// Hack for close button
 	d.Connect("response", func(_ *glib.Object, resp gtk.ResponseType) {
 		if resp == gtk.RESPONSE_DELETE_EVENT {
-			d.Hide()
 			d.Destroy()
 		}
 	})

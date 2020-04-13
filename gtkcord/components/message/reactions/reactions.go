@@ -27,7 +27,7 @@ type Container struct {
 	state *ningen.State
 }
 
-func NewContainer(state *ningen.State, m *discord.Message) *Container {
+func NewContainer(m *discord.Message) *Container {
 	f, _ := gtk.FlowBoxNew()
 
 	gtkutils.InjectCSSUnsafe(f, "reactions", "")
@@ -37,7 +37,6 @@ func NewContainer(state *ningen.State, m *discord.Message) *Container {
 		Reactions: map[api.EmojiAPI]*Reaction{},
 		MessageID: m.ID,
 		ChannelID: m.ChannelID,
-		state:     state,
 	}
 
 	for _, reaction := range m.Reactions {
@@ -53,6 +52,10 @@ func NewContainer(state *ningen.State, m *discord.Message) *Container {
 	f.Show()
 
 	return container
+}
+
+func (c *Container) SetState(s *ningen.State) {
+	c.state = s
 }
 
 func (c *Container) Search(chID, msgID discord.Snowflake, emoji api.EmojiAPI) *Reaction {
@@ -109,7 +112,7 @@ func (c *Container) removeAll(emoji *discord.Emoji) {
 
 // add or remove? dunno, but this is short code, i like. 0: add, 1: remove.
 func (c *Container) reactSomething(ch, msg discord.Snowflake, emoji discord.Emoji, code int) {
-	if c.ChannelID != ch || c.MessageID != msg {
+	if c.ChannelID != ch || c.MessageID != msg || c.state == nil {
 		return
 	}
 
@@ -164,6 +167,10 @@ func (c *Container) clicked(r *Reaction) {
 }
 
 func (c *Container) react(r *Reaction) {
+	if c.state == nil {
+		return
+	}
+
 	if err := c.state.React(c.ChannelID, c.MessageID, r.String); err == nil {
 		// Worked.
 		return
@@ -174,6 +181,10 @@ func (c *Container) react(r *Reaction) {
 }
 
 func (c *Container) unreact(r *Reaction) {
+	if c.state == nil {
+		return
+	}
+
 	if err := c.state.Unreact(c.ChannelID, c.MessageID, r.String); err == nil {
 		// Worked.
 		return

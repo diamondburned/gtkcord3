@@ -73,7 +73,7 @@ func (c *State) _completeMembers() {
 
 		var url = m.User.AvatarURL()
 		if url != "" {
-			url += "?size=64"
+			url += "?size=32"
 		}
 
 		b.Add(completerImage(url, cache.Round))

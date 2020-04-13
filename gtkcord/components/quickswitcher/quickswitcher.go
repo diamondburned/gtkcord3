@@ -17,6 +17,9 @@ import (
 
 const IconSize = 24
 
+// Any more and Gtk becomes super slow.
+const MaxEntries = 80
+
 type Spawner struct {
 	State *ningen.State
 
@@ -49,18 +52,21 @@ type Dialog struct {
 	OnFriend  func(userid discord.Snowflake)
 
 	// reusable slices
-	list      []Entry
-	sGuilds   []discord.Guild
-	sChannels []discord.Channel
-	// sFriends  []discord.User
+	list []Entry
+	done chan struct{}
+
+	visible []int // key to rows
+	rows    map[int]*Row
 
 	// TODO: cache guilds and channels into huge slices.
 }
 
-type Entry struct {
-	// will create if nil
+type Row struct {
 	*gtk.ListBoxRow
+	index int
+}
 
+type Entry struct {
 	// | <Icon> <Primary> <Secondary>          <Right> |
 
 	// Icon enum
@@ -70,10 +76,11 @@ type Entry struct {
 	PrimaryText   string
 	SecondaryText string
 	RightText     string
+	longString    string
 
 	// enum
 	GuildID   discord.Snowflake
-	ChannelID discord.Snowflake // could be DM, displayed as one
+	ChannelID discord.Snowflake // could be DM, visible as one
 	FriendID  discord.Snowflake // only called if needed a new channel
 }
 
@@ -87,7 +94,7 @@ func NewDialog(s *ningen.State) *Dialog {
 
 	d.Connect("response", func(_ *gtk.Dialog, resp gtk.ResponseType) {
 		if resp == gtk.RESPONSE_DELETE_EVENT {
-			d.Hide()
+			d.Destroy()
 		}
 	})
 
@@ -130,9 +137,11 @@ func NewDialog(s *ningen.State) *Dialog {
 		Entry:  entry,
 		List:   list,
 		state:  s,
+		done:   make(chan struct{}),
 	}
 
 	list.Connect("row-activated", dialog.onActivate)
+	list.SetSelectionMode(gtk.SELECTION_SINGLE)
 
 	entry.Connect("key-press-event", func(e *gtk.Entry, ev *gdk.Event) bool {
 		evKey := gdk.EventKeyNewFromEvent(ev)
@@ -167,68 +176,109 @@ func NewDialog(s *ningen.State) *Dialog {
 		dialog.onEntryChange(strings.ToLower(t))
 	})
 
+	// Populate in the background.
+	go func() {
+		dialog.populateEntries()
+		close(dialog.done) // special behavior, all <-done unblocks instantly
+	}()
+
 	return dialog
 }
 
 func (d *Dialog) Down() {
 	i := d.List.GetSelectedRow().GetIndex()
 	i++
-	if i >= len(d.list) {
+	if i >= len(d.visible) {
 		i = 0
 	}
-	d.List.SelectRow(d.list[i].ListBoxRow)
+	d.List.SelectRow(d.rows[d.visible[i]].ListBoxRow)
 }
 
 func (d *Dialog) Up() {
 	i := d.List.GetSelectedRow().GetIndex()
 	i--
 	if i < 0 {
-		i = len(d.list) - 1
+		i = len(d.visible) - 1
 	}
-	d.List.SelectRow(d.list[i].ListBoxRow)
+	d.List.SelectRow(d.rows[d.visible[i]].ListBoxRow)
 }
 
 func (d *Dialog) onActivate(_ *gtk.ListBox, r *gtk.ListBoxRow) {
 	i := r.GetIndex()
-	if i < 0 || i >= len(d.list) {
+	if i < 0 || i >= len(d.visible) {
 		// wtf?
 		return
 	}
 
-	switch entry := d.list[i]; {
-	case entry.ChannelID.Valid() && d.OnChannel != nil:
+	// Close the dialog:
+	d.Destroy()
+
+	switch entry := d.list[d.visible[i]]; {
+	case entry.ChannelID.Valid():
 		d.OnChannel(entry.ChannelID, entry.GuildID)
-	case entry.GuildID.Valid() && d.OnGuild != nil:
+	case entry.GuildID.Valid():
 		d.OnGuild(entry.GuildID)
 	}
-
-	// Close the dialog:
-	d.Hide()
-}
-
-func (d *Dialog) clear() {
-	for _, l := range d.list {
-		d.List.Remove(l)
-	}
-	d.list = d.list[:0]
 }
 
 func (d *Dialog) onEntryChange(word string) {
-	d.clear()
+	// Wait for population to be done.
+	<-d.done
+
+	// Remove old entries:
+	d.List.UnselectAll() // unselect first.
+	for _, l := range d.visible {
+		d.List.Remove(d.rows[l])
+	}
+	d.visible = d.visible[:0]
 
 	if word == "" {
 		return
 	}
 
+	for i := range d.list {
+		if !strings.Contains(d.list[i].longString, word) {
+			continue
+		}
+
+		row, ok := d.rows[i]
+		if !ok {
+			row = generateRow(i, &d.list[i])
+			d.rows[i] = row
+		}
+
+		d.List.Insert(row, -1)
+
+		if len(d.visible) == 0 {
+			d.List.SelectRow(row.ListBoxRow)
+		}
+		d.visible = append(d.visible, i)
+
+		if len(d.visible) >= MaxEntries {
+			// Stop searching. Any finer requires a better search string.
+			return
+		}
+	}
+}
+
+func (d *Dialog) populateEntries() {
 	// Search for guilds first:
-	g, _ := d.state.Store.Guilds()
-	for _, g := range g {
-		if contains(g.Name, word) {
-			d.addEntry(Entry{
-				IconURL:     g.IconURL(),
-				PrimaryText: g.Name,
-				GuildID:     g.ID,
-			})
+	guilds, _ := d.state.Store.Guilds()
+
+	// Pre-grow the slice.
+	d.list = make([]Entry, 0, len(guilds))
+	for _, g := range guilds {
+		d.list = append(d.list, Entry{
+			IconURL:     g.IconURL(),
+			PrimaryText: g.Name,
+			GuildID:     g.ID,
+		})
+	}
+
+	for _, g := range guilds {
+		// If somehow the guild is broken.
+		if g.Name == "" || !g.ID.Valid() {
+			continue
 		}
 
 		c, err := d.state.Store.Channels(g.ID)
@@ -236,82 +286,69 @@ func (d *Dialog) onEntryChange(word string) {
 			continue
 		}
 
+		var channels = make([]Entry, 0, len(c))
 		for _, c := range c {
+			// Allow only text channels.
 			if c.Type != discord.GuildText {
 				continue
 			}
-
-			entry := Entry{
+			channels = append(channels, Entry{
 				PrimaryText: c.Name,
 				RightText:   g.Name,
-			}
-
-			if !entry.contains(word) {
-				continue
-			}
-
-			entry.IconChar = '#'
-			entry.ChannelID = c.ID
-			entry.GuildID = c.GuildID
-			d.addEntry(entry)
+				IconChar:    '#',
+				ChannelID:   c.ID,
+				GuildID:     c.GuildID,
+			})
 		}
+
+		// Batch append:
+		d.list = append(d.list, channels...)
 	}
 
-	dm, _ := d.state.Store.PrivateChannels()
+	dm, _ := d.state.PrivateChannels()
+
+	// Prepare another slice to grow to:
+	dmEntries := make([]Entry, 0, len(dm))
+
 	for _, c := range dm {
 		switch c.Type {
 		case discord.DirectMessage:
 			recip := c.DMRecipients[0]
-			entry := Entry{
+			dmEntries = append(dmEntries, Entry{
 				PrimaryText:   recip.Username,
 				SecondaryText: "#" + recip.Discriminator,
-			}
+				IconURL:       recip.AvatarURL(),
+				ChannelID:     c.ID,
+			})
 
-			if !entry.contains(word) {
-				continue
-			}
-
-			entry.IconURL = recip.AvatarURL()
-			entry.ChannelID = c.ID
-			d.addEntry(entry)
 		default:
-			entry := Entry{
+			dmEntries = append(dmEntries, Entry{
 				PrimaryText: c.Name,
-			}
-
-			if !entry.contains(word) {
-				continue
-			}
-
-			entry.IconChar = '#'
-			entry.ChannelID = c.ID
-			d.addEntry(entry)
+				IconChar:    '#',
+				ChannelID:   c.ID,
+			})
 		}
 	}
-}
 
-func (d *Dialog) addEntry(entry Entry) {
-	if entry.ListBoxRow == nil {
-		entry.generateRow()
+	// Batch append:
+	d.list = append(d.list, dmEntries...)
+
+	// Form long strings:
+	for i, l := range d.list {
+		d.list[i].longString = strings.ToLower(l.PrimaryText + l.SecondaryText + l.RightText)
 	}
 
-	d.List.Insert(entry, -1)
-	entry.Show()
-
-	if len(d.list) == 0 {
-		d.List.SelectRow(entry.ListBoxRow)
-	}
-
-	d.list = append(d.list, entry)
+	// Pre-allocate (arbitrarily) half the length of list for visible:
+	d.visible = make([]int, 0, len(d.list)/2)
+	d.rows = make(map[int]*Row, len(d.list)/2)
 }
 
-func (e *Entry) generateRow() {
-	e.ListBoxRow, _ = gtk.ListBoxRowNew()
-	e.ListBoxRow.Show()
+func generateRow(i int, e *Entry) *Row {
+	r := Row{index: i}
+	r.ListBoxRow, _ = gtk.ListBoxRowNew()
 
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	b.Show()
-	e.ListBoxRow.Add(b)
+	r.ListBoxRow.Add(b)
 
 	switch {
 	case e.IconChar > 0:
@@ -322,7 +359,6 @@ func (e *Entry) generateRow() {
 		l.SetVAlign(gtk.ALIGN_CENTER)
 		gtkutils.Margin2(l, 2, 8)
 
-		l.Show()
 		b.Add(l)
 
 	default:
@@ -333,11 +369,10 @@ func (e *Entry) generateRow() {
 		gtkutils.Margin2(i, 2, 8)
 		gtkutils.ImageSetIcon(i, "user-available-symbolic", IconSize)
 
-		i.Show()
 		b.Add(i)
 
 		if e.IconURL != "" {
-			go cache.SetImageScaled(e.IconURL, i, IconSize, IconSize, cache.Round)
+			go cache.SetImageScaled(e.IconURL+"?size=32", i, IconSize, IconSize, cache.Round)
 		}
 	}
 
@@ -347,7 +382,6 @@ func (e *Entry) generateRow() {
 	p.SetEllipsize(pango.ELLIPSIZE_END)
 	gtkutils.Margin2(p, 2, 4)
 
-	p.Show()
 	b.Add(p)
 
 	// Is there a secondary text?
@@ -356,7 +390,6 @@ func (e *Entry) generateRow() {
 		s.SetOpacity(0.8)
 		gtkutils.Margin2(s, 2, 4)
 
-		s.Show()
 		b.Add(s)
 	}
 
@@ -369,16 +402,9 @@ func (e *Entry) generateRow() {
 		r.SetHAlign(gtk.ALIGN_END)
 		gtkutils.Margin2(r, 2, 4)
 
-		r.Show()
 		b.Add(r)
 	}
-}
 
-func (e Entry) contains(match string) bool {
-	return contains(e.PrimaryText+e.SecondaryText+e.RightText, match)
-}
-
-// match is assumed to already be lower-cased
-func contains(full, match string) bool {
-	return strings.Contains(strings.ToLower(full), match)
+	r.ShowAll()
+	return &r
 }
