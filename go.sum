@@ -20,6 +20,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/diamondburned/arikawa v0.1.6-0.20200407023606-2f597ebc0b5d h1:uMpDY1CKPdVKFAH65/uqB3GZy22XltnG4COTBlmhgUU=
 github.com/diamondburned/arikawa v0.1.6-0.20200407023606-2f597ebc0b5d/go.mod h1:4twL4clERjOU7nOWQm1p1v1tMZ8aWBe5TBtF2BJgmnw=
+github.com/diamondburned/arikawa v0.3.1-0.20200413042522-e95227d3f59f h1:DMjW4thWX6oywR/xyXhRBqL2BKorqXEwzLYyEv92jSs=
+github.com/diamondburned/arikawa v0.3.1-0.20200413042522-e95227d3f59f/go.mod h1:4twL4clERjOU7nOWQm1p1v1tMZ8aWBe5TBtF2BJgmnw=
 github.com/diamondburned/handy v0.0.0-20200405001554-1cdc15eec9a8 h1:Jkxp1cMjXMECudVqwH9KBnejRvGWYWbtDsG2M62/Lrs=
 github.com/diamondburned/handy v0.0.0-20200405001554-1cdc15eec9a8/go.mod h1:v7LYkOUfrXr7xNbJt1y4rUgLR3F9kaj5I4IcUMQLNuM=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
