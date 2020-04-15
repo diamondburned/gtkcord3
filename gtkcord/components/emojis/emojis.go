@@ -100,15 +100,13 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Pick
 	picker.Search, _ = gtk.EntryNew()
 	picker.Main, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
-	gtkutils.InjectCSSUnsafe(picker.Main, "emojiview", "")
+	gtkutils.InjectCSSUnsafe(picker.Popover, "emojiview", "")
 
 	picker.Search.Connect("changed", picker.searched)
 	picker.Popover.Connect("closed", picker.Destroy)
 
 	picker.PageView.SetTransitionType(gtk.STACK_TRANSITION_TYPE_CROSSFADE)
 	picker.PageView.SetTransitionDuration(75)
-
-	gtkutils.Margin(picker.PageView, 3)
 
 	picker.Scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL)
 	picker.Scroll.SetProperty("propagate-natural-height", true)
@@ -217,6 +215,7 @@ func (s *Section) load(onClick func(string), hide func()) {
 		for i := range s.Emojis {
 			img, _ := gtk.ImageNew()
 			img.Show()
+			img.SetTooltipText(s.Emojis[i].Name)
 			gtkutils.ImageSetIcon(img, "image-missing", EmojiSize)
 
 			s.emojis[i] = img

@@ -176,7 +176,9 @@ func InjectCSS(g StyleContextGetter, class, CSS string) {
 
 func AddCSSUnsafe(style *gtk.StyleContext, CSS string) {
 	css, _ := gtk.CssProviderNew()
-	css.LoadFromData(CSS)
+	if err := css.LoadFromData(CSS); err != nil {
+		log.Errorln("Failed to load CSS:", err)
+	}
 	style.AddProvider(css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 }
 

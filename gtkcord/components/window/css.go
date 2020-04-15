@@ -100,6 +100,22 @@ const CSS = `
 		-gtk-icon-effect: highlight;
 	}
 
+	.emojiview button {
+		padding: 4px;
+		border-radius: 0;
+	}
+	.emojiview button:hover {
+		background-image: none;
+	}
+	.emojiview flowbox {
+		background-color: @theme_bg_color;
+		padding: 4px 4px;
+	}
+	.emojiview row {
+		padding: 0;
+	}
+	
+
 	.user-info, .popup-grid > *:not(.popup-user):not(.activity) {
 		background-color: shade(@theme_base_color, 0.9);
 		color: @theme_fg_color;
@@ -108,8 +124,9 @@ const CSS = `
 		background-color: rgba(0, 0, 0, 0.12);
 	}
 
-	.user-info {
+	.user-info, popover {
 		padding: 0;
+		margin:  0;
 	}
 	.user-info separator {
 		margin-top: 0;
