@@ -22,10 +22,10 @@ func EmojiURL(emojiID string, animated bool) string {
 	const EmojiBaseURL = "https://cdn.discordapp.com/emojis/"
 
 	if animated {
-		return EmojiBaseURL + emojiID + ".gif"
+		return EmojiBaseURL + emojiID + ".gif" + "?size=64"
 	}
 
-	return EmojiBaseURL + emojiID + ".png"
+	return EmojiBaseURL + emojiID + ".png" + "?size=64"
 }
 
 type Emoji struct {
@@ -145,7 +145,7 @@ func (r *Renderer) insertEmoji(e *Emoji) {
 
 	r.View.AddChildAtAnchor(img, anchor)
 
-	url := e.EmojiURL() + "?size=64"
+	url := e.EmojiURL()
 
 	go func() {
 		if err := cache.SetImageScaled(url, img, sz, sz); err != nil {

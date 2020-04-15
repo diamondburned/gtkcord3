@@ -13,7 +13,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -22,8 +21,6 @@ import (
 const (
 	AvatarSize    = 42 // gtk.ICON_SIZE_DND
 	AvatarPadding = 10
-
-	AvatarFallbackURL = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
 )
 
 type Message struct {
@@ -33,6 +30,7 @@ type Message struct {
 	Nonce    string
 	ID       discord.Snowflake
 	AuthorID discord.Snowflake
+	Author   string
 	Webhook  bool
 
 	Timestamp time.Time
@@ -44,7 +42,6 @@ type Message struct {
 	// Left side, nil everything if compact mode
 	avatarEv *gtk.EventBox
 	avatar   *gtk.Image
-	pbURL    string
 
 	// Right container:
 	right *gtk.Box
@@ -160,6 +157,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		Nonce:     m.Nonce,
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
+		Author:    m.Author.Username,
 		Webhook:   m.WebhookID.Valid(),
 		Timestamp: m.Timestamp.Time().Local(),
 		Edited:    m.EditedTimestamp.Time().Local(),
@@ -378,22 +376,7 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 }
 
 func (m *Message) UpdateAvatar(url string) {
-	if url == "" {
-		url = AvatarFallbackURL
-	}
-
-	if m.pbURL == url {
-		return
-	}
-	m.pbURL = url
-
-	go func() {
-		err := cache.SetImageScaled(url+"?size=64", m.avatar, AvatarSize, AvatarSize, cache.Round)
-		if err != nil {
-			log.Errorln("Failed to get the pixbuf guild icon:", err)
-			return
-		}
-	}()
+	cache.AsyncFetchUnsafe(url+"?size=64", m.avatar, AvatarSize, AvatarSize, cache.Round)
 }
 
 func (m *Message) customContentUnsafe(s string) {

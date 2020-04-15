@@ -20,27 +20,27 @@ const CSS = `
 	}
 
 	.status {
-		padding: 2px;
+		background-color: white;
+		border: 2px solid #FFFFFF;
 		border-radius: 9999px;
 	}
-	.guilds .status, .popup-user .status {
-		padding: 3px;
-	}
+	.guilds     .status { border-width: 3px; }
+	.popup-user .status { border-width: 4px; }
 
 	.status.online {
-		background-color: #43B581;
+		border-color: #43B581;
 	}
 	.status.busy {
-		background-color: #F04747;
+		border-color: #F04747;
 	}
 	.status.idle {
-		background-color: #FAA61A;
+		border-color: #FAA61A;
 	}
 	.status.offline {
-		background-color: #747F8D;
+		border-color: #747F8D;
 	}
 	.status.unknown {
-		background-color: #FFFFFF;
+		border-color: #FFFFFF;
 	}
 
 	.quickswitcher list { background-color: transparent; }

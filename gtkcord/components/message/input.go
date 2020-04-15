@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/emojis"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/completer"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
@@ -37,6 +38,7 @@ type Input struct {
 	Input    *gtk.TextView
 	InputBuf *gtk.TextBuffer
 	Upload   *gtk.Button
+	Emoji    *gtk.Button
 	Send     *gtk.Button
 
 	Bottom *gtk.Box
@@ -119,6 +121,23 @@ func NewInput(m *Messages) (i *Input) {
 		SpawnUploader(i.upload)
 	})
 
+	// Emoji popup constructor:
+	espawner := emojis.New(i.Messages.c, func(emoji string) {
+		i.InputBuf.InsertAtCursor(emoji)
+	})
+	espawner.Refocus = i.Input // refocus on close
+
+	emoji, _ := gtk.ButtonNewFromIconName("face-smile-symbolic", InputIconSize)
+	i.Emoji = emoji
+	emoji.SetVAlign(gtk.ALIGN_BASELINE)
+	emoji.SetRelief(gtk.RELIEF_NONE)
+	emoji.SetMarginStart(2)
+	emoji.SetMarginEnd(2)
+	emoji.Connect("clicked", func(b *gtk.Button) {
+		opened := espawner.Spawn(b, i.Messages.GetGuildID())
+		opened.Popup()
+	})
+
 	send, _ := gtk.ButtonNewFromIconName("mail-send", InputIconSize)
 	i.Send = send
 	send.SetVAlign(gtk.ALIGN_BASELINE)
@@ -178,6 +197,7 @@ func NewInput(m *Messages) (i *Input) {
 	ibox.PackStart(upload, false, false, 0)
 	ibox.PackStart(s1, false, false, 2)
 	ibox.PackStart(isw, true, true, 0)
+	ibox.PackStart(emoji, false, false, 0)
 	ibox.PackStart(s2, false, false, 2)
 	ibox.PackStart(send, false, false, 0)
 

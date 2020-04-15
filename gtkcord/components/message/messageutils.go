@@ -22,7 +22,7 @@ func shouldCondense(msgs []*Message, msg, lastSameAuthor *Message) bool {
 
 	var latest = msgs[len(msgs)-1]
 
-	if msg.AuthorID != latest.AuthorID {
+	if msg.AuthorID != latest.AuthorID || msg.Author != latest.Author {
 		return false
 	}
 

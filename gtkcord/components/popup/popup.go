@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	PopupAvatarSize = 48
+	PopupAvatarSize = 96
 	PopupWidth      = 240
 
 	OfflineColor = 0x747F8D
@@ -186,7 +186,7 @@ func NewUserPopupBody() *UserPopupBody {
 	main.Show()
 	gtkutils.InjectCSSUnsafe(main, "popup-grid", "")
 
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	b.SetSizeRequest(PopupWidth, -1)
 	b.SetMarginTop(10)
 	b.SetMarginBottom(10)
@@ -195,9 +195,10 @@ func NewUserPopupBody() *UserPopupBody {
 	main.Attach(b, 0, 0, 1, 1)
 
 	iAvatar, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	iAvatar.SetHAlign(gtk.ALIGN_CENTER)
 	iAvatar.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
-	iAvatar.SetMarginStart(7)
-	iAvatar.SetMarginEnd(7)
+	iAvatar.SetMarginTop(10)
+	iAvatar.SetMarginBottom(7)
 	b.Add(iAvatar)
 
 	sAvatar, _ := iAvatar.GetStyleContext()
@@ -205,11 +206,9 @@ func NewUserPopupBody() *UserPopupBody {
 	sAvatar.AddClass("status")
 
 	l, _ := gtk.LabelNew("?")
-	l.SetXAlign(0.0)
 	l.SetMarginEnd(7)
 	l.SetEllipsize(pango.ELLIPSIZE_END)
-	l.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-	l.SetMaxWidthChars(25)
+	l.SetJustify(gtk.JUSTIFY_CENTER)
 	b.Add(l)
 
 	return &UserPopupBody{
@@ -271,7 +270,7 @@ func (b *UserPopupBody) UpdateMemberPart(nick string, u discord.User) {
 
 func (b *UserPopupBody) updateAvatar(url string) {
 	err := cache.SetImageScaled(
-		url+"?size=64", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
+		url+"?size=128", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
 	if err != nil {
 		log.Errorln("Failed to get the pixbuf avatar icon:", err)
 		return

@@ -427,13 +427,13 @@ func (s *State) GuildMuted(guildID discord.Snowflake, everyone bool) bool {
 }
 
 type GuildEmojis struct {
-	Name   string
+	discord.Guild
 	Emojis []discord.Emoji
 }
 
 func (s *State) SearchEmojis(guildID discord.Snowflake) []GuildEmojis {
 	// User doesn't have Nitro, so only non-GIF guild emojis are available:
-	if s.Ready.User.Nitro == discord.NoUserNitro {
+	if s.Ready.User.Nitro == discord.NoUserNitro && guildID.Valid() {
 		// If we don't have a guildID, return nothing.
 		if !guildID.Valid() {
 			return nil
@@ -458,8 +458,13 @@ func (s *State) SearchEmojis(guildID discord.Snowflake) []GuildEmojis {
 			}
 		}
 
+		if len(filtered) == 0 {
+			// No emojis.
+			return nil
+		}
+
 		return []GuildEmojis{{
-			Name:   g.Name,
+			Guild:  *g,
 			Emojis: emojis,
 		}}
 	}
@@ -475,11 +480,22 @@ func (s *State) SearchEmojis(guildID discord.Snowflake) []GuildEmojis {
 
 	for _, g := range guilds {
 		if e, err := s.Store.Emojis(g.ID); err == nil {
+			if len(e) == 0 {
+				continue
+			}
+
 			emojis = append(emojis, GuildEmojis{
-				Name:   g.Name,
+				Guild:  g,
 				Emojis: e,
 			})
 		}
+	}
+
+	// Put the searched emoji in front.
+	if guildID.Valid() {
+		sort.SliceStable(emojis, func(i, j int) bool {
+			return emojis[i].ID == guildID
+		})
 	}
 
 	return emojis

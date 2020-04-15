@@ -8,12 +8,12 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 )
 
 const AvatarSize = 32
+const AvatarSizeGtk = gtk.ICON_SIZE_DND
 
 type Container struct {
 	*gtk.Box
@@ -46,7 +46,7 @@ func New() *Container {
 	l.SetHAlign(gtk.ALIGN_START)
 	labelBox.Add(l)
 
-	a, _ := gtk.ImageNew()
+	a, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_DND)
 	a.Show()
 	a.SetVAlign(gtk.ALIGN_CENTER)
 	a.SetHAlign(gtk.ALIGN_CENTER)
@@ -181,16 +181,7 @@ func (c *Container) UpdatePresence(m discord.Presence, guild discord.Guild) {
 }
 
 func (c *Container) UpdateAvatar(url string) {
-	if url == "" {
-		return
-	}
-
-	go func() {
-		err := cache.SetImageScaled(url+"?size=64", c.Avatar, AvatarSize, AvatarSize, cache.Round)
-		if err != nil {
-			log.Errorln("Failed to get DM avatar", url+":", err)
-		}
-	}()
+	cache.AsyncFetchUnsafe(url+"?size=64", c.Avatar, AvatarSize, AvatarSize, cache.Round)
 }
 
 func PresenceColor(guild discord.Guild, member discord.Presence) discord.Color {
