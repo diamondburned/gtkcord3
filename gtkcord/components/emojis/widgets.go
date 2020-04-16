@@ -88,3 +88,15 @@ func newStaticViewport() *gtk.Viewport {
 
 	return v
 }
+
+func newFlowBox() *gtk.FlowBox {
+	f, _ := gtk.FlowBoxNew()
+	f.Show()
+	f.SetHomogeneous(true)
+	f.SetSelectionMode(gtk.SELECTION_SINGLE)
+	f.SetActivateOnSingleClick(true)
+	f.SetMaxChildrenPerLine(10) // from Discord
+	f.SetMinChildrenPerLine(10) // from Discord Mobile
+
+	return f
+}

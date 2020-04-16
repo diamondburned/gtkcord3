@@ -100,6 +100,12 @@ const CSS = `
 		-gtk-icon-effect: highlight;
 	}
 
+	.emojiview list, .emojiview searchbar box {
+		background-color: @theme_base_color;
+	}
+	.emojiview searchbar entry {
+		background-color: transparent;
+	}
 	.emojiview button {
 		padding: 4px;
 		border-radius: 0;
@@ -108,13 +114,12 @@ const CSS = `
 		background-image: none;
 	}
 	.emojiview flowbox {
-		background-color: @theme_bg_color;
+		background-color: shade(@theme_bg_color, 0.95);
 		padding: 4px 4px;
 	}
 	.emojiview row {
 		padding: 0;
 	}
-	
 
 	.user-info, .popup-grid > *:not(.popup-user):not(.activity) {
 		background-color: shade(@theme_base_color, 0.9);

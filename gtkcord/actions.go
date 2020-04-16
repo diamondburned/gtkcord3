@@ -22,7 +22,7 @@ func (a *Application) actionLoadChannel(_ *glib.SimpleAction, id int64) {
 		return
 	}
 
-	a.SwitchToID(ch.ID, ch.GuildID)
+	semaphore.IdleMust(a.SwitchToID, ch.ID, ch.GuildID)
 }
 
 func newAction(name string, fn interface{}) *glib.SimpleAction {

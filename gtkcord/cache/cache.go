@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -94,8 +95,13 @@ func SanitizeString(str string) string {
 
 // var fileIO sync.Mutex
 
-func download(url string, pp []Processor, gif bool) ([]byte, error) {
-	r, err := Client.Get(url)
+func download(ctx context.Context, url string, pp []Processor, gif bool) ([]byte, error) {
+	q, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create a new re")
+	}
+
+	r, err := Client.Do(q)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to GET")
 	}
@@ -124,8 +130,8 @@ func download(url string, pp []Processor, gif bool) ([]byte, error) {
 }
 
 // get doesn't check if the file exists
-func get(url, dst string, pp []Processor, gif bool) error {
-	b, err := download(url, pp, gif)
+func get(ctx context.Context, url, dst string, pp []Processor, gif bool) error {
+	b, err := download(ctx, url, pp, gif)
 	if err != nil {
 		return err
 	}
@@ -152,7 +158,7 @@ func GetPixbufScaled(url string, w, h int, pp ...Processor) (*gdk.Pixbuf, error)
 	}
 
 	// Get the image into file (dst)
-	if err := get(url, dst, pp, false); err != nil {
+	if err := get(context.Background(), url, dst, pp, false); err != nil {
 		return nil, err
 	}
 
@@ -169,6 +175,12 @@ func SetImage(url string, img *gtk.Image, pp ...Processor) error {
 }
 
 func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error {
+	return SetImageScaledContext(context.Background(), url, img, w, h, pp...)
+}
+
+func SetImageScaledContext(ctx context.Context,
+	url string, img *gtk.Image, w, h int, pp ...Processor) error {
+
 	// Transform URL:
 	gif := strings.Contains(url, "gif")
 	dst := TransformURL(url)
@@ -179,7 +191,7 @@ func SetImageScaled(url string, img *gtk.Image, w, h int, pp ...Processor) error
 	}
 
 	// Get the image into file (dst)
-	if err := get(url, dst, pp, gif); err != nil {
+	if err := get(ctx, url, dst, pp, gif); err != nil {
 		return err
 	}
 
