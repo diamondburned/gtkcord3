@@ -120,6 +120,22 @@ textview, textview > text {
 	border-radius: 0 0 16px 16px;
 }
 
+.guild-folder list {
+	background-color: transparent;
+}
+
+.guild image {
+	padding-top: 3px;
+	padding-bottom: 6px;
+}
+.guild-folder .guild image {
+	background-color: @theme_base_color;
+}
+.guild-folder .guild:last-child image {
+	padding-bottom: 0;
+	border-radius: 0 0 99px 99px;
+}
+
 .guild-folder > button {
 	margin: 0;
 }

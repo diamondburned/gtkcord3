@@ -39,6 +39,15 @@ type Guild struct {
 	unreadChs map[discord.Snowflake]bool
 }
 
+func marginate(r *gtk.ListBoxRow, i *gtk.Image) {
+	// Set paddings (height is less, width is WIDE):
+	r.SetSizeRequest(IconSize+IconPadding*3, IconSize+IconPadding)
+
+	if i != nil {
+		i.SetSizeRequest(IconSize, IconSize)
+	}
+}
+
 func newGuildRow(
 	s *ningen.State,
 	guildID discord.Snowflake,
@@ -64,9 +73,6 @@ func newGuildRow(
 	r.SetHAlign(gtk.ALIGN_CENTER)
 	r.SetVAlign(gtk.ALIGN_CENTER)
 	r.SetActivatable(true)
-	// Set paddings (height is less):
-	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding)
-	gtkutils.Margin2(r, IconPadding/2, 0)
 	gtkutils.InjectCSSUnsafe(r, "guild", "")
 
 	i, _ := gtk.ImageNew()
@@ -74,7 +80,8 @@ func newGuildRow(
 	i.SetHAlign(gtk.ALIGN_CENTER)
 	i.SetVAlign(gtk.ALIGN_CENTER)
 
-	i.SetSizeRequest(IconSize, IconSize)
+	marginate(r, i)
+
 	// gtkutils.Margin2(i, IconPadding, IconPadding) // extra padding
 
 	guild = &Guild{

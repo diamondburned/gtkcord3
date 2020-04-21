@@ -38,6 +38,7 @@ type UnreadStrip struct {
 
 func NewUnreadStrip(child gtk.IWidget) *UnreadStrip {
 	overlay, _ := gtk.OverlayNew()
+	overlay.SetVAlign(gtk.ALIGN_START)
 	overlay.Show()
 	overlay.Add(child)
 
@@ -60,7 +61,7 @@ func NewUnreadStrip(child gtk.IWidget) *UnreadStrip {
 		@define-color pinged rgb(240, 71, 71);
 
 		.read-indicator {
-			padding: 4px 2px; /* Always show, use revealer to hide */
+			padding: 6px 3px; /* Always show, use revealer to hide */
 			transition: 70ms linear;
 			border-radius: 0 99px 99px 0;
 			background-color: @theme_fg_color;
@@ -69,10 +70,10 @@ func NewUnreadStrip(child gtk.IWidget) *UnreadStrip {
 			background-color: @pinged;
 		}
 		.read-indicator.hover {
-			padding: 10px 2px;
+			padding: 10px 3px;
 		}
 		.read-indicator.active {
-			padding: 20px 2px;
+			padding: 20px 3px;
 		}
 	`)
 

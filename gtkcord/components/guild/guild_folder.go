@@ -106,14 +106,14 @@ func newGuildFolder(
 	// Folder.Style.AddClass("guild-folder")
 
 	// Show name on hover.
-	BindNameDirect(rev.Button, icon, &Folder.Name)
+	BindNameDirect(rev.Button, rev.Strip, &Folder.Name)
 
 	// Set the unread status for parent.
 	switch {
 	case pinged:
-		icon.SetPinged()
+		rev.Strip.SetPinged()
 	case unread:
-		icon.SetUnread()
+		rev.Strip.SetUnread()
 	}
 
 	// Color time.
@@ -130,7 +130,8 @@ func newGuildFolder(
 	`)
 
 	// Add some room:
-	gtkutils.Margin2(Folder.RevealerRow, IconPadding/2, 0)
+	rev.ListBoxRow.SetSizeRequest(IconSize+IconPadding*3, IconSize+IconPadding/2)
+	gtkutils.Margin2(rev, IconPadding/2, 0)
 
 	return Folder, nil
 }
@@ -169,11 +170,11 @@ func (f *GuildFolder) setUnread(unread, pinged bool) {
 	semaphore.Async(func() {
 		switch {
 		case pinged:
-			f.Icon.SetPinged()
+			f.Strip.SetPinged()
 		case unread:
-			f.Icon.SetUnread()
+			f.Strip.SetUnread()
 		default:
-			f.Icon.SetRead()
+			f.Strip.SetRead()
 		}
 	})
 }
@@ -186,8 +187,7 @@ type GuildFolderIcon struct {
 	folder []*Guild
 
 	// Main stack, switches between "guilds" and "folder"
-	*UnreadStrip
-	Stack *gtk.Stack
+	*gtk.Stack
 	Style *gtk.StyleContext
 
 	Guilds *gtk.Grid     // contains 4 images always.
@@ -203,13 +203,10 @@ func newGuildFolderIcon(guilds []*Guild) *GuildFolderIcon {
 
 	icon.Stack, _ = gtk.StackNew()
 	icon.Stack.SetTransitionType(gtk.STACK_TRANSITION_TYPE_SLIDE_UP) // unsure
-	icon.Stack.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
+	icon.Stack.SetSizeRequest(IconSize, IconSize)
 
 	icon.Style, _ = icon.Stack.GetStyleContext()
 	icon.Style.AddClass("collapsed") // used for coloring
-
-	// Wrap the stack inside the unread strip overlay.
-	icon.UnreadStrip = NewUnreadStrip(icon.Stack)
 
 	icon.Folder, _ = gtk.ImageNew()
 	gtkutils.ImageSetIcon(icon.Folder, "folder-symbolic", FolderSize)
@@ -225,7 +222,7 @@ func newGuildFolderIcon(guilds []*Guild) *GuildFolderIcon {
 	// Make dummy images.
 	for i := range icon.Images {
 		img, _ := gtk.ImageNew()
-		img.SetSizeRequest(24, 24)
+		img.SetSizeRequest(16, 16)
 
 		icon.Images[i] = img
 	}
@@ -246,7 +243,7 @@ func newGuildFolderIcon(guilds []*Guild) *GuildFolderIcon {
 		}
 		url += "?size=64" // same as guild.go
 
-		cache.AsyncFetchUnsafe(url, icon.Images[i], 24, 24, cache.Round)
+		cache.AsyncFetchUnsafe(url, icon.Images[i], 16, 16, cache.Round)
 	}
 
 	// Add things together.
@@ -262,17 +259,16 @@ func (i *GuildFolderIcon) setReveal(reveal bool) {
 		// show the folder.
 		i.Stack.SetVisibleChildName("folder")
 		i.Style.RemoveClass("collapsed")
-		i.SetSuppress(true)
 	} else {
 		// show the guilds
 		i.Stack.SetVisibleChildName("guilds")
 		i.Style.AddClass("collapsed")
-		i.SetSuppress(false)
 	}
 }
 
 type RevealerRow struct {
 	*gtk.ListBoxRow
+	Strip    *UnreadStrip
 	Button   *gtk.Button
 	Revealer *gtk.Revealer
 }
@@ -297,18 +293,22 @@ func newRevealerRow(button, reveal gtk.IWidget, click func(reveal bool)) *Reveal
 	b.Add(btn)
 	b.Add(r)
 
+	// Wrap the stack inside the unread strip overlay.
+	strip := NewUnreadStrip(b)
+
 	row, _ := gtk.ListBoxRowNew()
 	row.Show()
 	row.SetHAlign(gtk.ALIGN_CENTER)
 	row.SetVAlign(gtk.ALIGN_CENTER)
 	row.SetSelectable(false)
-	row.Add(b)
+	row.Add(strip)
 
 	btn.Connect("clicked", func() {
 		reveal := !r.GetRevealChild()
 		r.SetRevealChild(reveal)
 		click(reveal)
+		strip.SetSuppress(reveal)
 	})
 
-	return &RevealerRow{row, btn, r}
+	return &RevealerRow{row, strip, btn, r}
 }

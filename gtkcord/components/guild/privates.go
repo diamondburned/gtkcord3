@@ -23,17 +23,15 @@ func NewPMButton(s *ningen.State) (dm *DMButton) {
 	r.SetHAlign(gtk.ALIGN_FILL)
 	r.SetVAlign(gtk.ALIGN_CENTER)
 	r.SetActivatable(true)
-
-	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
-	gtkutils.Margin2(r, IconPadding/2, 0)
 	gtkutils.InjectCSSUnsafe(r, "dmbutton", "")
 
 	i, _ := gtk.ImageNew()
 	i.Show()
-	i.SetSizeRequest(IconSize, IconSize)
 	i.SetHAlign(gtk.ALIGN_CENTER)
 	i.SetVAlign(gtk.ALIGN_CENTER)
 	gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
+
+	marginate(r, i)
 
 	ov := NewUnreadStrip(i)
 	r.Add(ov)
