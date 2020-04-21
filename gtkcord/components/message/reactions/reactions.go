@@ -247,9 +247,10 @@ func newReaction(emoji discord.Emoji, count int, me bool) *Reaction {
 	}
 
 	// Set "padding"
-	c, _ := b.GetChild()
-	c.(gtkutils.SizeRequester).SetSizeRequest(EmojiSize+9, -1)
-	gtkutils.Margin2(c.(gtkutils.Marginator), 2, 5)
+	if c, _ := b.GetChild(); c != nil {
+		c.(gtkutils.SizeRequester).SetSizeRequest(EmojiSize+9, -1)
+		gtkutils.Margin2(c.(gtkutils.Marginator), 2, 5)
+	}
 
 	return reaction
 }

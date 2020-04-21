@@ -22,7 +22,7 @@ func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 		folder.List.SelectRow(guild.ListBoxRow)
 		fallthrough
 	case guild != nil:
-		a.Guilds.ListBox.SelectRow(guild.ListBoxRow)
+		a.Guilds.Select(guild.ListBoxRow)
 
 		// Switch the channels view to the guild:
 		a.SwitchGuild(guild)
@@ -33,7 +33,7 @@ func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 		}
 
 	default:
-		a.Privates.List.SelectRow(a.Guilds.DMButton.ListBoxRow)
+		a.Guilds.Select(a.Guilds.DMButton.ListBoxRow)
 
 		// Switch the channels away to the private ones:
 		a.SwitchDM()

@@ -4,7 +4,7 @@
 <h1 align="center">gtkcord</h1>
 <p  align="center">A lightweight Discord client which uses GTK3 for the user interface.</p>
 
-<img src=".readme-resources/images/screenshot4.png" />
+<img src=".readme-resources/images/screenshot5.png" />
 
 </p>
 

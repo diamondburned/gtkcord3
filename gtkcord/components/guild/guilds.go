@@ -132,13 +132,31 @@ func initGuilds(g *Guilds, s *ningen.State) {
 }
 
 func (g *Guilds) rowActivated(l *gtk.ListBox, r *gtk.ListBoxRow) {
-	var index = r.GetIndex()
+	guild, dm := g.preSelect(r)
+	switch {
+	case guild != nil:
+		g.onSelect(guild)
+	case dm:
+		g.DMButton.OnClick()
+	}
+}
+
+func (g *Guilds) Select(r *gtk.ListBoxRow) {
+	g.ListBox.SelectRow(r)
+	g.preSelect(r)
+}
+
+func (g *Guilds) preSelect(r *gtk.ListBoxRow) (guild *Guild, dm bool) {
+	var index = -1
+	if r != nil {
+		index = r.GetIndex()
+	}
 
 	switch {
 	case index < 1:
 		g.unselectAll(-1)
-		g.DMButton.onClick()
-		return
+		g.DMButton.Unread.SetActive(true)
+		return nil, true
 	default:
 		g.DMButton.inactive() // manual work
 		index--
@@ -152,8 +170,9 @@ func (g *Guilds) rowActivated(l *gtk.ListBox, r *gtk.ListBoxRow) {
 	switch r := row.(type) {
 	case *Guild:
 		r.Unread.SetActive(true)
-		g.onSelect(r)
+		return r, false
 	}
+	return nil, false
 }
 
 func (g *Guilds) unselectAll(except int) {

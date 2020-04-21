@@ -31,6 +31,7 @@ func NewContainer(state *ningen.State, gID, chID discord.Snowflake) (*Container,
 	}
 
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
+	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 	scroll.Show()
 
 	column := handy.ColumnNew()

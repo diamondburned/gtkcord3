@@ -52,11 +52,6 @@ func NewPMButton(s *ningen.State) (dm *DMButton) {
 	return
 }
 
-func (dm *DMButton) onClick() {
-	dm.Unread.SetActive(true)
-	dm.OnClick()
-}
-
 func (dm *DMButton) setUnread(unread bool) {
 	if unread {
 		dm.Unread.SetPinged()
