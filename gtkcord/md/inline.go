@@ -49,22 +49,24 @@ func (p *inlineDelimiterProcessor) OnMatch(consumes int) ast.Node {
 		BaseInline: ast.BaseInline{},
 	}
 	switch {
-	case p.char == '_' && consumes == 2:
+	case p.char == '_' && consumes == 2: // __
 		node.Attr = AttrUnderline
-	case p.char == '_' && consumes == 1:
+	case p.char == '_' && consumes == 1: // _
 		fallthrough
-	case p.char == '*' && consumes == 1:
+	case p.char == '*' && consumes == 1: // *
 		node.Attr = AttrItalics
-	case p.char == '*' && consumes == 2:
+	case p.char == '*' && consumes == 2: // **
 		node.Attr = AttrBold
-	case p.char == '|' && consumes == 2:
+	case p.char == '|' && consumes == 2: // ||
 		node.Attr = AttrSpoiler
-	case p.char == '~' && consumes == 2:
+	case p.char == '~' && consumes == 2: // ~~
 		node.Attr = AttrStrikethrough
-	case p.char == '`' && consumes == 1:
+	case p.char == '`' && consumes == 1: // `
 		node.Attr = AttrMonospace
 	}
-
+	if node.Attr == 0 {
+		return nil
+	}
 	return node
 }
 

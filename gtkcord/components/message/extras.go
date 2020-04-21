@@ -227,22 +227,21 @@ func newNormalEmbedUnsafe(
 	}
 
 	if embed.Description != "" {
-		// txtb, _ := gtk.TextBufferNew(nil)
-		// md.ParseWithMessage([]byte(embed.Description), txtb, s.Store, msg)
+		txtv, _ := gtk.TextViewNew()
+		txtv.SetCursorVisible(false)
+		txtv.SetEditable(false)
+		txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 
-		// txtv, _ := gtk.TextViewNewWithBuffer(txtb)
-		// txtv.SetCursorVisible(false)
-		// txtv.SetEditable(false)
-		// txtv.SetWrapMode(gtk.WRAP_WORD_CHAR)
+		embedSetMargin(txtv)
+		md.ParseWithMessage([]byte(embed.Description), txtv, s.Store, msg)
 
-		desc, _ := gtk.LabelNew(string(md.ParseToMarkup([]byte(embed.Description))))
-		desc.SetUseMarkup(true)
-		desc.SetLineWrap(true)
-		desc.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-		desc.SetXAlign(0.0)
-		embedSetMargin(desc)
+		// Make text smaller:
+		md.WrapTag(txtv, map[string]interface{}{
+			"scale":     0.84,
+			"scale-set": true,
+		})
 
-		content.Add(desc)
+		content.Add(txtv)
 	}
 
 	if len(embed.Fields) > 0 {
@@ -378,7 +377,7 @@ func newNormalEmbedUnsafe(
 	main.Add(content)
 
 	// Apply margin to content:
-	content.SetMarginTop(EmbedMargin / 2)
+	content.SetMarginTop(EmbedMargin) // account for children not having margin top
 	content.SetMarginBottom(EmbedMargin / 2)
 
 	// Add a frame around the main embed:
@@ -390,6 +389,6 @@ func newNormalEmbedUnsafe(
 func embedSetMargin(w gtkutils.Marginator) {
 	w.SetMarginStart(EmbedMargin)
 	w.SetMarginEnd(EmbedMargin)
-	w.SetMarginTop(EmbedMargin / 2)
 	w.SetMarginBottom(EmbedMargin / 2)
+	// w.SetMarginTop(EmbedMargin / 2)
 }

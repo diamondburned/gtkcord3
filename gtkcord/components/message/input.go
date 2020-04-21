@@ -93,7 +93,7 @@ func NewInput(m *Messages) (i *Input) {
 	col.Show()
 	col.SetHExpand(true)
 	col.SetSizeRequest(300, -1) // min width
-	col.SetMaximumWidth(MaxMessageWidth)
+	col.SetMaximumWidth(i.Messages.MessageWidth)
 	col.SetLinearGrowthWidth(10000) // force as wide as possible
 
 	style, _ := col.GetStyleContext()

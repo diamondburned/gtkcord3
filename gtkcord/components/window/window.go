@@ -23,7 +23,7 @@ func newStack() (*gtk.Stack, error) {
 }
 
 func stackRemove(s *gtk.Stack, name string) {
-	if w := s.GetChildByName(name); w != nil {
+	if w, _ := s.GetChildByName(name); w != nil {
 		s.Remove(w)
 	}
 }

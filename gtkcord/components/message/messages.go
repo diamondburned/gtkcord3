@@ -20,18 +20,21 @@ import (
 
 const scrollMinDelta = 500
 
+// used as fallback, the settings one overrides this
 var MaxMessageWidth = 750
 
 type Messages struct {
 	Opts
 	gtkutils.ExtendedWidget
+
 	channelID moreatomic.Snowflake
 	guildID   moreatomic.Snowflake
 
 	c     *ningen.State
 	fetch int // max messages
 
-	Main *gtk.Box
+	Main   *gtk.Box
+	Column *handy.Column
 
 	Scroll   *gtk.ScrolledWindow
 	Viewport *gtk.Viewport
@@ -52,11 +55,13 @@ type Messages struct {
 type Opts struct {
 	// Whether or not the sent messages should be "obfuscated" with zero-width
 	// space characters, which avoids telemetry somewhat.
-	InputZeroWidth bool `json:"zero_width"` // true
+	InputZeroWidth bool // true
 
 	// Whether or not gtkcord should send typing events to the Discord server
 	// and announce it.
-	InputOnTyping bool `json:"on_typing"` // true
+	InputOnTyping bool // true
+
+	MessageWidth int
 }
 
 func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
@@ -67,6 +72,9 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 		m.ExtendedWidget = main
 		m.Main = main
+
+		col := handy.ColumnNew()
+		m.Column = col
 
 		// Make the input and typing state:
 		m.Input = NewInput(m)
@@ -113,8 +121,6 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		// b.SetSizeRequest(MaxMessageWidth, -1)
 
 		// Column contains the list:
-		col := handy.ColumnNew()
-		col.SetMaximumWidth(MaxMessageWidth)
 		col.SetLinearGrowthWidth(10000) // force as wide as possible
 		col.Add(b)
 		col.Show()
@@ -160,11 +166,21 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 			// Drain down the event;
 			return false
 		})
+
+		// Set maximum widths
+		m.SetWidth(opts.MessageWidth)
 	})
 
 	m.injectHandlers()
 	m.injectPopup()
 	return m, nil
+}
+
+func (m *Messages) SetWidth(width int) {
+	MaxMessageWidth = width
+	m.Opts.MessageWidth = width
+	m.Column.SetMaximumWidth(width)
+	m.Input.Column.SetMaximumWidth(width)
 }
 
 // Focus on the input box

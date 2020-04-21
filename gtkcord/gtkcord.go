@@ -272,7 +272,11 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Messages
 
-	m, err := message.NewMessages(s, a.Settings.General.Behavior.Opts)
+	m, err := message.NewMessages(s, message.Opts{
+		InputZeroWidth: a.Settings.General.Behavior.ZeroWidth,
+		InputOnTyping:  a.Settings.General.Behavior.OnTyping,
+		MessageWidth:   a.Settings.General.Customization.MessageWidth,
+	})
 	if err != nil {
 		return errors.Wrap(err, "Failed to make messages")
 	}

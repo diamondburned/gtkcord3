@@ -131,6 +131,7 @@ func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	l.Show()
 	l.SetVAlign(gtk.ALIGN_CENTER)
 	l.SetHAlign(gtk.ALIGN_START)
+	l.SetEllipsize(pango.ELLIPSIZE_END)
 	l.SetUseMarkup(true)
 
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)

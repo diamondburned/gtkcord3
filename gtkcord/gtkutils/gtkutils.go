@@ -62,6 +62,10 @@ type Object interface {
 	SetProperty(string, interface{}) error
 }
 
+type SizeRequester interface {
+	SetSizeRequest(w, h int)
+}
+
 // Safe-guard
 var _ ExtendedWidget = (*gtk.Box)(nil)
 var _ WidgetDestroyer = (*gtk.Box)(nil)
@@ -273,7 +277,7 @@ func EventIsLeftClick(ev *gdk.Event) bool {
 
 type Dialoger interface {
 	GetContentArea() (*gtk.Box, error)
-	GetHeaderBar() *gtk.Widget
+	GetHeaderBar() (gtk.IWidget, error)
 	Remove(gtk.IWidget)
 }
 
@@ -281,7 +285,7 @@ func HandyDialog(dialog Dialoger, transientFor gtk.IWindow) *handy.Dialog {
 	w, _ := dialog.GetContentArea()
 	dialog.Remove(w)
 
-	h := dialog.GetHeaderBar()
+	h, _ := dialog.GetHeaderBar()
 	dialog.Remove(h)
 
 	d := handy.DialogNew(transientFor)

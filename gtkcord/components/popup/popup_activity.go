@@ -147,12 +147,12 @@ func (a *UserPopupActivity) image(id discord.Snowflake, assets *discord.Activity
 
 	if a.Image == nil {
 		a.Image, _ = gtk.ImageNew()
-		a.Image.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
+		a.Image.SetSizeRequest(PopupImageSize, PopupImageSize)
 		a.Image.SetMarginStart(SectionPadding)
 		a.Image.SetMarginBottom(SectionPadding)
 		a.Details.PackStart(a.Image, false, false, 0)
 	}
 
 	a.Image.SetTooltipText(text)
-	go cache.AsyncFetch(asset, a.Image, PopupAvatarSize, PopupAvatarSize)
+	go cache.AsyncFetch(asset, a.Image, PopupImageSize, PopupImageSize)
 }

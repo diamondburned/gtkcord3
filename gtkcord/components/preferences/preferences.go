@@ -1,6 +1,8 @@
 package preferences
 
 import (
+	"strconv"
+
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
@@ -16,7 +18,7 @@ func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
 
 	// Set the proper orientation:
 	if w, err := r.GetChild(); err == nil {
-		w.SetProperty("orientation", gtk.ORIENTATION_HORIZONTAL)
+		w.(gtkutils.Object).SetProperty("orientation", gtk.ORIENTATION_HORIZONTAL)
 		// Set all labels to have markup:
 		gtkutils.TraverseWidget(r, func(w *gtk.Widget) {
 			// Labels have use-markup
@@ -48,6 +50,14 @@ func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
 	return r
 }
 
+// Permit only CSS files by MIME type.
+func CSSFilter() *gtk.FileFilter {
+	cssFilter, _ := gtk.FileFilterNew()
+	cssFilter.SetName("CSS Files")
+	cssFilter.AddMimeType("text/css")
+	return cssFilter
+}
+
 // func FileChooser()
 
 func BindSwitch(s *gtk.Switch, b *bool, updaters ...func()) {
@@ -71,6 +81,7 @@ func BindFileChooser(fsb *gtk.FileChooserButton, s *string, updaters ...func()) 
 }
 
 func BindEntry(e *gtk.Entry, s *string, updaters ...func()) {
+	e.SetHExpand(true)
 	e.SetText(*s)
 	update(updaters)
 
@@ -84,6 +95,42 @@ func BindEntry(e *gtk.Entry, s *string, updaters ...func()) {
 		*s = t
 		update(updaters)
 	})
+}
+
+func BindNumberEntry(e *gtk.Entry, input *int, updaters ...func()) {
+	e.SetHExpand(true)
+	e.SetInputPurpose(gtk.INPUT_PURPOSE_NUMBER)
+	e.SetText(strconv.Itoa(*input))
+	update(updaters)
+
+	e.Connect("changed", func() {
+		t, err := e.GetText()
+		if err != nil {
+			log.Errorln("Failed to get entry text:", err)
+			return
+		}
+
+		log.Println("Input:", t)
+
+		i, err := strconv.Atoi(t)
+		EntryError(e, err)
+
+		if err != nil {
+			return
+		}
+
+		*input = i
+		update(updaters)
+	})
+}
+
+func EntryError(entry *gtk.Entry, err error) {
+	if err != nil {
+		entry.SetIconFromIconName(gtk.ENTRY_ICON_SECONDARY, "dialog-error")
+		entry.SetIconTooltipText(gtk.ENTRY_ICON_SECONDARY, err.Error())
+	} else {
+		entry.RemoveIcon(gtk.ENTRY_ICON_SECONDARY)
+	}
 }
 
 func BindButton(b *gtk.Button, updaters ...func()) {

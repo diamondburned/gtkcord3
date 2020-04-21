@@ -18,6 +18,7 @@ import (
 
 const (
 	PopupAvatarSize = 96
+	PopupImageSize  = 48 // rich presence image
 	PopupWidth      = 240
 
 	OfflineColor = 0x747F8D
@@ -100,7 +101,7 @@ func NewModelButton(markup string) *gtk.ModelButton {
 		return btn
 	}
 
-	l := &gtk.Label{Widget: *c}
+	l := &gtk.Label{Widget: *c.ToWidget()}
 	l.SetUseMarkup(true)
 	l.SetHAlign(gtk.ALIGN_START)
 
