@@ -2,7 +2,6 @@ package emojis
 
 import (
 	"context"
-	"runtime"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -13,17 +12,16 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
-	"golang.org/x/sync/semaphore"
 )
-
-// global semaphores are better
-var jobSemaphore = semaphore.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
 
 // MainPage contains sections, which has all emojis.
 type MainPage struct {
 	*gtk.ScrolledWindow
-	ListBox  *gtk.ListBox
+	Main     *gtk.Box
 	Sections []*Section
+
+	vadj *gtk.Adjustment
+	hadj *gtk.Adjustment
 
 	picker  *Picker
 	current int // used to track the last page
@@ -33,15 +31,16 @@ type MainPage struct {
 func newMainPage(p *Picker, click func(string)) MainPage {
 	page := MainPage{click: click, picker: p}
 	page.ScrolledWindow, _ = gtk.ScrolledWindowNew(nil, nil)
-	page.ListBox, _ = gtk.ListBoxNew()
-
-	page.ListBox.SetSelectionMode(gtk.SELECTION_NONE)
+	page.Main, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
 	page.ScrolledWindow.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL)
 	page.ScrolledWindow.SetProperty("propagate-natural-height", true)
 	page.ScrolledWindow.SetProperty("min-content-height", 400)
 	page.ScrolledWindow.SetProperty("max-content-height", 400)
-	page.ScrolledWindow.Add(page.ListBox)
+	page.ScrolledWindow.Add(page.Main)
+
+	page.vadj = page.ScrolledWindow.GetVAdjustment()
+	page.hadj = page.ScrolledWindow.GetHAdjustment()
 
 	return page
 }
@@ -55,14 +54,23 @@ func (page *MainPage) init(guildEmojis []ningen.GuildEmojis) {
 			Emojis: guildEmojis[i].Emojis,
 		}
 
+		// Copy the integer to use with the click callback.
+		guildN := i
+
 		header := newHeader(group.Name, group.IconURL())
 
 		s.Body = newFlowBox()
-		s.RevealerRow = newRevealerRow(header, s.Body, page.reveal)
+		s.RevealerBox = newRevealerBox(header, s.Body, func() {
+			page.reveal(guildN)
+		})
 		s.stopped.Set(true)
 
+		// Bind the revealer to the scrolled window so that expands can focus.
+		s.Revealer.SetFocusHAdjustment(page.hadj)
+		s.Revealer.SetFocusVAdjustment(page.vadj)
+
 		// Add the placeholder first.
-		page.ListBox.Insert(s, i)
+		page.Main.Add(s)
 		page.Sections = append(page.Sections, &s)
 	}
 
@@ -101,7 +109,7 @@ func (p *MainPage) reveal(i int) {
 }
 
 type Section struct {
-	*RevealerRow
+	*RevealerBox
 	Body *gtk.FlowBox
 
 	shiftHeld bool
@@ -139,6 +147,8 @@ func (s *Section) load(onClick func(string), hide func()) {
 				hide()
 			}
 		})
+		// Intercept a button click instead. It's better than listening to
+		// keypresses.
 		s.Body.Connect("button-press-event", func(f *gtk.FlowBox, ev *gdk.Event) bool {
 			evk := gdk.EventButtonNewFromEvent(ev)
 			const shift = uint(gdk.GDK_SHIFT_MASK)
@@ -162,17 +172,8 @@ func (s *Section) load(onClick func(string), hide func()) {
 			// Allocate a timeout context.
 			ctx, cancel := context.WithTimeout(context.TODO(), 7*time.Second)
 
-			// Throttle this job.
-			if err := jobSemaphore.Acquire(ctx, 1); err != nil {
-				// Timed out, exit.
-				cancel()
-				return
-			}
-
 			// Goroutines will pertain even on tab change. This is intentional.
 			go func(i int) {
-				// Release the job throttler.
-				defer jobSemaphore.Release(1)
 				// Complete the used context.
 				defer cancel()
 
@@ -181,7 +182,7 @@ func (s *Section) load(onClick func(string), hide func()) {
 				var url = md.EmojiURL(emoji.ID.String(), emoji.Animated)
 
 				// Set a custom timeout to avoid clogging up other images.
-				if err := cache.SetImageScaledContext(ctx, url, img, EmojiSize, EmojiSize); err != nil {
+				if err := cache.SetImageScaledContext(ctx, url, img, Size, Size); err != nil {
 					log.Errorln("Failed to get emoji:", err)
 				}
 			}(i)

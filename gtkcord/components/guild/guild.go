@@ -15,18 +15,17 @@ import (
 )
 
 const (
-	FolderSize  = 42
+	FolderSize  = 32
 	IconSize    = 52
 	IconPadding = 8
 )
 
 type Guild struct {
-	gtkutils.ExtendedWidget
+	*gtk.ListBoxRow
 	Parent *GuildFolder
+	Unread *UnreadStrip
 
-	Row   *gtk.ListBoxRow
-	Style *gtk.StyleContext
-
+	Event *gtk.EventBox
 	Image *gtk.Image
 	IURL  string
 
@@ -35,9 +34,9 @@ type Guild struct {
 	ID   discord.Snowflake
 	Name string
 
-	busy       deadlock.Mutex
-	stateClass string
-	unreadChs  map[discord.Snowflake]bool
+	busy      deadlock.Mutex
+	muted     bool
+	unreadChs map[discord.Snowflake]bool
 }
 
 func newGuildRow(
@@ -59,57 +58,55 @@ func newGuildRow(
 		}
 	}
 
-	var name = bold(g.Name)
 	var guild *Guild
 
-	semaphore.IdleMust(func() {
-		r, _ := gtk.ListBoxRowNew()
-		// Set paddings:
-		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
-		r.SetHAlign(gtk.ALIGN_FILL)
-		r.SetVAlign(gtk.ALIGN_CENTER)
-		r.SetTooltipMarkup(name)
-		r.SetActivatable(true)
+	r, _ := gtk.ListBoxRowNew()
+	r.SetHAlign(gtk.ALIGN_CENTER)
+	r.SetVAlign(gtk.ALIGN_CENTER)
+	r.SetActivatable(true)
+	// Set paddings (height is less):
+	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding)
+	gtkutils.Margin2(r, IconPadding/2, 0)
+	gtkutils.InjectCSSUnsafe(r, "guild", "")
 
-		style, _ := r.GetStyleContext()
-		style.AddClass("guild")
+	i, _ := gtk.ImageNew()
+	gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
+	i.SetHAlign(gtk.ALIGN_CENTER)
+	i.SetVAlign(gtk.ALIGN_CENTER)
 
-		i, _ := gtk.ImageNew()
-		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
-		i.SetSizeRequest(IconSize, IconSize)
-		i.SetHAlign(gtk.ALIGN_CENTER)
-		i.SetVAlign(gtk.ALIGN_CENTER)
-		r.Add(i)
+	i.SetSizeRequest(IconSize, IconSize)
+	// gtkutils.Margin2(i, IconPadding, IconPadding) // extra padding
 
-		guild = &Guild{
-			ExtendedWidget: r,
-			Parent:         parent,
+	guild = &Guild{
+		ListBoxRow: r,
+		Parent:     parent,
+		Unread:     NewUnreadStrip(i),
 
-			Row:       r,
-			Style:     style,
-			ID:        guildID,
-			Name:      g.Name,
-			IURL:      g.IconURL(),
-			Image:     i,
-			BannerURL: g.BannerURL(),
+		ID:        guildID,
+		Name:      g.Name,
+		IURL:      g.IconURL(),
+		Image:     i,
+		BannerURL: g.BannerURL(),
 
-			unreadChs: map[discord.Snowflake]bool{},
-		}
+		unreadChs: map[discord.Snowflake]bool{},
+	}
 
-		// Check if the guild is unavailable:
-		if fetcherr != nil {
-			guild.SetUnavailable(true)
-		}
-	})
+	// Bind the name popup.
+	guild.Event = BindName(guild.ListBoxRow, guild.Unread, &guild.Name)
 
+	// Check if the guild is unavailable:
 	if fetcherr != nil {
+		guild.SetUnavailable(true)
 		return guild, nil
 	}
 
 	// Prefetch unread state:
 	go func() {
+		// Update the guild icon in the background.
+		guild.UpdateImage()
+
 		if s.GuildMuted(guildID, false) {
-			guild.setClass("muted")
+			guild.muted = true
 			return
 		}
 
@@ -117,20 +114,19 @@ func newGuildRow(
 			unread := true
 			pinged := rs.MentionCount > 0
 
-			guild.setUnread(unread, pinged)
+			semaphore.Async(func() {
+				guild.busy.Lock()
+				guild.setUnread(unread, pinged)
+				guild.busy.Unlock()
+			})
 		}
 	}()
 
 	return guild, nil
 }
 
-// thread safe
-func (g *Guild) setClass(class string) {
-	gtkutils.DiffClass(&g.stateClass, class, g.Style)
-}
-
 func (g *Guild) SetUnavailable(unavailable bool) {
-	g.Row.SetSensitive(!unavailable)
+	g.ListBoxRow.SetSensitive(!unavailable)
 }
 
 func (g *Guild) UpdateImage() {
@@ -186,26 +182,18 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 }
 
 func (guild *Guild) setUnread(unread, pinged bool) {
-	guild.busy.Lock()
-
-	if guild.stateClass == "muted" {
-		guild.busy.Unlock()
-		return
-	}
-
 	switch {
 	case pinged:
-		guild.setClass("pinged")
+		guild.Unread.SetPinged()
 	case unread:
-		guild.setClass("unread")
+		guild.Unread.SetUnread()
 	default:
-		guild.setClass("")
+		guild.Unread.SetRead()
 	}
 
-	guild.busy.Unlock()
-
 	if guild.Parent != nil {
-		guild.Parent.setUnread(unread, pinged)
+		// TODO: migrate to UnreadStrip and get rid of the goroutine.
+		go guild.Parent.setUnread(unread, pinged)
 	}
 }
 

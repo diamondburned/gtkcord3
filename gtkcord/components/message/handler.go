@@ -87,12 +87,12 @@ func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 		return
 	}
 
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
 	guildID := m.guildID.Get()
 
 	semaphore.IdleMust(func() {
+		m.guard.RLock()
+		defer m.guard.RUnlock()
+
 		for _, n := range c.Members {
 			for _, message := range m.messages {
 				if message.AuthorID != n.User.ID {

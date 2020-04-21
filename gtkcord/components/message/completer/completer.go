@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
@@ -50,7 +51,7 @@ type State struct {
 	end   *gtk.TextIter
 
 	lastRequested time.Time
-	lastword      string
+	lastWord      moreatomic.String
 
 	channels []discord.Channel
 	members  []discord.Member
@@ -103,6 +104,11 @@ func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *S
 	scroll.Add(listbox)
 	listbox.Connect("row-activated", s.applyCompletion)
 
+	textbuf.Connect("changed", func() {
+		// Run the autocompleter.
+		s.run()
+	})
+
 	return s
 }
 
@@ -127,9 +133,6 @@ func (c *State) KeyDown(state, key uint) bool {
 			return true
 		}
 	}
-
-	// Run the autocompleter:
-	c.Run()
 
 	if c.IsEmpty() {
 		return false
@@ -211,37 +214,43 @@ func (c *State) getWord() string {
 	return start.GetText(end)
 }
 
-func (c *State) Run() {
+func (c *State) run() {
+	word := c.getWord()
+	if word == c.lastWord.Get() {
+		return
+	}
+	c.lastWord.Set(word)
+
 	select {
-	case completionQueue <- c.run:
+	case completionQueue <- c.execute:
 	default:
 		<-completionQueue
-		completionQueue <- c.run
+		completionQueue <- c.execute
 	}
 }
 
-func (c *State) run() {
-	word := semaphore.IdleMust(c.getWord).(string)
-	if word == c.lastword {
+func (c *State) execute() {
+	var word = c.lastWord.Get()
+
+	if word == "" {
+		// Clear the completion if there's no word.
+		c.ClearCompletion()
 		return
 	}
-	c.lastword = word
 
 	if !c.IsEmpty() && len(c.Entries) > 0 {
 		// Clear completion without hiding:
 		semaphore.IdleMust(c.clearCompletion)
 	}
 
-	// Reveal (true) if c.Entries is not empty.
-	defer semaphore.IdleMust(func() {
-		c.SetRevealChild(len(c.Entries) != 0)
-	})
-
-	if word == "" {
-		return
-	}
-
 	c.loadCompletion(word)
+
+	// Reveal (true) if c.Entries is not empty.
+	if len(c.Entries) > 0 {
+		semaphore.IdleMust(func() {
+			c.SetRevealChild(true)
+		})
+	}
 }
 
 func (c *State) ClearCompletion() {
@@ -256,15 +265,14 @@ func (c *State) ClearCompletion() {
 }
 
 func (c *State) clearCompletion() {
-	for i, entry := range c.Entries {
+	for _, entry := range c.Entries {
 		c.ListBox.Remove(entry)
-		c.Entries[i] = nil
 	}
-	c.Entries = c.Entries[:0]
+	c.Entries = nil
 
-	c.channels = c.channels[:0]
-	c.members = c.members[:0]
-	c.users = c.users[:0]
+	c.channels = nil
+	c.members = nil
+	c.users = nil
 	// c.emojis = c.emojis[:0]
 
 	// c.ScrolledWindow.Hide()
@@ -273,11 +281,6 @@ func (c *State) clearCompletion() {
 // Finalizing function
 func (c *State) applyCompletion() {
 	r := c.ListBox.GetSelectedRow()
-	if r == nil {
-		r = c.Entries[0].ListBoxRow
-		c.ListBox.SelectRow(r)
-	}
-
 	i := r.GetIndex()
 	if i < 0 || i >= len(c.Entries) {
 		log.Errorln("Index out of bounds:", i)

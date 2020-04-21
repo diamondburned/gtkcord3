@@ -200,7 +200,7 @@ func (t *State) render() {
 	t.mu.RUnlock()
 
 	semaphore.IdleMust(func() {
-		t.Label.SetMarkup(text)
+		t.Label.SetMarkup(`<span size="smaller">` + text + "</span>")
 		// Show or hide the breathing animation as well:
 		if text == "" {
 			t.Box.SetOpacity(0)

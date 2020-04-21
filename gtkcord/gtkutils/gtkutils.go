@@ -73,6 +73,11 @@ type Marginator interface {
 	SetMarginEnd(int)
 	SetMarginTop(int)
 	SetMarginBottom(int)
+
+	GetMarginStart() int
+	GetMarginEnd() int
+	GetMarginTop() int
+	GetMarginBottom() int
 }
 
 func Margin4(w Marginator, top, bottom, left, right int) {
@@ -88,6 +93,15 @@ func Margin2(w Marginator, top, left int) {
 
 func Margin(w Marginator, sz int) {
 	Margin2(w, sz, sz)
+}
+
+func TransferMargin(dst, src Marginator) {
+	dst.SetMarginBottom(src.GetMarginBottom())
+	dst.SetMarginEnd(src.GetMarginEnd())
+	dst.SetMarginStart(src.GetMarginStart())
+	dst.SetMarginTop(src.GetMarginTop())
+	// reset src to 0
+	Margin(src, 0)
 }
 
 func AsContainer(w gtk.IWidget) *gtk.Container {

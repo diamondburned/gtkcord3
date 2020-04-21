@@ -24,12 +24,7 @@ const (
 	EmbedImgHeight  = 300 // max
 	EmbedMargin     = 8
 
-	EmbedMainCSS = `
-		.embed {
-			border-left: 4px solid #%06X;
-			background-color: rgba(0, 0, 0, 0.1);
-		}
-	`
+	EmbedMainCSS = ".embed { border-left: 4px solid #%06X; }"
 )
 
 func clampWidth(width int) int {

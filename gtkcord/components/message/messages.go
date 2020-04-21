@@ -312,9 +312,6 @@ func (m *Messages) ScrollToBottom() {
 	vAdj := m.Scroll.GetVAdjustment()
 	to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
 	vAdj.SetValue(to)
-
-	// Focus:
-	m.Messages.SetFocusChild(m.last())
 }
 
 func (m *Messages) onScroll(adj *gtk.Adjustment) {

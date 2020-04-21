@@ -11,7 +11,8 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-const EmojiSize = 28
+// Size is the emoji size.
+const Size = 28
 
 type Picker struct {
 	*gtk.Popover

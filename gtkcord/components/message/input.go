@@ -482,6 +482,9 @@ func (i *Input) send(content string) error {
 		return errors.Wrap(err, "Failed to send message")
 	}
 
+	// Scroll down.
+	semaphore.Async(i.Messages.ScrollToBottom)
+
 	return nil
 }
 
@@ -517,6 +520,9 @@ func (i *Input) _upload(content string, paths []string) error {
 		return errors.Wrap(err, "Failed to upload message")
 	}
 	semaphore.IdleMust(w.rightBottom.Remove, u)
+
+	// Scroll down.
+	semaphore.Async(i.Messages.ScrollToBottom)
 
 	return nil
 }

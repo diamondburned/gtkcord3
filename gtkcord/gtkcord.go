@@ -362,7 +362,7 @@ func (a *Application) Ready(s *ningen.State) error {
 			State: s,
 			OnGuild: func(id discord.Snowflake) {
 				if g, _ := a.Guilds.FindByID(id); g != nil {
-					g.Row.Activate()
+					g.Activate()
 				}
 			},
 			OnChannel: func(ch, guild discord.Snowflake) {

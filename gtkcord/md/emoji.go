@@ -22,10 +22,10 @@ func EmojiURL(emojiID string, animated bool) string {
 	const EmojiBaseURL = "https://cdn.discordapp.com/emojis/"
 
 	if animated {
-		return EmojiBaseURL + emojiID + ".gif" + "?size=64"
+		return EmojiBaseURL + emojiID + ".gif?v=1"
 	}
 
-	return EmojiBaseURL + emojiID + ".png" + "?size=64"
+	return EmojiBaseURL + emojiID + ".png?v=1"
 }
 
 type Emoji struct {

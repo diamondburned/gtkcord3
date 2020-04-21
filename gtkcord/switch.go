@@ -15,18 +15,15 @@ import (
 func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 	var row *gtk.ListBoxRow
 
-	guild, _ := a.Guilds.FindByID(guildID)
+	guild, folder := a.Guilds.FindByID(guildID)
 
-	// Unselect everything first:
-	a.Guilds.UnselectAll(-1)
-	// Then select the row:
-	if guild != nil {
-		a.Guilds.ListBox.SelectRow(guild.Row)
-	} else {
-		a.Privates.List.SelectRow(a.Guilds.DMButton.ListBoxRow)
-	}
+	switch {
+	case folder != nil && guild != nil:
+		folder.List.SelectRow(guild.ListBoxRow)
+		fallthrough
+	case guild != nil:
+		a.Guilds.ListBox.SelectRow(guild.ListBoxRow)
 
-	if guild != nil {
 		// Switch the channels view to the guild:
 		a.SwitchGuild(guild)
 
@@ -35,7 +32,9 @@ func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
 			row = channel.Row
 		}
 
-	} else {
+	default:
+		a.Privates.List.SelectRow(a.Guilds.DMButton.ListBoxRow)
+
 		// Switch the channels away to the private ones:
 		a.SwitchDM()
 
@@ -89,11 +88,27 @@ func (a *Application) FocusMessages() {
 	a.Messages.Focus()
 }
 
+// leftIsDM returns whether or not the current view shows the direct messages.
+func (a *Application) leftIsDM() bool {
+	if wg, ok := a.leftCols[2]; ok {
+		_, ok = wg.(*channel.PrivateChannel)
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *Application) SwitchGuild(g *guild.Guild) {
 	a.changeCol(columnChange{
 		Widget: a.Channels,
 		Width:  channel.ChannelsWidth,
 		Checker: func() bool {
+			// Second column should be a DM if we're not in a guild.
+			if a.leftIsDM() {
+				return true
+			}
+
 			// We just check if the guild ID matches that in Messages. It
 			// shouldn't.
 			return a.Channels.GuildID != g.ID || a.Messages.GetGuildID() != g.ID
@@ -157,7 +172,8 @@ func (a *Application) SwitchChannel(ch Channel) {
 		Widget: a.Messages,
 		Width:  -1,
 		Checker: func() bool {
-			return a.Messages.GetChannelID() != ch.ChannelID()
+			// If left side is currently DM, then we must switch.
+			return a.leftIsDM() || a.Messages.GetChannelID() != ch.ChannelID()
 		},
 		Setter: func(w gtk.IWidget) {
 			a.Right.Add(w)

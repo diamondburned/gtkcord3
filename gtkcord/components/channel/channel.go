@@ -140,7 +140,7 @@ func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	b.Add(l)
 
 	r, _ := gtk.ListBoxRowNew()
-	r.SetSizeRequest(-1, 20)
+	r.SetSizeRequest(-1, 14)
 	r.Show()
 	r.Add(b)
 

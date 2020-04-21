@@ -6,12 +6,12 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-type RevealerRow struct {
-	*gtk.ListBoxRow
+type RevealerBox struct {
+	*gtk.Box
 	Revealer *gtk.Revealer
 }
 
-func newRevealerRow(btn *gtk.Button, reveal gtk.IWidget, onRev func(int)) *RevealerRow {
+func newRevealerBox(btn *gtk.Button, reveal gtk.IWidget, click func()) *RevealerBox {
 	r, _ := gtk.RevealerNew()
 	r.Show()
 	r.SetRevealChild(false)
@@ -23,18 +23,9 @@ func newRevealerRow(btn *gtk.Button, reveal gtk.IWidget, onRev func(int)) *Revea
 	b.Add(btn)
 	b.Add(r)
 
-	row, _ := gtk.ListBoxRowNew()
-	row.Show()
-	row.Add(b)
+	btn.Connect("clicked", click)
 
-	btn.Connect("clicked", func() {
-		onRev(row.GetIndex())
-	})
-
-	return &RevealerRow{
-		ListBoxRow: row,
-		Revealer:   r,
-	}
+	return &RevealerBox{b, r}
 }
 
 func newHeader(name string, imgURL string) *gtk.Button {
@@ -42,7 +33,7 @@ func newHeader(name string, imgURL string) *gtk.Button {
 	i.Show()
 
 	gtkutils.Margin(i, 4)
-	gtkutils.ImageSetIcon(i, "image-missing", EmojiSize)
+	gtkutils.ImageSetIcon(i, "image-missing", Size)
 
 	l, _ := gtk.LabelNew(name)
 	l.Show()
@@ -64,7 +55,7 @@ func newHeader(name string, imgURL string) *gtk.Button {
 	}
 
 	// ?size=64 is from the left-bar guilds icon.
-	cache.AsyncFetchUnsafe(imgURL+"?size=64", i, EmojiSize, EmojiSize, cache.Round)
+	cache.AsyncFetchUnsafe(imgURL+"?size=64", i, Size, Size, cache.Round)
 
 	return b
 }

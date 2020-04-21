@@ -66,7 +66,7 @@ func NewChMenuBody(p *gtk.Popover, s *ningen.State, gID, chID discord.Snowflake)
 	gtkutils.Margin(b, 10)
 
 	details := popup.NewButton("Details", func() {
-		p.Hide()
+		p.Popdown()
 
 		c, err := overview.NewContainer(s, gID, chID)
 		if err != nil {

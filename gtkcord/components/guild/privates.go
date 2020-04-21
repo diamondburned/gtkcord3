@@ -3,14 +3,13 @@ package guild
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
 type DMButton struct {
 	*gtk.ListBoxRow
-	Style *gtk.StyleContext
+	Unread *UnreadStrip
 
 	OnClick func()
 
@@ -19,61 +18,75 @@ type DMButton struct {
 
 // thread-safe
 func NewPMButton(s *ningen.State) (dm *DMButton) {
-	semaphore.IdleMust(func() {
-		r, _ := gtk.ListBoxRowNew()
-		r.Show()
-		r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
-		r.SetHAlign(gtk.ALIGN_FILL)
-		r.SetVAlign(gtk.ALIGN_CENTER)
-		r.SetTooltipMarkup("<b>Private Messages</b>")
-		r.SetActivatable(true)
+	r, _ := gtk.ListBoxRowNew()
+	r.Show()
+	r.SetHAlign(gtk.ALIGN_FILL)
+	r.SetVAlign(gtk.ALIGN_CENTER)
+	r.SetActivatable(true)
 
-		s, _ := r.GetStyleContext()
-		s.AddClass("dmbutton")
+	r.SetSizeRequest(IconSize+IconPadding*2, IconSize+IconPadding*2)
+	gtkutils.Margin2(r, IconPadding/2, 0)
+	gtkutils.InjectCSSUnsafe(r, "dmbutton", "")
 
-		i, _ := gtk.ImageNew()
-		i.Show()
-		i.SetSizeRequest(IconSize, IconSize)
-		i.SetHAlign(gtk.ALIGN_CENTER)
-		i.SetVAlign(gtk.ALIGN_CENTER)
-		gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
-		r.Add(i)
+	i, _ := gtk.ImageNew()
+	i.Show()
+	i.SetSizeRequest(IconSize, IconSize)
+	i.SetHAlign(gtk.ALIGN_CENTER)
+	i.SetVAlign(gtk.ALIGN_CENTER)
+	gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
 
-		dm = &DMButton{
-			ListBoxRow: r,
-			Style:      s,
-		}
-	})
+	ov := NewUnreadStrip(i)
+	r.Add(ov)
 
-	go func() {
-		// Find and detect any unread channels:
-		chs, err := s.PrivateChannels()
-		if err != nil {
-			log.Errorln("Failed to get private channels for DMButton:", err)
-			return
-		}
+	dm = &DMButton{
+		ListBoxRow: r,
+		Unread:     ov,
+	}
 
-		for _, ch := range chs {
-			rs := s.FindLastRead(ch.ID)
-			if rs == nil {
-				continue
-			}
+	name := "Private Messages"
+	BindName(r, ov, &name)
 
-			// Snowflakes have timestamps, which allow us to do this:
-			if ch.LastMessageID.Time().After(rs.LastMessageID.Time()) {
-				dm.setUnread(true)
-				break
-			}
-		}
-	}()
+	// Initialize the read state.
+	go dm.resetRead(s)
 
 	return
 }
 
+func (dm *DMButton) onClick() {
+	dm.Unread.SetActive(true)
+	dm.OnClick()
+}
+
 func (dm *DMButton) setUnread(unread bool) {
-	var class string
 	if unread {
-		class = "pinged"
+		dm.Unread.SetPinged()
+	} else {
+		dm.Unread.SetRead()
 	}
-	gtkutils.DiffClass(&dm.class, class, dm.Style)
+}
+
+func (dm *DMButton) inactive() {
+	dm.Unread.SetActive(false)
+}
+
+func (dm *DMButton) resetRead(s *ningen.State) {
+	// Find and detect any unread channels:
+	chs, err := s.PrivateChannels()
+	if err != nil {
+		log.Errorln("Failed to get private channels for DMButton:", err)
+		return
+	}
+
+	for _, ch := range chs {
+		rs := s.FindLastRead(ch.ID)
+		if rs == nil {
+			continue
+		}
+
+		// Snowflakes have timestamps, which allow us to do this:
+		if ch.LastMessageID.Time().After(rs.LastMessageID.Time()) {
+			dm.setUnread(true)
+			break
+		}
+	}
 }

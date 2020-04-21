@@ -79,8 +79,7 @@ func (r *Renderer) renderCodeBlock(node *ast.FencedCodeBlock, source []byte) {
 
 	for i := 0; i < node.Lines().Len(); i++ {
 		line := node.Lines().At(i)
-		// Prepend 2 spaces at the start of line to fake indentation:
-		code = append(code, append([]byte{' ', ' '}, line.Value(source)...)...)
+		code = append(code, line.Value(source)...)
 	}
 
 	iterator, err := lexer.Tokenise(nil, string(code))

@@ -23,15 +23,18 @@ type Guilds struct {
 	OnSelect func(g *Guild)
 }
 
-func NewGuilds(s *ningen.State) (*Guilds, error) {
-	if len(s.Ready.Settings.GuildFolders) > 0 {
-		return NewGuildsFromFolders(s, s.Ready.Settings.GuildFolders)
-	} else {
-		return NewGuildsLegacy(s, s.Ready.Settings.GuildPositions)
-	}
+func NewGuilds(s *ningen.State) (g *Guilds, err error) {
+	semaphore.IdleMust(func() {
+		if len(s.Ready.Settings.GuildFolders) > 0 {
+			g, err = newGuildsFromFolders(s, s.Ready.Settings.GuildFolders)
+		} else {
+			g, err = newGuildsLegacy(s, s.Ready.Settings.GuildPositions)
+		}
+	})
+	return
 }
 
-func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guilds, error) {
+func newGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guilds, error) {
 	var rows = make([]gtkutils.ExtendedWidget, 0, len(folders))
 	var g = &Guilds{}
 
@@ -61,7 +64,7 @@ func NewGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 	return g, nil
 }
 
-func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, error) {
+func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, error) {
 	guilds, err := s.Guilds()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get guilds")
@@ -102,71 +105,71 @@ func NewGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 func initGuilds(g *Guilds, s *ningen.State) {
 	dm := NewPMButton(s)
 
-	semaphore.IdleMust(func() {
-		gw, _ := gtk.ScrolledWindowNew(nil, nil)
-		gw.Show()
-		gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL) // external means hidden scroll
-		g.ExtendedWidget = gw
+	gw, _ := gtk.ScrolledWindowNew(nil, nil)
+	gw.Show()
+	gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL) // external means hidden scroll
+	g.ExtendedWidget = gw
 
-		l, _ := gtk.ListBoxNew()
-		l.Show()
-		l.SetActivateOnSingleClick(true)
-		gtkutils.InjectCSSUnsafe(l, "guilds", "")
+	l, _ := gtk.ListBoxNew()
+	l.Show()
+	l.SetActivateOnSingleClick(true)
+	gtkutils.InjectCSSUnsafe(l, "guilds", "")
 
-		gw.Add(l)
-		g.ListBox = l
+	gw.Add(l)
+	g.ListBox = l
 
-		// Add the button to the second of the list:
-		g.DMButton = dm
-		l.Insert(dm, -1)
+	// Add the button to the second of the list:
+	g.DMButton = dm
+	l.Insert(dm, -1)
 
-		// Add the rest:
-		for _, g := range g.Guilds {
-			l.Insert(g, -1)
-			g.ShowAll()
-		}
-
-		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			var index = r.GetIndex()
-
-			switch {
-			case index < 1:
-				g.UnselectAll(-1)
-				g.DMButton.OnClick()
-				return
-			default:
-				index--
-			}
-
-			var row = g.Guilds[index]
-
-			// Unselect all guild folders except the current one:
-			g.UnselectAll(index)
-
-			// load the guild, then subscribe to typing events
-			d, ok := row.(*Guild)
-			if ok {
-				g.onSelect(d)
-			}
-		})
-	})
-
-	go g.Find(func(g *Guild) bool {
-		g.UpdateImage()
-		return false
-	})
-
+	// Add the rest:
+	for _, g := range g.Guilds {
+		l.Insert(g, -1)
+		g.ShowAll()
+	}
+	l.Connect("row-activated", g.rowActivated)
 	s.AddReadChange(g.TraverseReadState)
 }
 
-func (guilds *Guilds) UnselectAll(except int) {
+func (g *Guilds) rowActivated(l *gtk.ListBox, r *gtk.ListBoxRow) {
+	var index = r.GetIndex()
+
+	switch {
+	case index < 1:
+		g.unselectAll(-1)
+		g.DMButton.onClick()
+		return
+	default:
+		g.DMButton.inactive() // manual work
+		index--
+	}
+
+	var row = g.Guilds[index]
+
 	// Unselect all guild folders except the current one:
-	for i, r := range guilds.Guilds {
+	g.unselectAll(index)
+
+	switch r := row.(type) {
+	case *Guild:
+		r.Unread.SetActive(true)
+		g.onSelect(r)
+	}
+}
+
+func (g *Guilds) unselectAll(except int) {
+	// Unselect all guild folders except the current one:
+	for i, r := range g.Guilds {
 		if i == except {
 			continue
 		}
-		if f, ok := r.(*GuildFolder); ok {
-			f.List.SelectRow(nil)
+
+		switch r := r.(type) {
+		case *Guild:
+			r.Unread.SetActive(false)
+		case *GuildFolder:
+			// TODO: r.Unread.SetSuppress(true)
+			r.unselectAll(-1) // will never be the current folder.
+			r.List.SelectRow(nil)
 		}
 	}
 }
@@ -233,6 +236,12 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 	}
 
 	guild.busy.Lock()
+	defer guild.busy.Unlock()
+
+	// TODO: confirm that nothing breaks with this running prematurely.
+	if guild.muted {
+		return
+	}
 
 	if !unread {
 		delete(guild.unreadChs, rs.ChannelID)
@@ -252,7 +261,6 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 		}
 	}
 
-	guild.busy.Unlock()
-
-	guild.setUnread(unread, pinged)
+	// IdleMust so the mutex is affected.
+	semaphore.IdleMust(guild.setUnread, unread, pinged)
 }

@@ -9,10 +9,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	sema "golang.org/x/sync/semaphore"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -36,6 +39,9 @@ var (
 	DirName = CachePrefix + "-" + CacheHash
 	Temp    = os.TempDir()
 	Path    = filepath.Join(Temp, DirName)
+
+	// global HTTP throttler to fetch assets.
+	throttler = sema.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
 )
 
 // var store *diskv.Diskv
@@ -96,6 +102,12 @@ func SanitizeString(str string) string {
 // var fileIO sync.Mutex
 
 func download(ctx context.Context, url string, pp []Processor, gif bool) ([]byte, error) {
+	// Throttle.
+	if err := throttler.Acquire(ctx, 1); err != nil {
+		return nil, errors.Wrap(err, "Failed to acquire throttler")
+	}
+	defer throttler.Release(1)
+
 	q, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create a new re")
@@ -206,6 +218,12 @@ func SetImageScaledContext(ctx context.Context,
 
 // SetImageAsync is not cached.
 func SetImageAsync(url string, img *gtk.Image, w, h int) error {
+	// Throttle.
+	if err := throttler.Acquire(context.Background(), 1); err != nil {
+		return errors.Wrap(err, "Failed to acquire throttler")
+	}
+	defer throttler.Release(1)
+
 	r, err := Client.Get(url)
 	if err != nil {
 		return errors.Wrap(err, "Failed to GET "+url)
@@ -222,26 +240,26 @@ func SetImageAsync(url string, img *gtk.Image, w, h int) error {
 }
 
 func AsyncFetch(url string, img *gtk.Image, w, h int, pp ...Processor) {
-	semaphore.IdleMust(func() {
-		AsyncFetchUnsafe(url, img, w, h, pp...)
-	})
+	semaphore.IdleMust(gtkutils.ImageSetIcon, img, "image-missing", w)
+	fetchImage(url, img, w, h, pp...)
 }
 
 func AsyncFetchUnsafe(url string, img *gtk.Image, w, h int, pp ...Processor) {
 	gtkutils.ImageSetIcon(img, "image-missing", w)
+	go fetchImage(url, img, w, h, pp...)
+}
 
-	go func() {
-		var err error
-		if len(pp) == 0 {
-			err = SetImageAsync(url, img, w, h)
-		} else {
-			err = SetImageScaled(url, img, w, h, pp...)
-		}
-		if err != nil {
-			log.Errorln("Failed to get image", url+":", err)
-			return
-		}
-	}()
+func fetchImage(url string, img *gtk.Image, w, h int, pp ...Processor) {
+	var err error
+	if len(pp) == 0 {
+		err = SetImageAsync(url, img, w, h)
+	} else {
+		err = SetImageScaled(url, img, w, h, pp...)
+	}
+	if err != nil {
+		log.Errorln("Failed to get image", url+":", err)
+		return
+	}
 }
 
 func SizeToURL(url string, w, h int) string {
