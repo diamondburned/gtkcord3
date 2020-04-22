@@ -186,6 +186,9 @@ func NewDialog(s *ningen.State) *Dialog {
 }
 
 func (d *Dialog) Down() {
+	if len(d.visible) == 0 {
+		return
+	}
 	i := d.List.GetSelectedRow().GetIndex()
 	i++
 	if i >= len(d.visible) {
@@ -195,6 +198,9 @@ func (d *Dialog) Down() {
 }
 
 func (d *Dialog) Up() {
+	if len(d.visible) == 0 {
+		return
+	}
 	i := d.List.GetSelectedRow().GetIndex()
 	i--
 	if i < 0 {
