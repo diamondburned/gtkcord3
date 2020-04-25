@@ -155,6 +155,10 @@ textview, textview > text {
 .guilds > *:hover, .guild:hover {
 	box-shadow: none;
 }
+.guild-folder:focus, .guild-folder:active {
+	box-shadow: none;
+	background-image: none;
+}
 
 .guilds row {
 	padding: 0;

@@ -6,6 +6,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 )
 
 func newNamePopover(name string, relative gtk.IWidget) *gtk.Popover {
@@ -14,6 +15,9 @@ func newNamePopover(name string, relative gtk.IWidget) *gtk.Popover {
 	label.SetUseMarkup(true)
 	label.SetMarginStart(5)
 	label.SetMarginEnd(5)
+	label.SetHExpand(true)
+	label.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	label.SetMaxWidthChars(50)
 	label.Show()
 
 	popover.Add(label)

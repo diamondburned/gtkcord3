@@ -43,7 +43,7 @@ func init() {
 
 	f, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0775)
 	if err != nil {
-		Errorln("Failed to open log file:", err)
+		log.Println("(NON-FATAL) ERROR: Failed to open log file:", err)
 	} else {
 		Output = io.MultiWriter(os.Stderr, f)
 	}

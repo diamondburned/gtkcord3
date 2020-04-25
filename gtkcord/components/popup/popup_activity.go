@@ -34,8 +34,10 @@ func NewUserPopupActivity() *UserPopupActivity {
 	gtkutils.InjectCSSUnsafe(details, "popup-activity", "")
 
 	header, _ := gtk.LabelNew("")
-	header.SetHAlign(gtk.ALIGN_FILL)
 	header.SetXAlign(0.0)
+	header.SetHAlign(gtk.ALIGN_FILL)
+	header.SetHExpand(true)
+	header.SetMaxWidthChars(0)
 	header.SetSingleLineMode(true)
 	header.SetEllipsize(pango.ELLIPSIZE_END)
 	gtkutils.Margin4(header, SectionPadding, SectionPadding-3, SectionPadding, SectionPadding)
@@ -90,6 +92,8 @@ func (a *UserPopupActivity) UpdateUnsafe(ac discord.Activity) {
 		l.SetHAlign(gtk.ALIGN_FILL)
 		l.SetVAlign(gtk.ALIGN_CENTER)
 		l.SetXAlign(0.0)
+		l.SetHExpand(true)
+		l.SetMaxWidthChars(0) // max of parent
 
 		a.Details.Add(l)
 
