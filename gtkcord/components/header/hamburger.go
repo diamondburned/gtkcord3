@@ -18,7 +18,7 @@ func newMainHamburger() (*MainHamburger, error) {
 		return nil, errors.Wrap(err, "Failed to make hamburger box")
 	}
 	b.Show()
-	b.SetSizeRequest(guild.IconSize+guild.IconPadding*2, -1)
+	b.SetSizeRequest(guild.TotalWidth, -1)
 
 	mb, err := gtk.MenuButtonNew()
 	if err != nil {

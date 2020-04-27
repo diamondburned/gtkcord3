@@ -18,6 +18,7 @@ const (
 	FolderSize  = 32
 	IconSize    = 52
 	IconPadding = 8
+	TotalWidth  = IconSize + IconPadding*3
 )
 
 type Guild struct {
@@ -41,7 +42,7 @@ type Guild struct {
 
 func marginate(r *gtk.ListBoxRow, i *gtk.Image) {
 	// Set paddings (height is less, width is WIDE):
-	r.SetSizeRequest(IconSize+IconPadding*3, IconSize+IconPadding)
+	r.SetSizeRequest(TotalWidth, IconSize+IconPadding)
 
 	if i != nil {
 		i.SetSizeRequest(IconSize, IconSize)

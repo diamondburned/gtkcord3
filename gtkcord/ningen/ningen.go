@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/utils/wsutil"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/pkg/errors"
 	"github.com/sasha-s/go-deadlock"
@@ -17,8 +18,8 @@ func init() {
 	gateway.Presence = &gateway.UpdateStatusData{
 		Status: discord.OnlineStatus,
 	}
-	gateway.WSTimeout = 5 * time.Second
-	gateway.WSDebug = func(v ...interface{}) {
+	wsutil.WSTimeout = 5 * time.Second
+	wsutil.WSDebug = func(v ...interface{}) {
 		log.Debugln(v...)
 	}
 }

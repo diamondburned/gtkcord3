@@ -6,7 +6,6 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
@@ -56,8 +55,6 @@ func parse(content []byte, r *Renderer, opts ...parser.ParseOption) {
 		parser.WithBlockParsers(BlockParsers()...),
 		parser.WithInlineParsers(InlineParsers()...),
 	)
-
-	log.Infoln("Parsing:", string(content))
 
 	node := p.Parse(text.NewReader(content), opts...)
 

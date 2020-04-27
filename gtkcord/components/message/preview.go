@@ -106,7 +106,7 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	// Calculate the sizee so that the image is just slightly (80%) smaller:
 	// w = w * 8 / 10
-	h = h * 8 / 10
+	h = h * 9 / 10
 
 	go pd.Fetch(w, h)
 	d.Run()
