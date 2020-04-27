@@ -12,7 +12,7 @@ func TestGetSessionBus(t *testing.T) {
 		t.Fatal("c == nil")
 	}
 
-	err = c.Notify(Notification{
+	_, err = NewNotifier(c).Notify(Notification{
 		AppName: "gtkcord3",
 		AppIcon: "user-available",
 		Title:   "Notification title",

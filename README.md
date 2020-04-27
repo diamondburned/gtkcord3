@@ -28,7 +28,7 @@ go get github.com/diamondburned/gtkcord3 # auto updates
 
 ![Login screen](.readme-resources/images/login.png)
 
-### Using DiscordLogin (recommended)
+### Using [DiscordLogin](https://github.com/diamondburned/discordlogin) (recommended)
 
 1. Click the DiscordLogin button.
 2. Install DiscordLogin if you have to.

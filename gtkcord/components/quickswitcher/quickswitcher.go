@@ -276,6 +276,7 @@ func (d *Dialog) populateEntries() {
 	for _, g := range guilds {
 		d.list = append(d.list, Entry{
 			IconURL:     g.IconURL(),
+			IconChar:    '*', // for guild apparently
 			PrimaryText: g.Name,
 			GuildID:     g.ID,
 		})
@@ -324,6 +325,7 @@ func (d *Dialog) populateEntries() {
 				PrimaryText:   recip.Username,
 				SecondaryText: "#" + recip.Discriminator,
 				IconURL:       recip.AvatarURL(),
+				IconChar:      '@',
 				ChannelID:     c.ID,
 			})
 
@@ -341,7 +343,8 @@ func (d *Dialog) populateEntries() {
 
 	// Form long strings:
 	for i, l := range d.list {
-		d.list[i].longString = strings.ToLower(l.PrimaryText + l.SecondaryText + l.RightText)
+		d.list[i].longString = string(l.IconChar) +
+			strings.ToLower(l.PrimaryText+l.SecondaryText+l.RightText)
 	}
 
 	// Pre-allocate (arbitrarily) half the length of list for visible:
@@ -357,17 +360,7 @@ func generateRow(i int, e *Entry) *Row {
 	r.ListBoxRow.Add(b)
 
 	switch {
-	case e.IconChar > 0:
-		l, _ := gtk.LabelNew(`<span size="larger" weight="bold">` + string(e.IconChar) + `</span>`)
-		l.SetUseMarkup(true)
-		l.SetSizeRequest(IconSize, IconSize)
-		l.SetHAlign(gtk.ALIGN_CENTER)
-		l.SetVAlign(gtk.ALIGN_CENTER)
-		gtkutils.Margin2(l, 2, 8)
-
-		b.Add(l)
-
-	default:
+	case e.IconURL != "":
 		i, _ := gtk.ImageNew()
 		i.SetSizeRequest(IconSize, IconSize)
 		i.SetHAlign(gtk.ALIGN_CENTER)
@@ -380,6 +373,16 @@ func generateRow(i int, e *Entry) *Row {
 		if e.IconURL != "" {
 			go cache.SetImageScaled(e.IconURL+"?size=32", i, IconSize, IconSize, cache.Round)
 		}
+
+	default:
+		l, _ := gtk.LabelNew(`<span size="larger" weight="bold">` + string(e.IconChar) + `</span>`)
+		l.SetUseMarkup(true)
+		l.SetSizeRequest(IconSize, IconSize)
+		l.SetHAlign(gtk.ALIGN_CENTER)
+		l.SetVAlign(gtk.ALIGN_CENTER)
+		gtkutils.Margin2(l, 2, 8)
+
+		b.Add(l)
 	}
 
 	// Generate primary text
