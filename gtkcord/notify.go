@@ -24,10 +24,12 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 	var (
 		title   = a.State.AuthorDisplayName(create) + " mentioned you"
 		content = humanize.TrimString(create.Content, 256)
-		markup  = md.ParseToSimpleMarkupWithMessage([]byte(content), a.State.Store, &create.Message)
+		markup  = md.ParseToSimpleMarkupWithMessage(
+			[]byte(content), a.State.Store, &create.Message,
+		)
 	)
 
-	if ch, _ := a.State.Store.Channel(create.ChannelID); ch != nil {
+	if ch, _ := a.State.Store.Channel(create.ChannelID); ch != nil && ch.Name != "" {
 		var suffix = " (#" + ch.Name + ")"
 
 		if create.GuildID.Valid() {

@@ -80,5 +80,11 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 		}
 	}
 
+	// Is this from a DM? TODO: get a better check.
+	if ch, err := s.Channel(msg.ChannelID); err == nil {
+		// True if the message is from DM or group.
+		return ch.Type == discord.DirectMessage || ch.Type == discord.GroupDM
+	}
+
 	return false
 }
