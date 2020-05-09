@@ -15,6 +15,11 @@ func messageMentions(msg discord.Message, uID discord.Snowflake) bool {
 }
 
 func (s *State) MessageMentions(msg discord.Message) bool {
+	// Ignore own messages.
+	if u, err := s.Me(); err == nil && msg.Author.ID == u.ID {
+		return false
+	}
+
 	var mutedGuild *Mute
 
 	// If there's guild:

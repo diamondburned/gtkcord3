@@ -1,180 +1,25 @@
-package message
+package extras
 
 import (
 	"fmt"
 	"html"
-	"path"
-	"strconv"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
 )
-
-const (
-	EmbedAvatarSize = 24
-	EmbedMaxWidth   = 300
-	EmbedImgHeight  = 300 // max
-	EmbedMargin     = 8
-
-	EmbedMainCSS = ".embed { border-left: 4px solid #%06X; }"
-)
-
-func clampWidth(width int) int {
-	if max := MaxMessageWidth - (AvatarSize + AvatarPadding*2) - (EmbedMargin * 3); width > max {
-		width = max
-	}
-	return width
-}
-
-func newExtraImageUnsafe(proxy, url string, w, h int, pp ...cache.Processor) *gtk.EventBox {
-	img, _ := gtk.ImageNew()
-	img.Show()
-	img.SetVAlign(gtk.ALIGN_START)
-	img.SetHAlign(gtk.ALIGN_START)
-
-	evb, _ := gtk.EventBoxNew()
-	evb.Show()
-	evb.Add(img)
-	evb.SetHAlign(gtk.ALIGN_START)
-	evb.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) {
-		if !gtkutils.EventIsLeftClick(ev) {
-			return
-		}
-		SpawnPreviewDialog(proxy, url)
-	})
-	embedSetMargin(evb)
-
-	cache.AsyncFetchUnsafe(proxy, img, w, h, pp...)
-	return evb
-}
-
-func maxSize(w, h, maxW, maxH int) (int, int) {
-	// cap width
-	maxW = clampWidth(maxW)
-
-	if w == 0 || h == 0 {
-		// shit
-		return maxW, maxH
-	}
-
-	return cache.MaxSize(w, h, maxW, maxH)
-}
-
-func sizeToURL(url string, w, h int) string {
-	return url + "?width=" + strconv.Itoa(w) + "&height=" + strconv.Itoa(h)
-}
-
-func NewAttachmentUnsafe(msg *discord.Message) []gtk.IWidget {
-	// Discord's supported formats
-	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
-	var widgets = make([]gtk.IWidget, 0, len(msg.Attachments))
-
-	for _, att := range msg.Attachments {
-		if att.Width == 0 || att.Height == 0 {
-			continue
-		}
-
-		if !validExt(att.Proxy, formats) {
-			continue
-		}
-
-		w, h := maxSize(int(att.Width), int(att.Height), EmbedMaxWidth, EmbedImgHeight)
-		proxyURL := sizeToURL(att.Proxy, w, h)
-
-		img := newExtraImageUnsafe(proxyURL, att.URL, w, h)
-		img.SetMarginStart(0)
-
-		widgets = append(widgets, img)
-	}
-
-	return widgets
-}
-
-func validExt(url string, exts []string) bool {
-	var ext = path.Ext(url)
-
-	for _, e := range exts {
-		if e == ext {
-			return true
-		}
-	}
-
-	return false
-}
-
-func NewEmbedUnsafe(s *ningen.State, msg *discord.Message) []gtk.IWidget {
-	if len(msg.Embeds) == 0 {
-		return nil
-	}
-
-	var embeds = make([]gtk.IWidget, 0, len(msg.Embeds))
-
-	for _, embed := range msg.Embeds {
-		w := newEmbedUnsafe(s, msg, embed)
-		if w == nil {
-			continue
-		}
-
-		embeds = append(embeds, w)
-	}
-
-	return embeds
-}
-
-func newEmbedUnsafe(s *ningen.State, msg *discord.Message, embed discord.Embed) gtk.IWidget {
-	switch embed.Type {
-	case discord.NormalEmbed, discord.LinkEmbed, discord.ArticleEmbed:
-		return newNormalEmbedUnsafe(s, msg, embed)
-	case discord.ImageEmbed:
-		return newImageEmbedUnsafe(embed)
-
-	case discord.VideoEmbed:
-		// I'm tired and lazy.
-		if embed.Thumbnail != nil && embed.Image == nil {
-			img := embed.Thumbnail
-			embed.Image = &discord.EmbedImage{
-				URL:    img.URL,
-				Proxy:  img.Proxy,
-				Width:  img.Width,
-				Height: img.Height,
-			}
-			embed.Thumbnail = nil
-		}
-
-		return newNormalEmbedUnsafe(s, msg, embed)
-	}
-
-	spew.Dump(embed)
-	return nil
-}
-
-func newImageEmbedUnsafe(embed discord.Embed) gtkutils.ExtendedWidget {
-	if embed.Thumbnail == nil {
-		return nil
-	}
-
-	w, h := int(embed.Thumbnail.Width), int(embed.Thumbnail.Height)
-	w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
-	link := sizeToURL(embed.Thumbnail.Proxy, w, h)
-
-	img := newExtraImageUnsafe(link, embed.Thumbnail.URL, w, h)
-	img.SetMarginStart(0)
-	return img
-}
 
 func newNormalEmbedUnsafe(
 	s *ningen.State, msg *discord.Message, embed discord.Embed) gtkutils.ExtendedWidget {
 
 	content, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	content.SetHAlign(gtk.ALIGN_START)
+	content.SetHAlign(gtk.ALIGN_FILL)
 
 	widthHint := 0 // used for calculating requested embed width
 
@@ -184,7 +29,7 @@ func newNormalEmbedUnsafe(
 
 		if embed.Author.ProxyIcon != "" {
 			img, _ := gtk.ImageNew()
-			img.SetMarginEnd(EmbedMargin)
+			img.SetMarginEnd(variables.EmbedMargin)
 			cache.AsyncFetchUnsafe(embed.Author.ProxyIcon, img, 24, 24, cache.Round)
 
 			box.Add(img)
@@ -295,7 +140,7 @@ func newNormalEmbedUnsafe(
 		if embed.Footer != nil {
 			if embed.Footer.ProxyIcon != "" {
 				img, _ := gtk.ImageNew()
-				img.SetMarginEnd(EmbedMargin)
+				img.SetMarginEnd(variables.EmbedMargin)
 				cache.AsyncFetchUnsafe(embed.Footer.ProxyIcon, img, 24, 24, cache.Round)
 
 				footer.Add(img)
@@ -353,7 +198,7 @@ func newNormalEmbedUnsafe(
 		content.SetHAlign(gtk.ALIGN_START)
 
 		w, h := int(embed.Image.Width), int(embed.Image.Height)
-		w, h = maxSize(w, h, EmbedMaxWidth, EmbedImgHeight)
+		w, h = maxSize(w, h, variables.EmbedMaxWidth, variables.EmbedImgHeight)
 
 		// set width hint to resize embeds accordingly
 		widthHint = w
@@ -365,7 +210,7 @@ func newNormalEmbedUnsafe(
 	}
 
 	// Calculate the embed width without padding:
-	var w = clampWidth(EmbedMaxWidth)
+	var w = clampWidth(variables.EmbedMaxWidth)
 	if widthHint > 0 && w > widthHint {
 		w = widthHint
 	}
@@ -373,22 +218,15 @@ func newNormalEmbedUnsafe(
 	// Wrap the content inside another box:
 	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	main.SetHAlign(gtk.ALIGN_START)
-	main.SetSizeRequest(w+(EmbedMargin*2), 0)
+	main.SetSizeRequest(w+(variables.EmbedMargin*2), 0)
 	main.Add(content)
 
 	// Apply margin to content:
-	content.SetMarginTop(EmbedMargin) // account for children not having margin top
-	content.SetMarginBottom(EmbedMargin / 2)
+	content.SetMarginTop(variables.EmbedMargin) // account for children not having margin top
+	content.SetMarginBottom(variables.EmbedMargin / 2)
 
 	// Add a frame around the main embed:
 	gtkutils.InjectCSSUnsafe(main, "embed", fmt.Sprintf(EmbedMainCSS, embed.Color))
 
 	return main
-}
-
-func embedSetMargin(w gtkutils.Marginator) {
-	w.SetMarginStart(EmbedMargin)
-	w.SetMarginEnd(EmbedMargin)
-	w.SetMarginBottom(EmbedMargin / 2)
-	// w.SetMarginTop(EmbedMargin / 2)
 }

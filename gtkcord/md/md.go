@@ -7,8 +7,10 @@ import (
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 var (
@@ -27,17 +29,29 @@ func ParseWithMessage(content []byte, dst *gtk.TextView, s state.Store, m *disco
 	parseMessage(content, dst, s, m, false)
 }
 
-func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message, ts bool) {
+func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message, msg bool) {
 	// Context to pass down messages:
 	ctx := parser.NewContext()
 	ctx.Set(messageCtx, m)
 	ctx.Set(sessionCtx, s)
 
+	var inlineParsers []util.PrioritizedValue
+	if msg {
+		inlineParsers = InlineParsers()
+	} else {
+		inlineParsers = InlineParserWithLink()
+	}
+
+	p := parser.NewParser(
+		parser.WithBlockParsers(BlockParsers()...),
+		parser.WithInlineParsers(inlineParsers...),
+	)
+
 	r := NewRenderer(dst)
-	parse([]byte(b), r, parser.WithContext(ctx))
+	renderToBuf(NewRenderer(dst), b, p.Parse(text.NewReader(b), parser.WithContext(ctx)))
 
 	// Is the not message edited? (Or if we don't want a timestamp)
-	if !ts || !m.EditedTimestamp.Valid() {
+	if !msg || !m.EditedTimestamp.Valid() {
 		return
 	}
 
@@ -47,21 +61,20 @@ func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message
 }
 
 func Parse(content []byte, dst *gtk.TextView, opts ...parser.ParseOption) {
-	parse(content, NewRenderer(dst), opts...)
-}
-
-func parse(content []byte, r *Renderer, opts ...parser.ParseOption) {
 	p := parser.NewParser(
 		parser.WithBlockParsers(BlockParsers()...),
 		parser.WithInlineParsers(InlineParsers()...),
 	)
 
 	node := p.Parse(text.NewReader(content), opts...)
+	renderToBuf(NewRenderer(dst), content, node)
+}
 
+func renderToBuf(r *Renderer, src []byte, node ast.Node) {
 	// Wipe the buffer clean
 	r.Buffer.Delete(r.Buffer.GetStartIter(), r.Buffer.GetEndIter())
 
-	r.Render(nil, content, node)
+	r.Render(nil, src, node)
 
 	// Remove trailing space:
 	end := r.Buffer.GetEndIter()

@@ -11,10 +11,12 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/emojis"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/completer"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/extras"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/typing"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/zwsp"
 	"github.com/diamondburned/handy"
@@ -22,8 +24,6 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
-
-const InputIconSize = gtk.ICON_SIZE_LARGE_TOOLBAR
 
 type Input struct {
 	*handy.Column
@@ -113,12 +113,12 @@ func NewInput(m *Messages) (i *Input) {
 	ibox.SetHExpand(true)
 	ibox.SetMarginBottom(0) // doing it legit by using label as padding
 
-	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", InputIconSize)
+	upload, _ := gtk.ButtonNewFromIconName("document-open-symbolic", variables.InputIconSize)
 	i.Upload = upload
 	upload.SetVAlign(gtk.ALIGN_BASELINE)
 	upload.SetRelief(gtk.RELIEF_NONE)
 	upload.Connect("clicked", func() {
-		SpawnUploader(i.upload)
+		extras.SpawnUploader(i.upload)
 	})
 
 	// Emoji popup constructor:
@@ -127,7 +127,7 @@ func NewInput(m *Messages) (i *Input) {
 	})
 	espawner.Refocus = i.Input // refocus on close
 
-	emoji, _ := gtk.ButtonNewFromIconName("face-smile-symbolic", InputIconSize)
+	emoji, _ := gtk.ButtonNewFromIconName("face-smile-symbolic", variables.InputIconSize)
 	i.Emoji = emoji
 	emoji.SetVAlign(gtk.ALIGN_BASELINE)
 	emoji.SetRelief(gtk.RELIEF_NONE)
@@ -138,7 +138,7 @@ func NewInput(m *Messages) (i *Input) {
 		opened.Popup()
 	})
 
-	send, _ := gtk.ButtonNewFromIconName("mail-send", InputIconSize)
+	send, _ := gtk.ButtonNewFromIconName("mail-send", variables.InputIconSize)
 	i.Send = send
 	send.SetVAlign(gtk.ALIGN_BASELINE)
 	send.SetRelief(gtk.RELIEF_NONE)
@@ -496,7 +496,7 @@ func (i *Input) upload(paths []string) {
 }
 
 func (i *Input) _upload(content string, paths []string) error {
-	u, err := NewMessageUploader(paths)
+	u, err := extras.NewMessageUploader(paths)
 	if err != nil {
 		return err
 	}

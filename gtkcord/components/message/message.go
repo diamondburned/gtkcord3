@@ -7,20 +7,17 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/extras"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/reactions"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
-)
-
-const (
-	AvatarSize    = 42 // gtk.ICON_SIZE_DND
-	AvatarPadding = 10
 )
 
 type Message struct {
@@ -53,6 +50,7 @@ type Message struct {
 
 	// Right-bottom container, has message contents:
 	rightBottom *gtk.Box
+	textReveal  *gtk.Revealer
 	textView    *gtk.TextView
 	content     *gtk.TextBuffer
 	reactions   *reactions.Container
@@ -125,7 +123,7 @@ func newMessageCustom(m *discord.Message) (message *Message) {
 }
 
 func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
-	// icon := icons.GetIconUnsafe("user-info", AvatarSize)
+	// icon := icons.GetIconUnsafe("user-info", variables.AvatarSize)
 
 	var (
 		row, _ = gtk.ListBoxRowNew()
@@ -144,11 +142,12 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		author, _    = gtk.LabelNew("???")
 		timestamp, _ = gtk.LabelNew("")
 
+		txtRv, _ = gtk.RevealerNew()
 		msgTv, _ = gtk.TextViewNew()
 		msgTb, _ = msgTv.GetBuffer()
 	)
 
-	gtkutils.ImageSetIcon(avatar, "user-info", AvatarSize)
+	gtkutils.ImageSetIcon(avatar, "user-info", variables.AvatarSize)
 
 	style, _ := main.GetStyleContext()
 	style.AddClass("message")
@@ -174,6 +173,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		author:      author,
 		timestamp:   timestamp,
 		rightBottom: rightBottom,
+		textReveal:  txtRv,
 		textView:    msgTv,
 		content:     msgTb,
 	}
@@ -199,15 +199,16 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 
 	message.rightBottom.SetHExpand(true)
 	message.rightBottom.SetMarginBottom(5)
-	message.rightBottom.SetMarginEnd(AvatarPadding)
+	message.rightBottom.SetMarginEnd(variables.AvatarPadding)
 	// message.rightBottom.Connect("size-allocate", func() {
 	// 	// Hack to force Gtk to recalculate size on changes
 	// 	message.rightBottom.SetVExpand(true)
 	// 	message.rightBottom.SetVExpand(false)
 	// })
 
-	message.avatarEv.SetMarginStart(AvatarPadding - 2)
-	message.avatarEv.SetMarginEnd(AvatarPadding)
+	message.avatarEv.SetMarginTop(6)
+	message.avatarEv.SetMarginStart(variables.AvatarPadding - 2)
+	message.avatarEv.SetMarginEnd(variables.AvatarPadding)
 	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
 	message.avatarEv.Add(message.avatar)
 	message.avatarEv.Connect("button_press_event", func(_ *gtk.EventBox, ev *gdk.Event) {
@@ -219,7 +220,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		message.OnUserClick(message)
 	})
 
-	message.avatar.SetSizeRequest(AvatarSize, AvatarSize)
+	message.avatar.SetSizeRequest(variables.AvatarSize, variables.AvatarSize)
 	message.avatar.SetVAlign(gtk.ALIGN_START)
 
 	message.author.SetMarkup(
@@ -233,31 +234,33 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 	message.rightTop.Add(message.author)
 	gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
 
-	timestampSize := AvatarSize - 2
+	timestampSize := variables.AvatarSize - 2
 	message.timestamp.SetSizeRequest(timestampSize, -1)
 	message.timestamp.SetOpacity(0.5)
 	message.timestamp.SetYAlign(0.0)
 	message.timestamp.SetSingleLineMode(true)
 	message.timestamp.SetMarginTop(2)
-	message.timestamp.SetMarginStart(AvatarPadding)
-	message.timestamp.SetMarginEnd(AvatarPadding)
+	message.timestamp.SetMarginStart(variables.AvatarPadding)
+	message.timestamp.SetMarginEnd(variables.AvatarPadding)
 	message.timestamp.SetTooltipText(m.Timestamp.Format(time.Stamp))
 	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", "")
 
 	message.right.Add(message.rightTop)
 	message.right.SetHExpand(true)
 
-	message.avatarEv.SetMarginTop(6)
 	message.right.SetMarginTop(6)
 
-	msgTv.Show()
 	msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
 	msgTv.SetHAlign(gtk.ALIGN_FILL)
 	msgTv.SetCursorVisible(false)
 	msgTv.SetEditable(false)
 	msgTv.SetCanFocus(false)
 
-	message.rightBottom.Add(msgTv)
+	// Add the message view into the revealer
+	txtRv.Add(msgTv)
+	txtRv.SetRevealChild(false)
+
+	message.rightBottom.Add(txtRv)
 
 	// Add a placeholder for reactions
 	message.reactions = reactions.NewContainer(m)
@@ -297,8 +300,6 @@ func (m *Message) SetCondensedUnsafe(condensed bool) {
 }
 
 func (m *Message) setCondensed() {
-	defer m.main.ShowAll()
-
 	if m.Condensed {
 		m.style.AddClass("condensed")
 		m.timestamp.SetXAlign(1.0)
@@ -376,12 +377,13 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 }
 
 func (m *Message) UpdateAvatar(url string) {
-	cache.AsyncFetchUnsafe(url+"?size=64", m.avatar, AvatarSize, AvatarSize, cache.Round)
+	cache.AsyncFetchUnsafe(url+"?size=64", m.avatar, variables.AvatarSize, variables.AvatarSize, cache.Round)
 }
 
 func (m *Message) customContentUnsafe(s string) {
 	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
 	m.content.InsertMarkup(m.content.GetEndIter(), s)
+	m.textReveal.SetRevealChild(true)
 }
 
 func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
@@ -391,6 +393,7 @@ func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
 func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
 	if update.Content != "" {
 		md.ParseMessageContent(m.textView, s.Store, update)
+		m.textReveal.SetRevealChild(true)
 	}
 
 	for _, mention := range update.Mentions {
@@ -414,8 +417,8 @@ func (m *Message) updateExtras(s *ningen.State, update *discord.Message) {
 
 	// set to nil so the old slice can be GC'd
 	m.extras = nil
-	m.extras = append(m.extras, NewEmbedUnsafe(s, update)...)
-	m.extras = append(m.extras, NewAttachmentUnsafe(update)...)
+	m.extras = append(m.extras, extras.NewEmbedUnsafe(s, update)...)
+	m.extras = append(m.extras, extras.NewAttachmentUnsafe(update)...)
 
 	for _, extra := range m.extras {
 		m.rightBottom.Add(extra)

@@ -10,6 +10,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/skratchdot/open-golang/open"
 )
 
 type ExtendedWidget interface {
@@ -309,4 +310,12 @@ func HandyDialog(dialog Dialoger, transientFor gtk.IWindow) *handy.Dialog {
 	d.SetTitlebar(h)
 
 	return d
+}
+
+func OpenURI(uri string) {
+	go func() {
+		if err := open.Run(uri); err != nil {
+			log.Errorln("Failed to open URI:", err)
+		}
+	}()
 }

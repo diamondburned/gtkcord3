@@ -1,6 +1,8 @@
 @define-color color_discord rgb(114, 137, 218);
 @define-color color_pinged rgb(240, 71, 71);
 
+@define-color darker mix(@theme_base_color, #000000, 0.1);
+
 button.flat {
 	padding: 0;
 	min-height: 0;
@@ -74,7 +76,7 @@ textview, textview > text {
 }
 
 .embed {
-	background-color: mix(@theme_base_color, #000000, 0.1);
+	background-color: @darker;
 }
 
 .messages > row {
@@ -232,10 +234,6 @@ textview, textview > text {
 	background-image: linear-gradient(transparent, rgba(10, 10, 10, 0.3) 60px);
 	transition: 75ms linear;
 	transition-property: background-image;
-}
-
-.message-input.editing {
-	background-image: linear-gradient(transparent, alpha(@color_discord, 0.3) 60px);
 }
 
 .message-input .completer {

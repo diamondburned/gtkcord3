@@ -70,6 +70,15 @@ func (r *MarkupRenderer) switchNode(w io.Writer, n ast.Node, source []byte, ente
 			r.setAttr(w, old, true)
 		}
 
+	case *ast.Link:
+		if enter {
+			w.Write([]byte(`<a href="`))
+			writeEscape(w, n.Destination)
+			w.Write([]byte(`">`))
+			writeEscape(w, n.Title)
+			w.Write([]byte(`</a>`))
+		}
+
 	case *ast.AutoLink:
 		if enter {
 			w.Write([]byte(`<a href="`))

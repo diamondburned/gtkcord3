@@ -1,6 +1,7 @@
 package md
 
 import (
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
@@ -20,6 +21,10 @@ func InlineParsers() []util.PrioritizedValue {
 		util.Prioritized(mention{}, 400),
 		util.Prioritized(autolink{}, 500),
 	}
+}
+
+func InlineParserWithLink() []util.PrioritizedValue {
+	return append(InlineParsers(), util.Prioritized(parser.NewLinkParser(), 600))
 }
 
 // matchInline function to parse a pair of bytes (chars)

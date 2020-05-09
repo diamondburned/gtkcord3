@@ -6,11 +6,11 @@ require (
 	github.com/Xuanwo/go-locale v0.1.0
 	github.com/alecthomas/chroma v0.7.1
 	github.com/davecgh/go-spew v1.1.1
-	github.com/diamondburned/arikawa v0.5.0
+	github.com/diamondburned/arikawa v0.6.1
 	github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
-	github.com/gotk3/gotk3 v0.4.1-0.20200419120351-72ea2e79ea22
+	github.com/gotk3/gotk3 v0.4.1-0.20200503111415-48d84d0c1c78
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
 	github.com/markbates/pkger v0.15.1
 	github.com/mattn/go-isatty v0.0.12 // indirect

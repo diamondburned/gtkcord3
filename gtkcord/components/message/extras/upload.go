@@ -1,4 +1,4 @@
-package message
+package extras
 
 import (
 	"io"
@@ -52,15 +52,7 @@ func SpawnUploader(callback func(absolutePath []string)) {
 	}
 
 	// Glib's shitty singly linked list:
-	slist, _ := dialog.GetFilenames()
-
-	var names = make([]string, 0, int(slist.Length()))
-	slist.Foreach(func(ptr unsafe.Pointer) {
-		names = append(names, gostring(ptr))
-	})
-
-	slist.Free()
-
+	names, _ := dialog.GetFilenames()
 	go callback(names)
 }
 

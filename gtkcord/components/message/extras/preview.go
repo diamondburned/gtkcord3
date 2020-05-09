@@ -1,4 +1,4 @@
-package message
+package extras
 
 import (
 	"fmt"
@@ -7,13 +7,13 @@ import (
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
-	"github.com/skratchdot/open-golang/open"
 )
 
 type PreviewDialog struct {
@@ -101,7 +101,7 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	}
 
 	bOriginal.Connect("clicked", func() {
-		go pd.Open()
+		gtkutils.OpenURI(pd.URL)
 	})
 
 	// Calculate the sizee so that the image is just slightly (80%) smaller:
@@ -110,12 +110,6 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	go pd.Fetch(w, h)
 	d.Run()
-}
-
-func (od *PreviewDialog) Open() {
-	if err := open.Run(od.URL); err != nil {
-		log.Errorln("Failed to open image URL:", err)
-	}
 }
 
 func (pd *PreviewDialog) Fetch(w, h int) {

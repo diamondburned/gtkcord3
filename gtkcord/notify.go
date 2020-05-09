@@ -16,8 +16,13 @@ func (a *Application) bindNotifier() {
 }
 
 func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
-
+	// Check if the message should trigger a mention.
 	if !a.State.MessageMentions(create.Message) {
+		return
+	}
+
+	// Ignore mentions from the current channel.
+	if a.Messages != nil && a.Messages.GetChannelID() == create.ChannelID {
 		return
 	}
 

@@ -172,8 +172,6 @@ func ningen(s *state.State) *State {
 		}
 	})
 
-	// state.UpdateReady(s.Ready)
-	// state.UpdateNitroEmojis()
 	return state
 }
 

@@ -1,6 +1,7 @@
 package humanize
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -98,4 +99,22 @@ func TrimString(str string, maxlen int) string {
 	}
 
 	return str[:maxlen-3] + "..."
+}
+
+var ByteUnits = [...]string{"bytes", "KB", "MB"}
+
+func Size(size uint64) string {
+	// hmm today i will do dumb shit
+	size *= 100 // 2 decimal points
+	unit := "GB"
+
+	for _, u := range ByteUnits {
+		if size < 1024 {
+			unit = u
+			break
+		}
+		size /= 1024
+	}
+
+	return fmt.Sprintf("%d.%d %s", size/2, size%2, unit)
 }

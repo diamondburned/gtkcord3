@@ -1,4 +1,4 @@
-{ pkgs, buildGoModule, makeDesktopItem }:
+{ pkgs, buildGoModule, makeDesktopItem, lib }:
 
 with import ./shell.nix { inherit pkgs; };
 
@@ -26,6 +26,6 @@ buildGoModule rec {
 		cp "${./logo.png}" $out/share/icons/hicolor/256x256/apps/gtkcord3.png
 	'';
 
-	modSha256   = "1r3iaw5j90dsf2k05hwxvwypdpv0s1lbwgvldh2wwybdm8y37flv";
+	modSha256   = "116xl59j62pivmav1hadvklwmfv1gi6hygc9cg9g7szinis88i95";
 	subPackages = [ "." ];
 }

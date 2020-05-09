@@ -219,10 +219,8 @@ func (s *TagState) tagSet(attr Attribute, enter bool) *gtk.TextTag {
 }
 
 func (s *TagState) tagAdd(attr Attribute) *gtk.TextTag {
-	if s.Attr != s.Attr|attr {
-		s.Attr |= attr
-		s.tag = s.colorTag(s.Tag)
-	}
+	s.Attr |= attr
+	s.tag = s.colorTag(s.Tag)
 	return s.tag
 }
 
@@ -254,6 +252,7 @@ func (s *TagState) tagSetAttrAndColor(attr Attribute, color string) *gtk.TextTag
 	return s.tag
 }
 
+// injectTag copies attributes and colors from the state to the given tag.
 func (s *TagState) injectTag(tag *gtk.TextTag) {
 	s.Attr.tag(tag, s.Color)
 }

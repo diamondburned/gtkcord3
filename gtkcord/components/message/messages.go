@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/diamondburned/handy"
@@ -19,9 +20,6 @@ import (
 )
 
 const scrollMinDelta = 500
-
-// used as fallback, the settings one overrides this
-var MaxMessageWidth = 750
 
 type Messages struct {
 	Opts
@@ -118,7 +116,7 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		b.Show()
 
 		// List should fill:
-		// b.SetSizeRequest(MaxMessageWidth, -1)
+		// b.SetSizeRequest(variables.MaxMessageWidth, -1)
 
 		// Column contains the list:
 		col.SetLinearGrowthWidth(10000) // force as wide as possible
@@ -177,7 +175,7 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 }
 
 func (m *Messages) SetWidth(width int) {
-	MaxMessageWidth = width
+	variables.MaxMessageWidth = width
 	m.Opts.MessageWidth = width
 	m.Column.SetMaximumWidth(width)
 	m.Input.Column.SetMaximumWidth(width)

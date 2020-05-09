@@ -3,7 +3,7 @@ package header
 import (
 	"log"
 
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -20,14 +20,14 @@ func NewBack() *Back {
 	r.SetRevealChild(false)
 	r.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
 	r.SetTransitionDuration(150)
-	r.SetMarginStart(message.AvatarPadding)
-	r.SetMarginEnd(message.AvatarPadding)
+	r.SetMarginStart(variables.AvatarPadding)
+	r.SetMarginEnd(variables.AvatarPadding)
 
 	mb, _ := gtk.MenuButtonNew()
 	mb.SetSensitive(true)
 	mb.SetHAlign(gtk.ALIGN_CENTER)
 	mb.Show()
-	mb.SetSizeRequest(message.AvatarSize, -1)
+	mb.SetSizeRequest(variables.AvatarSize, -1)
 	r.Add(mb)
 
 	i, err := gtk.ImageNewFromIconName("go-previous-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)

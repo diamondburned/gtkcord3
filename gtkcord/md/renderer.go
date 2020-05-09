@@ -68,20 +68,30 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 			r.renderCodeBlock(n, source)
 		}
 
+	case *ast.Link:
+		if enter {
+			tag := r.tags.hyperlink(string(n.Destination))
+			r.tags.injectTag(tag)
+			// Shitty hack to hijack hyperlink into tag, since markdown is trash.
+			r.tags.tag = tag
+			r.insertWithTag(n.Title, nil) // use replaced tag
+		} else {
+			// Reset above tag state.
+			r.tags.tagAdd(0)
+		}
+
 	case *ast.AutoLink:
 		if enter {
 			url := n.URL(source)
-
 			tag := r.tags.hyperlink(string(url))
 			r.tags.injectTag(tag)
-
 			r.insertWithTag(url, tag)
 		}
 
 	case *Inline:
 		r.tags.tagSet(n.Attr, enter)
 
-	case *Emoji: // TODO
+	case *Emoji:
 		if enter {
 			r.insertEmoji(n)
 		}
