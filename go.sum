@@ -43,6 +43,8 @@ github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd h1:A6vDe3XuMv5pB3Pxr
 github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd/go.mod h1:Eew3QBwAOBTrfFFDmsDE5wZWbcagBL1NUslj1GhRveo=
 github.com/gotk3/gotk3 v0.4.1-0.20200503111415-48d84d0c1c78 h1:i/ax7yAXkZOmKnJMVYJsg+9KqUXqqN/fPSAvyUd+oEg=
 github.com/gotk3/gotk3 v0.4.1-0.20200503111415-48d84d0c1c78/go.mod h1:/hqFpkNa9T3JgNAE2fLvCdov7c5bw//FHNZrZ3Uv9/Q=
+github.com/gotk3/gotk3 v0.4.1-0.20200508185535-d1638cba009b h1:vb4TgF46fpxGkSBTolKHClJpOe+4jEnqI1cEByq6shU=
+github.com/gotk3/gotk3 v0.4.1-0.20200508185535-d1638cba009b/go.mod h1:/hqFpkNa9T3JgNAE2fLvCdov7c5bw//FHNZrZ3Uv9/Q=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=

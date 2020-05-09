@@ -10,7 +10,7 @@ require (
 	github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
-	github.com/gotk3/gotk3 v0.4.1-0.20200503111415-48d84d0c1c78
+	github.com/gotk3/gotk3 v0.4.1-0.20200508185535-d1638cba009b
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
 	github.com/markbates/pkger v0.15.1
 	github.com/mattn/go-isatty v0.0.12 // indirect

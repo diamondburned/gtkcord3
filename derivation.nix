@@ -26,6 +26,6 @@ buildGoModule rec {
 		cp "${./logo.png}" $out/share/icons/hicolor/256x256/apps/gtkcord3.png
 	'';
 
-	modSha256   = "116xl59j62pivmav1hadvklwmfv1gi6hygc9cg9g7szinis88i95";
+	modSha256   = "0dfxrcvaz6k9cmkgwx9zpdlyv1hh2iiw27ibgfvj1zm1wacg2l27";
 	subPackages = [ "." ];
 }
