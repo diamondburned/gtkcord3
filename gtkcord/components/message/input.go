@@ -227,8 +227,8 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 		i.Typing.Type(i.Messages.GetChannelID())
 	}
 
-	const shiftMask = uint(gdk.GDK_SHIFT_MASK)
-	const cntrlMask = uint(gdk.GDK_CONTROL_MASK)
+	const shiftMask = uint(gdk.SHIFT_MASK)
+	const cntrlMask = uint(gdk.CONTROL_MASK)
 
 	var (
 		state = evKey.State()

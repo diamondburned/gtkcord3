@@ -16,7 +16,7 @@ var bindOnce sync.Once
 
 func Bind(spawner Spawner) {
 	bindOnce.Do(func() {
-		gtk.AccelMapAddEntry(AccelSpawnDialog, gdk.KEY_K, gdk.GDK_CONTROL_MASK)
+		gtk.AccelMapAddEntry(AccelSpawnDialog, gdk.KEY_K, gdk.CONTROL_MASK)
 	})
 
 	window.Window.Accel.ConnectByPath(AccelSpawnDialog, spawner.Spawn)
