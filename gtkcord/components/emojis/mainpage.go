@@ -151,7 +151,7 @@ func (s *Section) load(onClick func(string), hide func()) {
 		// keypresses.
 		s.Body.Connect("button-press-event", func(f *gtk.FlowBox, ev *gdk.Event) bool {
 			evk := gdk.EventButtonNewFromEvent(ev)
-			const shift = uint(gdk.GDK_SHIFT_MASK)
+			const shift = uint(gdk.SHIFT_MASK)
 
 			// Is shift being held?
 			s.shiftHeld = evk.State()&shift != shift
