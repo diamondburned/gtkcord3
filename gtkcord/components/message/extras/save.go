@@ -1,6 +1,7 @@
 package extras
 
 import (
+	"html"
 	"io"
 	"mime"
 	"os"
@@ -48,8 +49,10 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 	labels.SetVAlign(gtk.ALIGN_CENTER)
 	labels.SetHExpand(true)
 
-	header, _ := gtk.LabelNew(name)
+	headerText := `<a href="` + url + `">` + html.EscapeString(name) + `</a>`
+	header, _ := gtk.LabelNew(headerText)
 	header.Show()
+	header.SetUseMarkup(true)
 	header.SetHAlign(gtk.ALIGN_START)
 	header.SetSingleLineMode(true)
 	header.SetEllipsize(pango.ELLIPSIZE_END)
@@ -60,15 +63,6 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 	sub.SetEllipsize(pango.ELLIPSIZE_END)
 	sub.SetHAlign(gtk.ALIGN_START)
 	sub.SetUseMarkup(true)
-
-	open, _ := gtk.ButtonNewFromIconName("document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	open.Show()
-	open.SetSizeRequest(35, 35)
-	open.SetVAlign(gtk.ALIGN_CENTER)
-	open.SetRelief(gtk.RELIEF_NONE)
-	open.Connect("clicked", func() {
-		gtkutils.OpenURI(url)
-	})
 
 	// TODO: progress bar for download button
 	dl, _ := gtk.ButtonNewFromIconName("folder-download-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
@@ -99,7 +93,6 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 
 	box.PackStart(img, false, false, 5)
 	box.PackStart(labels, true, true, 0)
-	box.PackStart(open, false, false, 3)
 	box.PackStart(dl, false, false, 3)
 
 	gtkutils.InjectCSSUnsafe(box, "attachment", `
