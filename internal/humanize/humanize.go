@@ -103,9 +103,8 @@ func TrimString(str string, maxlen int) string {
 
 var ByteUnits = [...]string{"bytes", "KB", "MB"}
 
-func Size(size uint64) string {
-	// hmm today i will do dumb shit
-	size *= 100 // 2 decimal points
+func Size(sz uint64) string {
+	size := float64(sz) // 2 decimal points
 	unit := "GB"
 
 	for _, u := range ByteUnits {
@@ -116,5 +115,5 @@ func Size(size uint64) string {
 		size /= 1024
 	}
 
-	return fmt.Sprintf("%d.%d %s", size/2, size%2, unit)
+	return fmt.Sprintf("%.2f %s", size, unit)
 }

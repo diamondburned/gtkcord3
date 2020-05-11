@@ -57,13 +57,14 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 	subText := `<span size="smaller">` + humanize.Size(size) + `</span>`
 	sub, _ := gtk.LabelNew(subText)
 	sub.Show()
-	sub.SetSizeRequest(35, 35)
+	sub.SetEllipsize(pango.ELLIPSIZE_END)
 	sub.SetHAlign(gtk.ALIGN_START)
 	sub.SetUseMarkup(true)
 
 	open, _ := gtk.ButtonNewFromIconName("document-open-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
 	open.Show()
 	open.SetSizeRequest(35, 35)
+	open.SetVAlign(gtk.ALIGN_CENTER)
 	open.SetRelief(gtk.RELIEF_NONE)
 	open.Connect("clicked", func() {
 		gtkutils.OpenURI(url)
@@ -72,6 +73,8 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 	// TODO: progress bar for download button
 	dl, _ := gtk.ButtonNewFromIconName("folder-download-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
 	dl.Show()
+	dl.SetSizeRequest(35, 35)
+	dl.SetVAlign(gtk.ALIGN_CENTER)
 	dl.SetRelief(gtk.RELIEF_NONE)
 	dl.Connect("clicked", NewSaver(name, func(filename string) {
 		// Reset the label (if failed).
