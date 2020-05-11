@@ -36,7 +36,7 @@ type Messages struct {
 
 	Scroll   *gtk.ScrolledWindow
 	Viewport *gtk.Viewport
-	atBottom bool
+	atBottom moreatomic.Bool
 
 	Messages *gtk.ListBox
 	messages []*Message
@@ -129,6 +129,13 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		v.SetShadowType(gtk.SHADOW_NONE)
 		v.Add(col) // add col instead of list
 		v.Show()
+
+		// Scroll to the bottom if we have more things.
+		v.Connect("size-allocate", func() {
+			if m.atBottom.Get() {
+				m.ScrollToBottom()
+			}
+		})
 
 		// Fractal does this, but Go is superior.
 		adj := s.GetVAdjustment()
@@ -296,8 +303,10 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		m.messages[i].updateExtras(m.c, &messages[i])
 	}
 
-	m.resetting = false
+	// Request that we should always scroll to bottom.
+	m.atBottom.Set(true)
 
+	m.resetting = false
 	return nil
 }
 
@@ -322,17 +331,21 @@ func (m *Messages) Cleanup() {
 }
 
 func (m *Messages) ScrollToBottom() {
-	// Set scroll:
-	vAdj := m.Scroll.GetVAdjustment()
-	to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
-	vAdj.SetValue(to)
+	// Always set scroll asynchronously, so Gtk can properly calculate the
+	// height of children after rendering.
+	semaphore.Async(func() {
+		// Set scroll:
+		vAdj := m.Scroll.GetVAdjustment()
+		to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
+		vAdj.SetValue(to)
+	})
 }
 
 func (m *Messages) onScroll(adj *gtk.Adjustment) {
 	if adj.GetUpper()-adj.GetPageSize() == adj.GetValue() {
-		m.atBottom = true
+		m.atBottom.Set(true)
 	} else {
-		m.atBottom = false
+		m.atBottom.Set(false)
 	}
 }
 
@@ -466,7 +479,7 @@ func (m *Messages) fetchMore() {
 func (m *Messages) cleanOldMessages() {
 	// Check the scrolling
 
-	if !m.atBottom {
+	if !m.atBottom.Get() {
 		return
 	}
 

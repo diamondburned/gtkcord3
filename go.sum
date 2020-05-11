@@ -41,8 +41,6 @@ github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0U
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd h1:A6vDe3XuMv5pB3Pxrq5xv4AuVVkjMTp95GpYJ+f9izE=
 github.com/gotk3/gotk3 v0.4.1-0.20200321173312-c4ae30c61acd/go.mod h1:Eew3QBwAOBTrfFFDmsDE5wZWbcagBL1NUslj1GhRveo=
-github.com/gotk3/gotk3 v0.4.1-0.20200503111415-48d84d0c1c78 h1:i/ax7yAXkZOmKnJMVYJsg+9KqUXqqN/fPSAvyUd+oEg=
-github.com/gotk3/gotk3 v0.4.1-0.20200503111415-48d84d0c1c78/go.mod h1:/hqFpkNa9T3JgNAE2fLvCdov7c5bw//FHNZrZ3Uv9/Q=
 github.com/gotk3/gotk3 v0.4.1-0.20200508185535-d1638cba009b h1:vb4TgF46fpxGkSBTolKHClJpOe+4jEnqI1cEByq6shU=
 github.com/gotk3/gotk3 v0.4.1-0.20200508185535-d1638cba009b/go.mod h1:/hqFpkNa9T3JgNAE2fLvCdov7c5bw//FHNZrZ3Uv9/Q=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=

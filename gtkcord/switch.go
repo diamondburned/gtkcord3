@@ -200,9 +200,6 @@ func (a *Application) SwitchChannel(ch Channel) {
 			if a.Messages.GetGuildID().Valid() {
 				a.Header.ChMenuBtn.SetRevealChild(true)
 			}
-
-			// Always scroll to bottom:
-			a.Messages.ScrollToBottom()
 		},
 	})
 }
