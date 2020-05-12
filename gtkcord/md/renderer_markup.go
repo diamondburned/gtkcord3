@@ -4,11 +4,12 @@ import (
 	"html"
 	"io"
 
+	"github.com/diamondburned/ningen/md"
 	"github.com/yuin/goldmark/ast"
 )
 
 type MarkupRenderer struct {
-	attr Attribute
+	attr md.Attribute
 }
 
 func NewMarkupRenderer() *MarkupRenderer {
@@ -54,7 +55,7 @@ func (r *MarkupRenderer) switchNode(w io.Writer, n ast.Node, source []byte, ente
 			r.attr = 0
 
 			// Write an opening tag:
-			r.setAttr(w, AttrMonospace, true)
+			r.setAttr(w, md.AttrMonospace, true)
 
 			// Write the code body
 			for i := 0; i < n.Lines().Len(); i++ {
@@ -88,16 +89,16 @@ func (r *MarkupRenderer) switchNode(w io.Writer, n ast.Node, source []byte, ente
 			w.Write([]byte(`</a>`))
 		}
 
-	case *Inline:
+	case *md.Inline:
 		r.setAttr(w, n.Attr, enter)
 
-	case *Emoji:
+	case *md.Emoji:
 		if enter {
 			// Only write :emojiName:
 			writeEscape(w, []byte(":"+string(n.Name)+":"))
 		}
 
-	case *Mention:
+	case *md.Mention:
 		if enter {
 			switch {
 			case n.Channel != nil:
@@ -129,14 +130,14 @@ func (r *MarkupRenderer) switchNode(w io.Writer, n ast.Node, source []byte, ente
 			w.Write([]byte{'\n'})
 
 			// Check blockquote:
-			if r.attr.Has(AttrQuoted) {
+			if r.attr.Has(md.AttrQuoted) {
 				w.Write([]byte{'>', ' '})
 			}
 		}
 	}
 }
 
-func (r *MarkupRenderer) setAttr(w io.Writer, attr Attribute, enter bool) {
+func (r *MarkupRenderer) setAttr(w io.Writer, attr md.Attribute, enter bool) {
 	// close the original span if there's one
 	r.closeAttr(w)
 

@@ -1,15 +1,17 @@
 package md
 
 import (
-	"bytes"
-	"strconv"
 	"strings"
 
+	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/ningen/md"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
+	"github.com/skratchdot/open-golang/open"
 )
 
 type Attribute uint16
@@ -25,98 +27,37 @@ const (
 	AttrQuoted
 )
 
-func TagAttribute(tag []byte) Attribute {
-	switch {
-	case bytes.Equal(tag, []byte("**")):
-		return AttrBold
-	case bytes.Equal(tag, []byte("__")):
-		return AttrUnderline
-	case bytes.Equal(tag, []byte("*")), bytes.Equal(tag, []byte("_")):
-		return AttrItalics
-	case bytes.Equal(tag, []byte("***")):
-		return AttrBold | AttrItalics
-	case bytes.Equal(tag, []byte("~~")):
-		return AttrStrikethrough
-	case bytes.Equal(tag, []byte("||")):
-		return AttrSpoiler
-	case bytes.Equal(tag, []byte("`")):
-		return AttrMonospace
-	}
-	return 0
-}
-
-func (a Attribute) Has(attr Attribute) bool {
-	return a&attr == attr
-}
-
-func (a *Attribute) Add(attr Attribute) {
-	*a |= attr
-}
-func (a *Attribute) Remove(attr Attribute) {
-	*a &= ^attr
-}
-
-func (a Attribute) Markup() string {
+func AttrMarkup(a md.Attribute) string {
 	var attrs = make([]string, 0, 7)
 
-	if a.Has(AttrBold) {
+	if a.Has(md.AttrBold) {
 		attrs = append(attrs, `weight="bold"`)
 	}
-	if a.Has(AttrItalics) {
+	if a.Has(md.AttrItalics) {
 		attrs = append(attrs, `style="italic"`)
 	}
-	if a.Has(AttrUnderline) {
+	if a.Has(md.AttrUnderline) {
 		attrs = append(attrs, `underline="single"`)
 	}
-	if a.Has(AttrStrikethrough) {
+	if a.Has(md.AttrStrikethrough) {
 		attrs = append(attrs, `strikethrough="true"`)
 	}
-	if a.Has(AttrSpoiler) {
+	if a.Has(md.AttrSpoiler) {
 		attrs = append(attrs, `foreground="#808080"`) // no fancy click here
 	}
-	if a.Has(AttrMonospace) {
+	if a.Has(md.AttrMonospace) {
 		attrs = append(attrs, `font_family="monospace"`)
 	}
 
 	// only append this if not spoiler to avoid duplicate tags
-	if a.Has(AttrQuoted) && !a.Has(AttrStrikethrough) {
+	if a.Has(md.AttrQuoted) && !a.Has(md.AttrStrikethrough) {
 		attrs = append(attrs, `foreground="#789922"`)
 	}
 
 	return strings.Join(attrs, " ")
 }
 
-func (a Attribute) StringInt() string {
-	return strconv.FormatUint(uint64(a), 10)
-}
-
-func (a Attribute) String() string {
-	var attrs = make([]string, 0, 7)
-	if a.Has(AttrBold) {
-		attrs = append(attrs, "bold")
-	}
-	if a.Has(AttrItalics) {
-		attrs = append(attrs, "italics")
-	}
-	if a.Has(AttrUnderline) {
-		attrs = append(attrs, "underline")
-	}
-	if a.Has(AttrStrikethrough) {
-		attrs = append(attrs, "strikethrough")
-	}
-	if a.Has(AttrSpoiler) {
-		attrs = append(attrs, "spoiler")
-	}
-	if a.Has(AttrMonospace) {
-		attrs = append(attrs, "monospace")
-	}
-	if a.Has(AttrQuoted) {
-		attrs = append(attrs, "quoted")
-	}
-	return strings.Join(attrs, ", ")
-}
-
-func (attr Attribute) tag(t *gtk.TextTag, color string) {
+func tag(attr md.Attribute, t *gtk.TextTag, color string) {
 	t.SetProperty("weight", pango.WEIGHT_MEDIUM)
 
 	if color != "" {
@@ -124,7 +65,7 @@ func (attr Attribute) tag(t *gtk.TextTag, color string) {
 	}
 
 	// TODO: hidden unless on hover
-	if attr.Has(AttrSpoiler) {
+	if attr.Has(md.AttrSpoiler) {
 		// Same color, so text appears invisible.
 		t.SetProperty("foreground", "#202225")
 		t.SetProperty("background", "#202225")
@@ -138,32 +79,32 @@ func (attr Attribute) tag(t *gtk.TextTag, color string) {
 		})
 	}
 
-	if attr.Has(AttrBold) {
+	if attr.Has(md.AttrBold) {
 		t.SetProperty("weight", pango.WEIGHT_BOLD)
 	}
-	if attr.Has(AttrItalics) {
+	if attr.Has(md.AttrItalics) {
 		t.SetProperty("style", pango.STYLE_ITALIC)
 	}
-	if attr.Has(AttrUnderline) {
+	if attr.Has(md.AttrUnderline) {
 		t.SetProperty("underline", pango.UNDERLINE_SINGLE)
 	}
-	if attr.Has(AttrStrikethrough) {
+	if attr.Has(md.AttrStrikethrough) {
 		t.SetProperty("strikethrough", true)
 	}
-	if attr.Has(AttrQuoted) && color == "" {
+	if attr.Has(md.AttrQuoted) && color == "" {
 		t.SetProperty("foreground", "#789922")
 	}
-	if attr.Has(AttrSpoiler) && color == "" {
+	if attr.Has(md.AttrSpoiler) && color == "" {
 		t.SetProperty("foreground", "#808080")
 	}
-	if attr.Has(AttrMonospace) {
+	if attr.Has(md.AttrMonospace) {
 		t.SetProperty("family", "monospace")
 		t.SetProperty("scale", 0.84)
 		t.SetProperty("scale-set", true)
 	}
 }
 
-func ColorTag(table *gtk.TextTagTable, attr Attribute, color string) *gtk.TextTag {
+func ColorTag(table *gtk.TextTagTable, attr md.Attribute, color string) *gtk.TextTag {
 	var key = attr.StringInt() + color
 
 	v, err := table.Lookup(key)
@@ -177,7 +118,7 @@ func ColorTag(table *gtk.TextTagTable, attr Attribute, color string) *gtk.TextTa
 	}
 
 	// Load
-	attr.tag(t, color)
+	tag(attr, t, color)
 
 	table.Add(t)
 	return t
@@ -193,7 +134,7 @@ type TagState struct {
 var EmptyTag = Tag{}
 
 type Tag struct {
-	Attr  Attribute
+	Attr  md.Attribute
 	Color string
 }
 
@@ -210,7 +151,7 @@ func (s *TagState) colorTag(tag Tag) *gtk.TextTag {
 	return ColorTag(s.table, tag.Attr, tag.Color)
 }
 
-func (s *TagState) tagSet(attr Attribute, enter bool) *gtk.TextTag {
+func (s *TagState) tagSet(attr md.Attribute, enter bool) *gtk.TextTag {
 	if enter {
 		return s.tagAdd(attr)
 	} else {
@@ -218,13 +159,13 @@ func (s *TagState) tagSet(attr Attribute, enter bool) *gtk.TextTag {
 	}
 }
 
-func (s *TagState) tagAdd(attr Attribute) *gtk.TextTag {
+func (s *TagState) tagAdd(attr md.Attribute) *gtk.TextTag {
 	s.Attr |= attr
 	s.tag = s.colorTag(s.Tag)
 	return s.tag
 }
 
-func (s *TagState) tagRemove(attr Attribute) *gtk.TextTag {
+func (s *TagState) tagRemove(attr md.Attribute) *gtk.TextTag {
 	s.Attr &= ^attr
 	s.tag = s.colorTag(s.Tag)
 	return s.tag
@@ -245,7 +186,7 @@ func (s *TagState) tagSetColor(color string) *gtk.TextTag {
 	return s.tag
 }
 
-func (s *TagState) tagSetAttrAndColor(attr Attribute, color string) *gtk.TextTag {
+func (s *TagState) tagSetAttrAndColor(attr md.Attribute, color string) *gtk.TextTag {
 	s.Color = color
 	s.Attr = attr
 	s.tag = s.colorTag(s.Tag)
@@ -253,16 +194,99 @@ func (s *TagState) tagSetAttrAndColor(attr Attribute, color string) *gtk.TextTag
 }
 
 // injectTag copies attributes and colors from the state to the given tag.
-func (s *TagState) injectTag(tag *gtk.TextTag) {
-	s.Attr.tag(tag, s.Color)
+func (s *TagState) injectTag(textTag *gtk.TextTag) {
+	tag(s.Attr, textTag, s.Color)
 }
 
-func (s *TagState) tagWith(attr Attribute) *gtk.TextTag {
+func (s *TagState) tagWith(attr md.Attribute) *gtk.TextTag {
 	return ColorTag(s.table, s.Attr|attr, s.Color)
 }
 
 func (s *TagState) tagWithColor(color string) *gtk.TextTag {
 	return ColorTag(s.table, s.Attr, color)
+}
+
+// does not change state
+func (s *TagState) hyperlink(url string) *gtk.TextTag {
+	key := "link_" + url
+
+	v, err := s.table.Lookup(key)
+	if err == nil {
+		return v
+	}
+
+	t, err := gtk.TextTagNew(key)
+	if err != nil {
+		log.Panicln("Failed to create new hyperlink tag:", err)
+	}
+
+	t.SetProperty("underline", pango.UNDERLINE_SINGLE)
+	t.SetProperty("foreground", "#3F7CE0")
+	t.Connect("event", setHandler(func(PressedEvent) {
+		if err := open.Start(url); err != nil {
+			log.Errorln("Failed to open image URL:", err)
+		}
+	}))
+
+	s.table.Add(t)
+	return t
+}
+
+func searchMember(state state.Store, guild, user discord.Snowflake) *discord.GuildUser {
+	m, err := state.Member(guild, user)
+	if err == nil {
+		return &discord.GuildUser{
+			User:   m.User,
+			Member: m,
+		}
+	}
+
+	// Maybe?
+	p, err := state.Presence(guild, user)
+	if err == nil {
+		return &discord.GuildUser{
+			User: p.User,
+		}
+	}
+
+	return nil
+}
+
+func (s *TagState) guildUser(gu *discord.GuildUser) *gtk.TextTag {
+	if UserPressed == nil {
+		return nil
+	}
+
+	return s.addHandler("@"+gu.ID.String(), func(ev PressedEvent) {
+		UserPressed(ev, gu)
+	})
+}
+
+func (s *TagState) channel(ch *discord.Channel) *gtk.TextTag {
+	if ChannelPressed == nil {
+		return nil
+	}
+
+	return s.addHandler("#"+ch.ID.String(), func(ev PressedEvent) {
+		ChannelPressed(ev, ch)
+	})
+}
+
+func (s *TagState) inlineEmojiTag() *gtk.TextTag {
+	t, err := s.table.Lookup("emoji")
+	if err == nil {
+		return t
+	}
+
+	t, err = gtk.TextTagNew("emoji")
+	if err != nil {
+		log.Panicln("Failed to create new emoji tag:", err)
+	}
+
+	t.SetProperty("rise", -8192)
+
+	s.table.Add(t)
+	return t
 }
 
 func (s *TagState) timestamp() *gtk.TextTag {
@@ -300,8 +324,6 @@ func (s *TagState) addHandler(key string, handler func(PressedEvent)) *gtk.TextT
 	s.table.Add(t)
 	return t
 }
-
-// func (s *TagState)
 
 type PressedEvent struct {
 	*gdk.EventButton

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 
+	"github.com/diamondburned/ningen/md"
 	"github.com/yuin/goldmark/ast"
 )
 
@@ -18,7 +19,7 @@ func NewSimpleMarkupRenderer() *SimpleMarkupRenderer {
 func (r *SimpleMarkupRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 	ast.Walk(n, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		switch n := n.(type) {
-		case *Inline:
+		case *md.Inline:
 			r.setAttr(w, n.Attr, enter)
 		default:
 			r.MarkupRenderer.switchNode(w, n, source, enter)
@@ -30,7 +31,7 @@ func (r *SimpleMarkupRenderer) Render(w io.Writer, source []byte, n ast.Node) er
 	return nil
 }
 
-func (r *SimpleMarkupRenderer) setAttr(w io.Writer, attr Attribute, enter bool) {
+func (r *SimpleMarkupRenderer) setAttr(w io.Writer, attr md.Attribute, enter bool) {
 	// close the original span if there's one
 	r.closeAttr(w)
 
@@ -52,13 +53,13 @@ func (r *SimpleMarkupRenderer) closeAttr(w io.Writer) {
 
 	var tokens = make([][]byte, 0, 3)
 
-	if r.attr.Has(AttrUnderline) {
+	if r.attr.Has(md.AttrUnderline) {
 		tokens = append(tokens, []byte("</u>"))
 	}
-	if r.attr.Has(AttrItalics) {
+	if r.attr.Has(md.AttrItalics) {
 		tokens = append(tokens, []byte("</i>"))
 	}
-	if r.attr.Has(AttrBold) {
+	if r.attr.Has(md.AttrBold) {
 		tokens = append(tokens, []byte("</b>"))
 	}
 
@@ -72,13 +73,13 @@ func (r *SimpleMarkupRenderer) openAttr(w io.Writer) {
 
 	var tokens = make([][]byte, 0, 3)
 
-	if r.attr.Has(AttrBold) {
+	if r.attr.Has(md.AttrBold) {
 		tokens = append(tokens, []byte("<b>"))
 	}
-	if r.attr.Has(AttrItalics) {
+	if r.attr.Has(md.AttrItalics) {
 		tokens = append(tokens, []byte("<i>"))
 	}
-	if r.attr.Has(AttrUnderline) {
+	if r.attr.Has(md.AttrUnderline) {
 		tokens = append(tokens, []byte("<u>"))
 	}
 

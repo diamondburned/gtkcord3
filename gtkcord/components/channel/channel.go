@@ -37,13 +37,13 @@ func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 		return
 	}
 
-	if s.ChannelMuted(ch.ID) {
+	if s.Muted.Channel(ch.ID) {
 		w.stateClass = "muted"
 		w.Style.AddClass("muted")
 		return
 	}
 
-	if rs := s.FindLastRead(ch.ID); rs != nil {
+	if rs := s.Read.FindLast(ch.ID); rs != nil {
 		w.unread = ch.LastMessageID != rs.LastMessageID
 		pinged := w.unread && rs.MentionCount > 0
 

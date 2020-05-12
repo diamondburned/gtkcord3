@@ -41,6 +41,7 @@ func New(s *ningen.State) (m *Container) {
 	// unreference these things
 	// list.Connect("destroy", m.cleanup)
 
+	list.SetSelectionMode(gtk.SELECTION_NONE)
 	list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		i := r.GetIndex()
 		w := m.Rows[i]
@@ -55,9 +56,6 @@ func New(s *ningen.State) (m *Container) {
 
 		body := popup.NewStatefulPopupBody(m.state, rw.ID, m.GuildID)
 		body.ParentStyle, _ = p.GetStyleContext()
-		body.AddUnhandler(func() {
-			l.SelectRow(nil)
-		})
 
 		p.SetChildren(body)
 		p.Popup()

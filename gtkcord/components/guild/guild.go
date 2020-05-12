@@ -113,7 +113,7 @@ func newGuildRow(
 		// Update the guild icon in the background.
 		guild.UpdateImage()
 
-		if s.GuildMuted(guildID, false) {
+		if s.Muted.Guild(guildID, false) {
 			guild.muted = true
 			return
 		}
@@ -169,11 +169,11 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 			continue
 		}
 
-		if s.CategoryMuted(ch.ID) {
+		if s.Muted.Category(ch.ID) {
 			continue
 		}
 
-		if rs := s.FindLastRead(ch.ID); rs != nil {
+		if rs := s.Read.FindLast(ch.ID); rs != nil {
 			if ch.LastMessageID == rs.LastMessageID {
 				continue
 			}

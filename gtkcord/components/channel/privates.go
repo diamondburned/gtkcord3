@@ -89,7 +89,7 @@ func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs
 		})
 	})
 
-	s.AddReadChange(pcs.TraverseReadState)
+	s.Read.OnChange(pcs.TraverseReadState)
 	return
 }
 
@@ -149,7 +149,7 @@ func (pcs *PrivateChannels) LoadChannels() error {
 		defer pcs.busy.Unlock()
 
 		for _, channel := range channels {
-			rs := pcs.state.FindLastRead(channel.ID)
+			rs := pcs.state.Read.FindLast(channel.ID)
 			if rs == nil {
 				continue
 			}
@@ -200,7 +200,7 @@ func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
 	return strings.Contains(strings.ToLower(pc.Name), pcs.search)
 }
 
-func (pcs *PrivateChannels) TraverseReadState(_ *ningen.State, rs *gateway.ReadState, unread bool) {
+func (pcs *PrivateChannels) TraverseReadState(rs gateway.ReadState, unread bool) {
 	// Read lock is used, as the size of the slice isn't directly modified.
 	pcs.busy.RLock()
 	defer pcs.busy.RUnlock()

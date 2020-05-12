@@ -21,6 +21,8 @@ type Guilds struct {
 	Guilds   []gtkutils.ExtendedWidget
 	Current  *Guild
 	OnSelect func(g *Guild)
+
+	state *ningen.State
 }
 
 func NewGuilds(s *ningen.State) (g *Guilds, err error) {
@@ -103,6 +105,8 @@ func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 }
 
 func initGuilds(g *Guilds, s *ningen.State) {
+	g.state = s
+
 	dm := NewPMButton(s)
 
 	gw, _ := gtk.ScrolledWindowNew(nil, nil)
@@ -128,7 +132,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 		g.ShowAll()
 	}
 	l.Connect("row-activated", g.rowActivated)
-	s.AddReadChange(g.TraverseReadState)
+	s.Read.OnChange(g.TraverseReadState)
 }
 
 func (g *Guilds) rowActivated(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -232,8 +236,8 @@ func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 	return nil, nil
 }
 
-func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {
-	ch, err := s.Store.Channel(rs.ChannelID)
+func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
+	ch, err := guilds.state.Store.Channel(chrs.ChannelID)
 	if err != nil {
 		return
 	}
@@ -248,9 +252,9 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 		return
 	}
 
-	pinged := rs.MentionCount > 0
+	pinged := chrs.MentionCount > 0
 
-	if s.ChannelMuted(rs.ChannelID) {
+	if guilds.state.Muted.Channel(ch.ID) {
 		unread = false
 	}
 
@@ -263,9 +267,9 @@ func (guilds *Guilds) TraverseReadState(s *ningen.State, rs *gateway.ReadState, 
 	}
 
 	if !unread {
-		delete(guild.unreadChs, rs.ChannelID)
+		delete(guild.unreadChs, ch.ID)
 	} else {
-		guild.unreadChs[rs.ChannelID] = pinged
+		guild.unreadChs[ch.ID] = pinged
 	}
 
 	if !unread || !pinged {

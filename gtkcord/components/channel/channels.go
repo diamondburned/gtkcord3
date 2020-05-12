@@ -74,7 +74,7 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 		})
 	})
 
-	state.AddReadChange(chs.TraverseReadState)
+	state.Read.OnChange(chs.TraverseReadState)
 	return
 }
 
@@ -102,7 +102,7 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get guild channels")
 	}
-	channels = filterChannels(chs.state.State, channels)
+	channels = filterChannels(chs.state, channels)
 
 	chs.busy.Lock()
 	defer chs.busy.Unlock()
@@ -165,7 +165,7 @@ func (chs *Channels) First() *Channel {
 	return nil
 }
 
-func (chs *Channels) TraverseReadState(s *ningen.State, rs *gateway.ReadState, unread bool) {
+func (chs *Channels) TraverseReadState(rs gateway.ReadState, unread bool) {
 	chs.busy.RLock()
 	defer chs.busy.RUnlock()
 

@@ -4,6 +4,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -13,7 +14,11 @@ func (c *State) completeEmojis(word string) {
 	}
 
 	guildID := c.container.GetGuildID()
-	guildEmojis := c.state.SearchEmojis(guildID)
+	guildEmojis, err := c.state.Emoji.Get(guildID)
+	if err != nil {
+		log.Errorln("Failed to get emojis:", err)
+		return
+	}
 
 	filtered := guildEmojis[:0]
 	filteredLen := 0

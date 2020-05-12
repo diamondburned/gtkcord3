@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 )
 
@@ -13,7 +12,7 @@ type _sortStructure struct {
 	children []discord.Channel
 }
 
-func filterChannels(s *state.State, chs []discord.Channel) []discord.Channel {
+func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 	filtered := make([]discord.Channel, 0, len(chs))
 	u := s.Ready.User
 

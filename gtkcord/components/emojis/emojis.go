@@ -6,6 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
@@ -24,6 +25,7 @@ type Picker struct {
 	PageView   *gtk.Stack
 	MainPage   MainPage   // page 1 "main"
 	SearchPage SearchPage // page 2 "search"
+	Error      *gtk.Label
 }
 
 type Spawner struct {
@@ -80,9 +82,11 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Pick
 
 	picker.MainPage = newMainPage(picker, s.click)
 	picker.SearchPage = newSearchPage(picker)
+	picker.Error, _ = gtk.LabelNew("")
 
 	picker.Main.Add(picker.Search)
 	picker.Main.Add(picker.PageView)
+	picker.Main.Add(picker.Error)
 
 	picker.Popover.Add(picker.Main)
 	picker.Popover.Connect("key-press-event", func(p *gtk.Popover, ev *gdk.Event) bool {
@@ -99,8 +103,19 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Pick
 	picker.ShowAll()
 
 	// Make all guild pages
-	guildEmojis := s.state.SearchEmojis(currentGuild)
-	picker.MainPage.init(guildEmojis)
+	e, err := s.state.Emoji.Get(currentGuild)
+	if err != nil {
+		log.Errorln("Failed to get emojis:", err)
+
+		// Show the error visually.
+		picker.Error.SetMarkup(`<span color="red">` + err.Error() + "</span>")
+		picker.PageView.SetVisibleChild(picker.Error)
+
+		// Early return.
+		return picker
+	}
+
+	picker.MainPage.init(e)
 
 	s.opened = picker
 	return picker

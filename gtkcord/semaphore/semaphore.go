@@ -103,6 +103,16 @@ func Async(fn interface{}, v ...interface{}) {
 	idleAdd(log.Trace(1), true, fn, v...)
 }
 
+// AfterLock runs a background goroutine to acquire a lock then run fn in the
+// main thread.
+func AfterLock(locker sync.Locker, fn func()) {
+	go func() {
+		locker.Lock()
+		IdleMust(fn)
+		locker.Unlock()
+	}()
+}
+
 func idle(trace string, fn interface{}, v ...interface{}) (interface{}, error) {
 	var values = idleAdd(trace, false, fn, v...)
 	switch len(values) {

@@ -153,7 +153,7 @@ func NewInput(m *Messages) (i *Input) {
 	})
 
 	// Initialize the typing state:
-	i.Typing = typing.NewState(m.c.State)
+	i.Typing = typing.NewState(m.c.State.State)
 
 	// Make the edit indicator widgets:
 	editRevealer, _ := gtk.RevealerNew()

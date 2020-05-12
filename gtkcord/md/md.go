@@ -6,11 +6,10 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
+	"github.com/diamondburned/ningen/md"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
 )
 
 var (
@@ -30,25 +29,10 @@ func ParseWithMessage(content []byte, dst *gtk.TextView, s state.Store, m *disco
 }
 
 func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message, msg bool) {
-	// Context to pass down messages:
-	ctx := parser.NewContext()
-	ctx.Set(messageCtx, m)
-	ctx.Set(sessionCtx, s)
-
-	var inlineParsers []util.PrioritizedValue
-	if msg {
-		inlineParsers = InlineParsers()
-	} else {
-		inlineParsers = InlineParserWithLink()
-	}
-
-	p := parser.NewParser(
-		parser.WithBlockParsers(BlockParsers()...),
-		parser.WithInlineParsers(inlineParsers...),
-	)
+	node := md.ParseWithMessage(b, s, m, msg)
 
 	r := NewRenderer(dst)
-	renderToBuf(NewRenderer(dst), b, p.Parse(text.NewReader(b), parser.WithContext(ctx)))
+	renderToBuf(NewRenderer(dst), b, node)
 
 	// Is the not message edited? (Or if we don't want a timestamp)
 	if !msg || !m.EditedTimestamp.Valid() {
@@ -61,12 +45,7 @@ func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message
 }
 
 func Parse(content []byte, dst *gtk.TextView, opts ...parser.ParseOption) {
-	p := parser.NewParser(
-		parser.WithBlockParsers(BlockParsers()...),
-		parser.WithInlineParsers(InlineParsers()...),
-	)
-
-	node := p.Parse(text.NewReader(content), opts...)
+	node := md.Parse(content, opts...)
 	renderToBuf(NewRenderer(dst), content, node)
 }
 
@@ -85,31 +64,14 @@ func renderToBuf(r *Renderer, src []byte, node ast.Node) {
 }
 
 func ParseToMarkup(content []byte) []byte {
-	p := parser.NewParser(
-		parser.WithBlockParsers(BlockParsers()...),
-		parser.WithInlineParsers(InlineParsers()...),
-	)
-
-	node := p.Parse(text.NewReader(content))
-
 	var buf bytes.Buffer
-	NewMarkupRenderer().Render(&buf, content, node)
+	NewMarkupRenderer().Render(&buf, content, md.Parse(content))
 
 	return bytes.TrimSpace(buf.Bytes())
 }
 
 func ParseToMarkupWithMessage(content []byte, s state.Store, m *discord.Message) []byte {
-	// Context to pass down messages:
-	ctx := parser.NewContext()
-	ctx.Set(messageCtx, m)
-	ctx.Set(sessionCtx, s)
-
-	p := parser.NewParser(
-		parser.WithBlockParsers(BlockParsers()...),
-		parser.WithInlineParsers(InlineParsers()...),
-	)
-
-	node := p.Parse(text.NewReader(content), parser.WithContext(ctx))
+	node := md.ParseWithMessage(content, s, m, false)
 
 	var buf bytes.Buffer
 	NewMarkupRenderer().Render(&buf, content, node)
@@ -118,17 +80,7 @@ func ParseToMarkupWithMessage(content []byte, s state.Store, m *discord.Message)
 }
 
 func ParseToSimpleMarkupWithMessage(content []byte, s state.Store, m *discord.Message) []byte {
-	// Context to pass down messages:
-	ctx := parser.NewContext()
-	ctx.Set(messageCtx, m)
-	ctx.Set(sessionCtx, s)
-
-	p := parser.NewParser(
-		parser.WithBlockParsers(BlockParsers()...),
-		parser.WithInlineParsers(InlineParsers()...),
-	)
-
-	node := p.Parse(text.NewReader(content), parser.WithContext(ctx))
+	node := md.ParseWithMessage(content, s, m, false)
 
 	var buf bytes.Buffer
 	NewSimpleMarkupRenderer().Render(&buf, content, node)

@@ -362,7 +362,7 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 
 	chID := m.GetChannelID()
 
-	r := m.c.FindLastRead(chID)
+	r := m.c.Read.FindLast(chID)
 	if r == nil {
 		return
 	}
@@ -376,7 +376,7 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	// thread. Since goroutines are cheap, this isn't a huge issue.
 	go func() {
 		// Find the latest message and ack it:
-		m.c.MarkRead(chID, lastID)
+		m.c.Read.MarkRead(chID, lastID)
 	}()
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/ningen/handler"
 )
 
 type MemberListState struct {
@@ -28,10 +29,12 @@ type MemberList struct {
 	Items  []*gateway.GuildMemberListOpItem
 }
 
-func NewMemberListState() *MemberListState {
-	return &MemberListState{
+func NewMemberListState(h handler.AddHandler) *MemberListState {
+	state := &MemberListState{
 		state: map[discord.Snowflake]*MemberList{},
 	}
+	h.AddHandler(state.handle)
+	return state
 }
 
 func (m *MemberList) Acquire() func() {

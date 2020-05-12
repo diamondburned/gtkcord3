@@ -3,10 +3,29 @@ package md
 import (
 	"io"
 
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/ningen/md"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 )
+
+const (
+	InlineEmojiSize = 22
+	LargeEmojiSize  = 48
+)
+
+func EmojiURL(emojiID string, animated bool) string {
+	const EmojiBaseURL = "https://cdn.discordapp.com/emojis/"
+
+	if animated {
+		return EmojiBaseURL + emojiID + ".gif?v=1"
+	}
+
+	return EmojiBaseURL + emojiID + ".png?v=1"
+}
 
 // Render is a non-thread-safe TextBuffer renderer.
 type Renderer struct {
@@ -26,7 +45,6 @@ func NewRenderer(tv *gtk.TextView) *Renderer {
 		tags: TagState{
 			table: tags,
 		},
-		// setEmojis: make(chan setEmoji), // arbitrary 8
 	}
 }
 
@@ -54,7 +72,7 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 		}
 
 	case *ast.Blockquote:
-		r.tags.tagSet(AttrQuoted, enter)
+		r.tags.tagSet(md.AttrQuoted, enter)
 		if enter {
 			r.insertWithTag([]byte{'>', ' '}, nil)
 		} else {
@@ -88,15 +106,15 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 			r.insertWithTag(url, tag)
 		}
 
-	case *Inline:
+	case *md.Inline:
 		r.tags.tagSet(n.Attr, enter)
 
-	case *Emoji:
+	case *md.Emoji:
 		if enter {
 			r.insertEmoji(n)
 		}
 
-	case *Mention:
+	case *md.Mention:
 		if enter {
 			switch {
 			case n.Channel != nil:
@@ -134,7 +152,7 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 			r.insertWithTag([]byte("\n"), nil)
 
 			// Check if blockquote prefix:
-			if r.tags.Attr.Has(AttrQuoted) {
+			if r.tags.Attr.Has(md.AttrQuoted) {
 				r.insertWithTag([]byte{'>', ' '}, nil)
 			}
 		}
@@ -149,4 +167,31 @@ func (r *Renderer) insertWithTag(content []byte, tag *gtk.TextTag) {
 	}
 
 	r.Buffer.InsertWithTag(r.Buffer.GetEndIter(), string(content), tag)
+}
+
+func (r *Renderer) insertEmoji(e *md.Emoji) {
+	// TODO
+	var sz = InlineEmojiSize
+	if e.Large {
+		sz = LargeEmojiSize
+	}
+
+	anchor := r.Buffer.CreateChildAnchor(r.Buffer.GetEndIter())
+
+	img, _ := gtk.ImageNew()
+	img.Show()
+	img.SetTooltipText(e.Name)
+	img.SetSizeRequest(sz, 10) // 10 is the minimum height
+	img.SetProperty("yalign", 1.0)
+	gtkutils.ImageSetIcon(img, "image-missing", sz)
+
+	r.View.AddChildAtAnchor(img, anchor)
+
+	url := e.EmojiURL()
+
+	go func() {
+		if err := cache.SetImageScaled(url, img, sz, sz); err != nil {
+			log.Errorln("Markdown: Failed to GET "+url+":", err)
+		}
+	}()
 }
