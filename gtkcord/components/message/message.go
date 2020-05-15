@@ -332,10 +332,6 @@ func (m *Message) setCondensed() {
 	m.main.Add(m.right)
 }
 
-func (m *Message) UpdateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
-	semaphore.IdleMust(m.updateAuthor, s, gID, u)
-}
-
 func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
 	// Webhooks don't have users.
 	if gID.Valid() && !m.Webhook {
@@ -377,17 +373,14 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 }
 
 func (m *Message) UpdateAvatar(url string) {
-	cache.AsyncFetchUnsafe(url+"?size=64", m.avatar, variables.AvatarSize, variables.AvatarSize, cache.Round)
+	cache.AsyncFetchUnsafe(
+		url+"?size=64", m.avatar, variables.AvatarSize, variables.AvatarSize, cache.Round)
 }
 
 func (m *Message) customContentUnsafe(s string) {
 	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
 	m.content.InsertMarkup(m.content.GetEndIter(), s)
 	m.textReveal.SetRevealChild(true)
-}
-
-func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
-	semaphore.IdleMust(m.UpdateContentUnsafe, s, update)
 }
 
 func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
@@ -402,12 +395,6 @@ func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) 
 			return
 		}
 	}
-}
-
-func (m *Message) UpdateExtras(s *ningen.State, update *discord.Message) {
-	semaphore.IdleMust(func() {
-		m.updateExtras(s, update)
-	})
 }
 
 func (m *Message) updateExtras(s *ningen.State, update *discord.Message) {

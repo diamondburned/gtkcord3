@@ -3,6 +3,7 @@ package window
 import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -116,9 +117,7 @@ func WithApplication(app *gtk.Application) error {
 	overrideSettings(settings)
 	Window.Settings = settings
 
-	// w.SetVAlign(gtk.ALIGN_CENTER)
-	// w.SetHAlign(gtk.ALIGN_CENTER)
-	// w.SetDefaultSize(500, 250)
+	w.SetDefaultSize(variables.WindowWidth, variables.WindowHeight)
 
 	c, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
 	if err != nil {
@@ -143,15 +142,6 @@ func WithApplication(app *gtk.Application) error {
 	// Play the loading animation:
 	NowLoading()
 
-	// Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
-	// if err != nil {
-	// 	return errors.Wrap(err, "Failed to create a default cursor")
-	// }
-	// Window.CursorPointer, err = gdk.CursorNewFromName(d, "pointer")
-	// if err != nil {
-	// 	return errors.Wrap(err, "Failed to create a pointer cursor")
-	// }
-
 	return nil
 }
 
@@ -170,13 +160,6 @@ func Blur() {
 func Unblur() {
 	Window.SetSensitive(true)
 }
-
-// func SetPointerCursor() {
-// 	Window.Root.SetCursor(Window.CursorPointer)
-// }
-// func SetDefaultCursor() {
-// 	Window.Root.SetCursor(Window.CursorDefault)
-// }
 
 func Resize(w, h int) {
 	Window.Window.Resize(w, h)

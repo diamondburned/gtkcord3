@@ -16,7 +16,6 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
-	"github.com/sasha-s/go-deadlock"
 )
 
 const scrollMinDelta = 500
@@ -40,11 +39,10 @@ type Messages struct {
 
 	Messages *gtk.ListBox
 	messages []*Message
-	guard    deadlock.RWMutex
+	// guard    deadlock.RWMutex
 
-	resetting    bool
-	fetchingMore moreatomic.Bool
-	lastFetched  moreatomic.Time
+	fetching    moreatomic.Bool
+	lastFetched moreatomic.Time
 
 	// Additional components
 	Input *Input
@@ -130,13 +128,6 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		v.Add(col) // add col instead of list
 		v.Show()
 
-		// Scroll to the bottom if we have more things.
-		v.Connect("size-allocate", func() {
-			if m.atBottom.Get() {
-				m.ScrollToBottom()
-			}
-		})
-
 		// Fractal does this, but Go is superior.
 		adj := s.GetVAdjustment()
 		adj.Connect("value-changed", m.onScroll)
@@ -153,6 +144,13 @@ func NewMessages(s *ningen.State, opts Opts) (*Messages, error) {
 		// Set the proper scrolls
 		b.SetFocusHAdjustment(s.GetHAdjustment())
 		b.SetFocusVAdjustment(s.GetVAdjustment())
+
+		// Scroll to the bottom if we have more things.
+		b.Connect("size-allocate", func() {
+			if m.atBottom.Get() {
+				m.ScrollToBottom()
+			}
+		})
 
 		// On mouse-press, focus:
 		s.Connect("button-release-event", func(_ *gtk.ScrolledWindow, ev *gdk.Event) bool {
@@ -201,12 +199,9 @@ func (m *Messages) GetGuildID() discord.Snowflake {
 	return m.guildID.Get()
 }
 
-func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
+func (m *Messages) GetRecentAuthorsUnsafe(limit int) []discord.Snowflake {
 	ids := make([]discord.Snowflake, 0, limit)
 	added := make(map[discord.Snowflake]struct{}, limit)
-
-	m.guard.RLock()
-	defer m.guard.RUnlock()
 
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		message := m.messages[i]
@@ -222,10 +217,8 @@ func (m *Messages) GetRecentAuthors(limit int) []discord.Snowflake {
 	return ids
 }
 
-func (m *Messages) LastFromMe() *Message {
-	m.guard.RLock()
-	defer m.guard.RUnlock()
-
+// unsafe
+func (m *Messages) LastFromMeUnsafe() *Message {
 	for n := len(m.messages) - 1; n >= 0; n-- {
 		if msg := m.messages[n]; msg.AuthorID == m.c.Ready.User.ID {
 			return msg
@@ -234,47 +227,34 @@ func (m *Messages) LastFromMe() *Message {
 	return nil
 }
 
-func (m *Messages) last() *Message {
-	if len(m.messages) == 0 {
-		return nil
-	}
-	return m.messages[len(m.messages)-1]
-}
-
-func (m *Messages) lastID() discord.Snowflake {
-	if msg := m.last(); msg != nil {
-		return msg.ID
-	}
-	return 0
-}
-
-func (m *Messages) Load(channel discord.Snowflake) error {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
+// Load is thread-safe. Done will be called in the main thread.
+func (m *Messages) Load(channel discord.Snowflake, done func(error)) {
 	m.channelID.Set(channel)
-
-	// Mark that we're loading messages.
-	m.resetting = true
 
 	// Order: latest is first.
 	messages, err := m.c.Messages(channel)
 	if err != nil {
-		return errors.Wrap(err, "Failed to get messages")
+		semaphore.Async(func() {
+			done(errors.Wrap(err, "Failed to get messages"))
+		})
+		return
 	}
 
 	// Set GuildID and subscribe if it's valid:
+	var guildID discord.Snowflake
 	if len(messages) > 0 {
-		guild := messages[0].GuildID
-		m.guildID.Set(guild)
-
-		if guild.Valid() {
-			go m.c.Subscribe(guild, channel, 0)
+		guildID = messages[0].GuildID
+		if guildID.Valid() {
+			go m.c.Subscribe(guildID, channel, 0)
 		}
 
 	} else {
 		// If there are no messages, don't bother.
-		return nil
+		semaphore.Async(func() {
+			// Pretend we're done.
+			done(nil)
+		})
+		return
 	}
 
 	// Sort so that latest is last:
@@ -282,32 +262,40 @@ func (m *Messages) Load(channel discord.Snowflake) error {
 		return messages[i].ID < messages[j].ID
 	})
 
-	// Allocate a new empty slice. This is a trade-off to re-using the old
-	// slice to re-use messages.
-	m.messages = make([]*Message, 0, m.fetch)
+	semaphore.Async(func() {
+		// Set the guild ID to the state struct.
+		m.guildID.Set(guildID)
 
-	// WaitGroup for the background goroutines that were spawned:
-	// var loads = make([])
+		// Allocate a new empty slice. This is a trade-off to re-using the old
+		// slice to re-use messages.
+		m.messages = make([]*Message, 0, m.fetch)
 
-	// Iterate from earliest to latest, in a thread-safe function.
-	for i := 0; i < len(messages); i++ {
-		message := &messages[i]
+		// WaitGroup for the background goroutines that were spawned:
+		// var loads = make([])
 
-		w := newMessageUnsafe(m.c, message)
-		w.updateAuthor(m.c, message.GuildID, message.Author)
-		m._insert(w)
-	}
+		// Iterate from earliest to latest, in a thread-safe function.
+		for i := 0; i < len(messages); i++ {
+			message := &messages[i]
 
-	// Iterate backwards, from latest to earliest:
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		m.messages[i].updateExtras(m.c, &messages[i])
-	}
+			w := newMessageUnsafe(m.c, message)
+			w.updateAuthor(m.c, message.GuildID, message.Author)
+			m._insert(w)
+		}
 
-	// Request that we should always scroll to bottom.
-	m.atBottom.Set(true)
+		// Request that we should always scroll to bottom.
+		m.atBottom.Set(true)
+		// Call the done callback.
+		done(nil)
+	})
 
-	m.resetting = false
-	return nil
+	// Give some breathing room.
+
+	semaphore.Async(func() {
+		// Iterate backwards, from latest to earliest:
+		for i := len(m.messages) - 1; i >= 0; i-- {
+			m.messages[i].updateExtras(m.c, &messages[i])
+		}
+	})
 }
 
 func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
@@ -316,9 +304,6 @@ func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
 
 func (m *Messages) Cleanup() {
 	m.Input.Typing.Stop()
-
-	m.guard.Lock()
-	defer m.guard.Unlock()
 
 	for _, msg := range m.messages {
 		// DESTROY!!!!
@@ -331,18 +316,12 @@ func (m *Messages) Cleanup() {
 }
 
 func (m *Messages) ScrollToBottom() {
-	// Always set scroll asynchronously, so Gtk can properly calculate the
-	// height of children after rendering.
-	semaphore.Async(func() {
-		// Set scroll:
-		vAdj := m.Scroll.GetVAdjustment()
-		to := vAdj.GetUpper() - vAdj.GetPageSize() - 1
-		vAdj.SetValue(to)
-	})
+	vAdj := m.Scroll.GetVAdjustment()
+	vAdj.SetValue(vAdj.GetUpper())
 }
 
 func (m *Messages) onScroll(adj *gtk.Adjustment) {
-	if adj.GetUpper()-adj.GetPageSize() == adj.GetValue() {
+	if adj.GetUpper()-adj.GetPageSize() <= adj.GetValue() {
 		m.atBottom.Set(true)
 	} else {
 		m.atBottom.Set(false)
@@ -361,67 +340,44 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	}
 
 	chID := m.GetChannelID()
-
-	r := m.c.Read.FindLast(chID)
-	if r == nil {
-		return
-	}
-
 	lastID := m.messages[len(m.messages)-1].ID
-	if r.LastMessageID == lastID {
+
+	// Find the latest message and ack it. Since MarkRead calls the onChanges
+	// functions which would be using semaphore.IdleMust, we need to spawn this
+	// in a goroutine.
+	r := m.c.Read.FindLast(chID)
+	if r == nil || r.LastMessageID == lastID {
 		return
 	}
 
-	// Run this in a goroutine to avoid the mutex acquire from locking the UI
-	// thread. Since goroutines are cheap, this isn't a huge issue.
-	go func() {
-		// Find the latest message and ack it:
-		m.c.Read.MarkRead(chID, lastID)
-	}()
+	m.c.Read.MarkRead(chID, lastID)
 }
 
 // mainly used for fetching extra message when scrolled to the top
 func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
+	// Do we even have messages?
+	if len(m.messages) < m.fetch {
+		return
+	}
+
 	// only count scroll to top
 	if pos != gtk.POS_TOP {
 		return
 	}
 
-	// Prevent fetching more if we're already fetching.
-	if m.fetchingMore.Get() {
-		return
-	}
-
-	// Prevent fetching if we've just fetched 5 (or less) seconds ago. HasBeen
+	// Prevent fetching if we've just fetched 2 (or less) seconds ago. HasBeen
 	// also implicitly updates.
-	if !m.lastFetched.HasBeen(2 * time.Second) {
+	if !m.lastFetched.HasBeen(2*time.Second) || m.fetching.Get() {
 		return
 	}
 
-	// Buggy, apparently steals lock.
-
-	go func() {
-		m.fetchingMore.Set(true)
-		m.guard.Lock()
-
-		defer m.fetchingMore.Set(false)
-		defer m.guard.Unlock()
-
-		semaphore.IdleMust(m.Scroll.SetSensitive, false)
-		defer semaphore.IdleMust(m.Scroll.SetSensitive, true)
-
-		m.fetchMore()
-	}()
-}
-
-func (m *Messages) fetchMore() {
-	if len(m.messages) < m.fetch {
-		return
-	}
+	m.Scroll.SetSensitive(false)
 
 	// Grab the first ID
-	first := m.messages[0].ID
+	go m.fetchMore(m.messages[0].ID)
+}
 
+func (m *Messages) fetchMore(first discord.Snowflake) {
 	// Grab the channel and guild dID:
 	channelID := m.channelID.Get()
 	guildID := m.guildID.Get()
@@ -443,8 +399,10 @@ func (m *Messages) fetchMore() {
 	// appears first.
 	oldMsgs := make([]*Message, 0, len(messages))
 
-	// Iterate from earliest to latest, in a thread-safe function.
-	semaphore.IdleMust(func() {
+	// I'm not sure if this would make Go put everything on the heap. Maybe it
+	// already does.
+	semaphore.Async(func() {
+		// Iterate from earliest to latest, in a thread-safe function.
 		for i := 0; i < len(messages); i++ {
 			message := &messages[i]
 
@@ -470,10 +428,13 @@ func (m *Messages) fetchMore() {
 			w.updateAuthor(m.c, guildID, message.Author)
 			w.updateExtras(m.c, message)
 		}
-	})
 
-	// Prepend into the slice as well:
-	m.messages = append(oldMsgs, m.messages...)
+		// Prepend into the slice as well:
+		m.messages = append(oldMsgs, m.messages...)
+
+		// Reactivate the boxes.
+		m.Scroll.SetSensitive(true)
+	})
 }
 
 func (m *Messages) cleanOldMessages() {
@@ -482,9 +443,6 @@ func (m *Messages) cleanOldMessages() {
 	if !m.atBottom.Get() {
 		return
 	}
-
-	m.guard.Lock()
-	defer m.guard.Unlock()
 
 	// Check the number of messages
 	if len(m.messages) <= m.fetch {
@@ -495,12 +453,10 @@ func (m *Messages) cleanOldMessages() {
 	cleanLen := len(m.messages) - m.fetch
 
 	// Destroy the messages before reslicing
-	semaphore.IdleMust(func() {
-		// Iterate from 0 to the oldest message to be kept:
-		for _, r := range m.messages[:cleanLen] {
-			m.Messages.Remove(r)
-		}
-	})
+	// Iterate from 0 to the oldest message to be kept:
+	for _, r := range m.messages[:cleanLen] {
+		m.Messages.Remove(r)
+	}
 
 	// Finally, clean the slice
 	m.messages = append(m.messages[:0], m.messages[cleanLen:]...)
@@ -514,29 +470,19 @@ func (m *Messages) cleanOldMessages() {
 	}
 }
 
-func (m *Messages) Upsert(message *discord.Message) {
+func (m *Messages) UpsertUnsafe(message *discord.Message) {
 	// Clean up old messages (thread-safe):
 	defer m.cleanOldMessages()
 
 	// Are we sure this is not our message?
-	if m.Update(message) {
+	if m.UpdateUnsafe(message) {
 		return
 	}
 
-	var w *Message
-	semaphore.IdleMust(func() {
-		w = newMessageUnsafe(m.c, message)
-	})
-
-	// Avoid the mutex from locking the UI thread when things are busy.
-	m.guard.Lock()
-	semaphore.IdleMust(m._insert, w)
-	m.guard.Unlock()
-
-	semaphore.IdleMust(func() {
-		w.updateAuthor(m.c, message.GuildID, message.Author)
-		w.updateExtras(m.c, message)
-	})
+	w := newMessageUnsafe(m.c, message)
+	m._insert(w)
+	w.updateAuthor(m.c, message.GuildID, message.Author)
+	w.updateExtras(m.c, message)
 }
 
 // not thread-safe
@@ -552,15 +498,10 @@ func (m *Messages) _insert(w *Message) {
 	m.messages = append(m.messages, w)
 
 	w.ShowAll()
-
-	// Gtk is hella buggy.
-	w.CheckResize()
 }
 
-func (m *Messages) Update(update *discord.Message) bool {
+func (m *Messages) UpdateUnsafe(update *discord.Message) bool {
 	var target *Message
-
-	m.guard.RLock()
 
 	for _, message := range m.messages {
 		if false ||
@@ -572,8 +513,6 @@ func (m *Messages) Update(update *discord.Message) bool {
 		}
 	}
 
-	m.guard.RUnlock()
-
 	if target == nil {
 		return false
 	}
@@ -581,20 +520,20 @@ func (m *Messages) Update(update *discord.Message) bool {
 	target.ID = update.ID
 
 	// Clear the nonce, if any:
-	semaphore.IdleMust(func() {
-		if !target.getAvailableUnsafe() {
-			target.setAvailableUnsafe(true)
-		}
-		if update.Content != "" {
-			target.UpdateContentUnsafe(m.c, update)
-		}
-		target.updateExtras(m.c, update)
-	})
+	if !target.getAvailableUnsafe() {
+		target.setAvailableUnsafe(true)
+	}
+
+	if update.Content != "" {
+		target.UpdateContentUnsafe(m.c, update)
+	}
+
+	target.updateExtras(m.c, update)
 
 	return true
 }
 
-func (m *Messages) delete(ids ...discord.Snowflake) {
+func (m *Messages) deleteUnsafe(ids ...discord.Snowflake) {
 	for _, id := range ids {
 		for i, message := range m.messages {
 			if message.ID != id {
@@ -604,7 +543,7 @@ func (m *Messages) delete(ids ...discord.Snowflake) {
 			oldMessage := m.messages[i]
 
 			m.messages = append(m.messages[:i], m.messages[i+1:]...)
-			semaphore.IdleMust(m.Messages.Remove, oldMessage)
+			m.Messages.Remove(oldMessage)
 
 			// Exit if len is 0
 			if len(m.messages) == 0 {
@@ -620,7 +559,7 @@ func (m *Messages) delete(ids ...discord.Snowflake) {
 			// Check if next message is author's:
 			if i < len(m.messages) && m.messages[i].AuthorID == oldMessage.AuthorID {
 				// Then uncollapse next message:
-				semaphore.IdleMust(m.messages[i].SetCondensedUnsafe, false)
+				m.messages[i].SetCondensedUnsafe(false)
 			}
 
 			break
@@ -628,17 +567,14 @@ func (m *Messages) delete(ids ...discord.Snowflake) {
 	}
 }
 
-func (m *Messages) deleteNonce(nonce string) bool {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
+func (m *Messages) deleteNonceUnsafe(nonce string) bool {
 	for i, message := range m.messages {
 		if message.Nonce != nonce {
 			continue
 		}
 
 		m.messages = append(m.messages[:i], m.messages[i+1:]...)
-		semaphore.IdleMust(m.Messages.Remove, message)
+		m.Messages.Remove(message)
 		return true
 	}
 

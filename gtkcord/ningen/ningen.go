@@ -1,7 +1,6 @@
 package ningen
 
 import (
-	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -11,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 func init() {
@@ -27,7 +27,7 @@ type State struct {
 	*ningen.State
 	MemberList *MemberListState
 
-	gmu    sync.Mutex
+	gmu    deadlock.Mutex
 	guilds map[discord.Snowflake]*guildState
 }
 

@@ -284,16 +284,14 @@ func (i *Input) keyDown(_ *gtk.TextView, ev *gdk.Event) bool {
 	// If arrow up is pressed and the input box is empty:
 	if upArr && i.getContent() == "" {
 		// Try and look backwards for the latest message:
-		var latest = i.Messages.LastFromMe()
+		var latest = i.Messages.LastFromMeUnsafe()
 
 		// If we can find the message:
 		if latest != nil {
 			// Trigger the edit message:
-			go func() {
-				if err := i.editMessage(latest.ID); err != nil {
-					log.Errorln("Failed to edit messages:", err)
-				}
-			}()
+			if err := i.editMessage(latest.ID); err != nil {
+				log.Errorln("Failed to edit messages:", err)
+			}
 		}
 
 		return true
@@ -371,16 +369,14 @@ func (i *Input) editMessage(id discord.Snowflake) error {
 
 	i.Editing = m
 
-	semaphore.IdleMust(func() {
-		// Add class
-		i.Style.AddClass("editing")
+	// Add class
+	i.Style.AddClass("editing")
 
-		// Reveal the cancel buttons:
-		i.EditRevealer.SetRevealChild(true)
+	// Reveal the cancel buttons:
+	i.EditRevealer.SetRevealChild(true)
 
-		// Set the content:
-		i.InputBuf.SetText(i.Editing.Content)
-	})
+	// Set the content:
+	i.InputBuf.SetText(i.Editing.Content)
 
 	return nil
 }
@@ -471,14 +467,14 @@ func (i *Input) send(content string) error {
 
 	// An invalid ID keeps the message invalid until it is sent.
 	m := i.makeMessage(content)
-	i.Messages.Upsert(m)
+	semaphore.Async(i.Messages.UpsertUnsafe, m)
 
 	_, err := i.Messages.c.State.SendMessageComplex(m.ChannelID, api.SendMessageData{
 		Content: m.Content,
 		Nonce:   m.Nonce,
 	})
 	if err != nil {
-		i.Messages.deleteNonce(m.Nonce)
+		semaphore.Async(i.Messages.deleteNonceUnsafe, m.Nonce)
 		return errors.Wrap(err, "Failed to send message")
 	}
 
@@ -504,19 +500,18 @@ func (i *Input) _upload(content string, paths []string) error {
 
 	w := newMessageCustom(m)
 
-	semaphore.IdleMust(func() {
+	semaphore.Async(func() {
 		w.rightBottom.Add(u)
 		i.Messages._insert(w)
+		w.updateAuthor(i.Messages.c, m.GuildID, m.Author)
 	})
-
-	go w.updateAuthor(i.Messages.c, m.GuildID, m.Author)
 
 	_, err = i.Messages.c.State.SendMessageComplex(m.ChannelID, s)
 	if err != nil {
-		i.Messages.deleteNonce(m.Nonce)
+		semaphore.Async(i.Messages.deleteNonceUnsafe, m.Nonce)
 		return errors.Wrap(err, "Failed to upload message")
 	}
-	semaphore.IdleMust(w.rightBottom.Remove, u)
+	semaphore.Async(w.rightBottom.Remove, u)
 
 	return nil
 }

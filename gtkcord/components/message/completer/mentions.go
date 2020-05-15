@@ -10,19 +10,21 @@ import (
 )
 
 func (c *State) completeRecentMentions() {
-	ids := c.container.GetRecentAuthors(MaxCompletionEntries)
-	guildID := c.container.GetGuildID()
+	semaphore.IdleMust(func() {
+		ids := c.container.GetRecentAuthorsUnsafe(MaxCompletionEntries)
+		guildID := c.container.GetGuildID()
 
-	for _, id := range ids {
-		m, err := c.state.Store.Member(guildID, id)
-		if err != nil {
-			continue
+		for _, id := range ids {
+			m, err := c.state.Store.Member(guildID, id)
+			if err != nil {
+				continue
+			}
+
+			c.members = append(c.members, *m)
 		}
 
-		c.members = append(c.members, *m)
-	}
-
-	semaphore.IdleMust(c._completeMembers)
+		c._completeMembers()
+	})
 }
 
 func (c *State) completeMentions(word string) {

@@ -13,9 +13,9 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/gtkcord3/internal/moreatomic"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
-	"github.com/sasha-s/go-deadlock"
 )
 
 const TypingTimeout = 10 * time.Second
@@ -54,7 +54,7 @@ func handler() {
 
 			if t != nil {
 				// Reset the timer to the shortest tick:
-				if T := t.Shortest(); !T.IsZero() {
+				if T := t.shortest.Get(); !T.IsZero() {
 					tick.Reset(time.Now().Sub(T))
 				}
 			}
@@ -70,10 +70,8 @@ func handler() {
 		}
 
 		// Render the typing state:
-		tOld.render()
-
-		// If there's nothing left to update, mark it.
-		if tOld.Empty() {
+		if empty := tOld.Render(); empty {
+			// If there's nothing left to update, mark it.
 			tOld = nil
 		}
 	}
@@ -83,12 +81,9 @@ type State struct {
 	*gtk.Box
 	Label *gtk.Label
 
-	mu deadlock.RWMutex
-
-	Users []typingUser
-
-	// updated by Render() only
-	users []string
+	Users    []typingUser
+	users    []string
+	shortest moreatomic.Time
 
 	state *state.State
 
@@ -145,19 +140,13 @@ func (t *State) Type(chID discord.Snowflake) {
 	}()
 }
 
-func (t *State) Empty() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
+func (t *State) isEmpty() bool {
 	return len(t.Users) == 0
 }
 
 func (t *State) Reset() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	t.lastTyped = time.Time{} // zero out
-	t.Users = t.Users[:0]
+	t.Users = nil
 
 	t.Label.SetText("")
 	t.Box.SetOpacity(0)
@@ -167,9 +156,14 @@ func (t *State) Stop() {
 	t.Reset()
 }
 
-func (t *State) render() {
-	t.mu.RLock()
+func (t *State) Render() (empty bool) {
+	semaphore.IdleMust(func() {
+		empty = t.render()
+	})
+	return
+}
 
+func (t *State) render() bool {
 	t.cleanUp()
 
 	var text = ""
@@ -197,36 +191,29 @@ func (t *State) render() {
 		text = "Several people are typing..."
 	}
 
-	t.mu.RUnlock()
+	t.Label.SetMarkup(`<span size="smaller">` + text + "</span>")
+	// Show or hide the breathing animation as well:
+	if text == "" {
+		t.Box.SetOpacity(0)
+	} else {
+		t.Box.SetOpacity(1)
+	}
 
-	semaphore.IdleMust(func() {
-		t.Label.SetMarkup(`<span size="smaller">` + text + "</span>")
-		// Show or hide the breathing animation as well:
-		if text == "" {
-			t.Box.SetOpacity(0)
-		} else {
-			t.Box.SetOpacity(1)
-		}
-	})
+	return t.isEmpty()
 }
 
 func (t *State) Update() {
+	t.sort()
+	if len(t.Users) > 0 {
+		t.shortest.Set(t.Users[0].Time)
+	} else {
+		t.shortest.Reset()
+	}
+
 	select {
 	case typingHandler <- t:
 	default:
 	}
-}
-
-func (t *State) Shortest() time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	if len(t.Users) == 0 {
-		return time.Time{}
-	}
-
-	t.sort()
-	return t.Users[0].Time.Add(-1 * time.Millisecond) // extra overhead just in case
 }
 
 func (t *State) cleanUp() {
@@ -237,6 +224,11 @@ func (t *State) cleanUp() {
 		if t.Users[i].Time.Before(now) {
 			t.Users = append(t.Users[:i], t.Users[i+1:]...)
 		}
+	}
+
+	if len(t.Users) == 0 {
+		// GC the old slice.
+		t.Users = nil
 	}
 }
 
@@ -254,20 +246,13 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 
 	defer t.Update()
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	// Check duplicates:
 	for _, u := range t.Users {
 		if u.ID == typing.UserID {
 			u.Time = typing.Timestamp.Time()
-			t.sort()
 			return
 		}
 	}
-
-	// Temporarily unlock the mutex:
-	t.mu.Unlock()
 
 	var user = typingUser{
 		ID:   typing.UserID,
@@ -285,14 +270,18 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 
 	// Attempt 2: if the event has a GuildID
 	if user.Name == "" && typing.GuildID.Valid() {
-		n, err := t.state.MemberDisplayName(typing.GuildID, typing.UserID)
+		m, err := t.state.Store.Member(typing.GuildID, typing.UserID)
 		if err == nil {
-			user.Name = n
+			if m.Nick != "" {
+				user.Name = m.Nick
+			} else {
+				user.Name = m.User.Username
+			}
 		}
 	}
 
 	// Attempt 3: Check the DM channel:
-	if c, err := t.state.Channel(typing.ChannelID); err == nil {
+	if c, err := t.state.Store.Channel(typing.ChannelID); err == nil {
 		for _, r := range c.DMRecipients {
 			if r.ID == typing.UserID {
 				user.Name = r.Username
@@ -309,17 +298,11 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 	// Escape and format the name:
 	user.Name = `<span weight="bold">` + html.EscapeString(user.Name) + `</span>`
 
-	// Lock back the mutex:
-	t.mu.Lock()
-
 	t.Users = append(t.Users, user)
 }
 
 func (t *State) Remove(id discord.Snowflake) {
 	defer t.Update()
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	for i := range t.Users {
 		if t.Users[i].ID == id {

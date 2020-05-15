@@ -35,9 +35,14 @@ type Guild struct {
 	ID   discord.Snowflake
 	Name string
 
-	busy      deadlock.Mutex
-	muted     bool
-	unreadChs map[discord.Snowflake]bool
+	// busy      deadlock.Mutex
+	muted  bool
+	unread unread
+}
+
+type unread struct {
+	mut deadlock.Mutex
+	chs map[discord.Snowflake]bool
 }
 
 func marginate(r *gtk.ListBoxRow, i *gtk.Image) {
@@ -96,7 +101,9 @@ func newGuildRow(
 		Image:     i,
 		BannerURL: g.BannerURL(),
 
-		unreadChs: map[discord.Snowflake]bool{},
+		unread: unread{
+			chs: make(map[discord.Snowflake]bool),
+		},
 	}
 
 	// Bind the name popup.
@@ -123,9 +130,7 @@ func newGuildRow(
 			pinged := rs.MentionCount > 0
 
 			semaphore.Async(func() {
-				guild.busy.Lock()
 				guild.setUnread(unread, pinged)
-				guild.busy.Unlock()
 			})
 		}
 	}()
@@ -157,10 +162,10 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 		return nil
 	}
 
-	guild.busy.Lock()
-	defer guild.busy.Unlock()
+	guild.unread.mut.Lock()
+	defer guild.unread.mut.Unlock()
 
-	guild.unreadChs = map[discord.Snowflake]bool{}
+	guild.unread.chs = map[discord.Snowflake]bool{}
 	var found *gateway.ReadState
 
 	for _, ch := range channels {
@@ -169,7 +174,7 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 			continue
 		}
 
-		if s.Muted.Category(ch.ID) {
+		if s.Muted.Category(ch.ID) || s.Muted.Channel(ch.ID) {
 			continue
 		}
 
@@ -177,9 +182,10 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 			if ch.LastMessageID == rs.LastMessageID {
 				continue
 			}
-			pinged := rs.MentionCount > 0
 
-			guild.unreadChs[ch.ID] = pinged
+			pinged := rs.MentionCount > 0
+			guild.unread.chs[ch.ID] = pinged
+
 			if found == nil || pinged {
 				found = rs
 			}
@@ -200,46 +206,9 @@ func (guild *Guild) setUnread(unread, pinged bool) {
 	}
 
 	if guild.Parent != nil {
-		// TODO: migrate to UnreadStrip and get rid of the goroutine.
-		go guild.Parent.setUnread(unread, pinged)
+		guild.Parent.setUnread(unread, pinged)
 	}
 }
-
-// func (guild *Guild) setUnread(s *ningen.State, unread, pinged bool) {
-// 	if s.GuildMuted(guild.ID, false) {
-// 		return
-// 	}
-
-// 	if !unread && guild.Folder == nil {
-// 		if rs := guild.containsUnreadChannel(s); rs != nil {
-// 			unread = true
-// 			pinged = rs.MentionCount > 0
-// 		}
-// 	}
-
-// 	switch {
-// 	case pinged:
-// 		guild.setClass("pinged")
-// 	case unread:
-// 		guild.setClass("unread")
-// 	default:
-// 		guild.setClass("")
-// 	}
-
-// 	if guild.Parent != nil {
-// 		for _, guild := range guild.Parent.Folder.Guilds {
-// 			unread := guild.stateClass == "unread"
-// 			pinged := guild.stateClass == "pinged"
-
-// 			if unread || pinged {
-// 				guild.Parent.setUnread(s, true, pinged)
-// 				return
-// 			}
-// 		}
-
-// 		guild.Parent.setUnread(s, false, false)
-// 	}
-// }
 
 func escape(str string) string {
 	return html.EscapeString(str)

@@ -25,6 +25,12 @@ github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329 h1:X70pQLoXq/t
 github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329/go.mod h1:tV5WTkJhC1A4PeQtQ2Y3GwB6g2yOxi47VlGmAMdb5Ag=
 github.com/diamondburned/ningen v0.0.0-20200512005947-0e0922a1c1d7 h1:wtCRo8U1aXRr+5DSY6jJF0OUt2cSIGuyZAP12J47k/E=
 github.com/diamondburned/ningen v0.0.0-20200512005947-0e0922a1c1d7/go.mod h1:uRsHyzD7ALBO3QM6S9us9uHuBEXUXZ4WXJj4xrcETFc=
+github.com/diamondburned/ningen v0.0.0-20200512055650-4fea25c0b3f9 h1:fEjy/k2oujp86FhgEkQ4aB4F79Vy77a2nebR5WZ+5u8=
+github.com/diamondburned/ningen v0.0.0-20200512055650-4fea25c0b3f9/go.mod h1:uRsHyzD7ALBO3QM6S9us9uHuBEXUXZ4WXJj4xrcETFc=
+github.com/diamondburned/ningen v0.0.0-20200515072601-21183d071544 h1:D2rRZVlevOQnWsjwKCw83MjIkX7d19L0o0aVWir3K94=
+github.com/diamondburned/ningen v0.0.0-20200515072601-21183d071544/go.mod h1:uRsHyzD7ALBO3QM6S9us9uHuBEXUXZ4WXJj4xrcETFc=
+github.com/diamondburned/ningen v0.0.0-20200515163503-6722e2cc2e59 h1:G2qrljPXd4HakAj2dng/VHqkDZCutyNtczikIdwO5A4=
+github.com/diamondburned/ningen v0.0.0-20200515163503-6722e2cc2e59/go.mod h1:uRsHyzD7ALBO3QM6S9us9uHuBEXUXZ4WXJj4xrcETFc=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
 github.com/dlclark/regexp2 v1.1.6 h1:CqB4MjHw0MFCDj+PHHjiESmHX+N7t0tJzKvC6M97BRg=

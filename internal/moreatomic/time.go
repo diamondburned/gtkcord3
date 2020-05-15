@@ -24,6 +24,10 @@ func (t *Time) Set(time time.Time) {
 	atomic.StoreInt64(&t.unixnano, time.UnixNano())
 }
 
+func (t *Time) Reset() {
+	t.Set(time.Time{})
+}
+
 // HasBeen checks if it has been this long since the last time. If yes, it will
 // set the time.
 func (t *Time) HasBeen(dura time.Duration) bool {

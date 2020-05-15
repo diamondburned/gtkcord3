@@ -2,13 +2,12 @@ package guild
 
 import (
 	"fmt"
-	"sync"
+	"strings"
 
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -25,9 +24,6 @@ type GuildFolder struct {
 
 	Guilds   []*Guild
 	Revealed bool
-
-	classMutex sync.Mutex
-	stateClass string
 }
 
 func newGuildFolder(
@@ -66,26 +62,6 @@ func newGuildFolder(
 		}
 		r.Parent = Folder
 		Folder.Guilds = append(Folder.Guilds, r)
-
-		// Obvious race condition:
-		// switch r.stateClass {
-		// case "pinged":
-		// 	pinged = true
-		// 	fallthrough
-		// case "unread":
-		// 	unread = true
-		// }
-
-		// r.Row.SetSizeRequest(
-		// 	// We need to mult 4 div 3, since if we do full *2, the child
-		// 	// channels will be too big and expand the left bar.
-		// 	IconSize+IconPadding*4/3,
-		// 	IconSize+IconPadding*2,
-		// )
-
-		// Disable padding.
-		// gtkutils.Margin2(r, IconPadding, 0)
-		// gtkutils.Margin2(r.Event, IconPadding, 0)
 
 		Folder.List.Add(r)
 	}
@@ -146,14 +122,6 @@ func (f *GuildFolder) unselectAll(except int) {
 }
 
 func (f *GuildFolder) setUnread(unread, pinged bool) {
-	// If unread but current folder is pinged, then set pinged to true.
-	// if unread && !pinged && f.stateClass == "pinged" {
-	// 	pinged = true
-	// }
-
-	f.classMutex.Lock()
-	defer f.classMutex.Unlock()
-
 	// Check all children guilds
 	if !unread || !pinged {
 		for _, g := range f.Guilds {
@@ -167,21 +135,15 @@ func (f *GuildFolder) setUnread(unread, pinged bool) {
 		}
 	}
 
-	semaphore.Async(func() {
-		switch {
-		case pinged:
-			f.Strip.SetPinged()
-		case unread:
-			f.Strip.SetUnread()
-		default:
-			f.Strip.SetRead()
-		}
-	})
+	switch {
+	case pinged:
+		f.Strip.SetPinged()
+	case unread:
+		f.Strip.SetUnread()
+	default:
+		f.Strip.SetRead()
+	}
 }
-
-// func (f *GuildFolder) setClass(class string) {
-// 	gtkutils.DiffClass(&f.stateClass, class, f.Style)
-// }
 
 type GuildFolderIcon struct {
 	folder []*Guild
@@ -241,6 +203,8 @@ func newGuildFolderIcon(guilds []*Guild) *GuildFolderIcon {
 		if url == "" {
 			continue
 		}
+		// Replace GIF with PNG to save CPU cycles.
+		url = strings.Replace(url, "gif", "png", -1)
 		url += "?size=64" // same as guild.go
 
 		cache.AsyncFetchUnsafe(url, icon.Images[i], 16, 16, cache.Round)

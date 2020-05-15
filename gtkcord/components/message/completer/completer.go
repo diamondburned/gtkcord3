@@ -38,13 +38,7 @@ type State struct {
 
 	state *ningen.State
 
-	// RequestGuildMember func(prefix string)
-	GetRecentAuthors func(limit int) []discord.Snowflake
-	InputBuf         *gtk.TextBuffer
-
-	// guildID   *discord.Snowflake
-	// channelID *discord.Snowflake
-
+	InputBuf  *gtk.TextBuffer
 	container MessageContainer
 
 	start *gtk.TextIter
@@ -69,7 +63,7 @@ type Entry struct {
 type MessageContainer interface {
 	GetChannelID() discord.Snowflake
 	GetGuildID() discord.Snowflake
-	GetRecentAuthors(limit int) []discord.Snowflake
+	GetRecentAuthorsUnsafe(limit int) []discord.Snowflake
 }
 
 func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *State {

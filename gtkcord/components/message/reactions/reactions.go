@@ -88,11 +88,11 @@ func (c *Container) ReactRemove(r *gateway.MessageReactionRemoveEvent) {
 
 // RemoveAll removes everything.
 func (c *Container) RemoveAll() {
-	semaphore.Async(c.removeAll, (*discord.Emoji)(nil))
+	c.removeAll(nil)
 }
 
 func (c *Container) RemoveEmoji(emoji discord.Emoji) {
-	semaphore.Async(c.removeAll, &emoji)
+	c.removeAll(&emoji)
 }
 
 func (c *Container) removeAll(emoji *discord.Emoji) {
@@ -133,26 +133,24 @@ func (c *Container) reactSomething(ch, msg discord.Snowflake, emoji discord.Emoj
 		}
 	}
 
-	semaphore.Async(func() {
-		if r := c.Search(ch, msg, emoji.APIString()); r != nil {
-			// Reaction found, remove.
-			r.update(target)
+	if r := c.Search(ch, msg, emoji.APIString()); r != nil {
+		// Reaction found, remove.
+		r.update(target)
+		return
+	}
+
+	switch code {
+	case 0:
+		if target == nil {
+			log.Errorln("Can't find reaction:", emoji)
 			return
 		}
+		// Reaction not found, add it into the message.
+		c.addReaction(*target)
 
-		switch code {
-		case 0:
-			if target == nil {
-				log.Errorln("Can't find reaction:", emoji)
-				return
-			}
-			// Reaction not found, add it into the message.
-			c.addReaction(*target)
-
-		case 1:
-			// can't do anything.
-		}
-	})
+	case 1:
+		// can't do anything.
+	}
 }
 
 func (c *Container) clicked(r *Reaction) {

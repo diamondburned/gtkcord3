@@ -33,6 +33,8 @@ func init() {
 		for call := range idleAdds {
 			call := call
 
+			log.Debugln(call.trace, "Adding")
+
 			glib.IdleAdd(func() {
 				var val []reflect.Value
 

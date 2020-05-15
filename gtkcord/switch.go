@@ -181,12 +181,15 @@ func (a *Application) SwitchChannel(ch Channel) {
 		Before: func() {
 			a.Messages.Cleanup()
 		},
-		Loader: func() bool {
-			if err := a.Messages.Load(ch.ChannelID()); err != nil {
-				log.Errorln("Failed to load messages:", err)
-				return false
-			}
-			return true
+		LoaderAsync: func(c *columnChange) {
+			a.Messages.Load(ch.ChannelID(), func(err error) {
+				if err != nil {
+					log.Errorln("Failed to load messages:", err)
+					c.Fail()
+				} else {
+					c.Pass()
+				}
+			})
 		},
 		After: func() {
 			a.lastAccess(ch.GuildID(), a.Messages.GetChannelID())
@@ -206,13 +209,38 @@ func (a *Application) SwitchChannel(ch Channel) {
 
 // EVERYTHING IS THREAD-SAFE AND WILL BLOCK UI!!!!
 type columnChange struct {
-	Widget  gtkutils.ExtendedWidget
-	Width   int
-	Checker func() bool // true == switch
-	Setter  func(wnew gtk.IWidget)
-	Before  func()
-	Loader  func() bool
-	After   func() // only if succeed
+	Widget      gtkutils.ExtendedWidget
+	Width       int
+	Checker     func() bool // true == switch
+	Setter      func(wnew gtk.IWidget)
+	Before      func()
+	Loader      func() bool
+	LoaderAsync func(c *columnChange)
+	After       func() // only if succeed
+
+	// non-nil if LoaderAsync != nil
+	unblur interface{ SetSensitive(bool) }
+}
+
+func (c *columnChange) Fail() {
+	sadface, _ := animations.NewSizedSadFace()
+	sadface.SetSizeRequest(c.Width, -1)
+	c.Setter(sadface)
+	c.final()
+}
+
+func (c *columnChange) Pass() {
+	c.Setter(c.Widget)
+	c.Widget.Show()
+	c.After()
+	c.final()
+}
+
+func (c *columnChange) final() {
+	// Just in case. This will only do something if LoaderAsync is ran.
+	if c.unblur != nil {
+		c.unblur.SetSensitive(true)
+	}
 }
 
 func (a *Application) changeCol(c columnChange) {
@@ -232,19 +260,21 @@ func (a *Application) changeCol(c columnChange) {
 	// Clean up channels
 	c.Before()
 
-	if !c.Loader() {
-		sadface, _ := animations.NewSizedSadFace()
-		sadface.SetSizeRequest(c.Width, -1)
-		c.Setter(sadface)
+	// See if it's possible to load asynchronously:
+	if c.LoaderAsync != nil {
+		// Deactivate the entire window.
+		c.unblur = a.Main
+		c.unblur.SetSensitive(false)
 
+		go c.LoaderAsync(&c)
 		return
 	}
 
-	// Replace the spinner with the actual channel:
-	c.Setter(c.Widget)
-	c.Widget.Show()
-
-	c.After()
+	if !c.Loader() {
+		c.Fail()
+	} else {
+		c.Pass()
+	}
 }
 
 func cleanup(cleaners ...interface{ Cleanup() }) {

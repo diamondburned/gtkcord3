@@ -1,16 +1,15 @@
 package ningen
 
 import (
-	"sync"
-
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen/handler"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type MemberListState struct {
-	mu    sync.Mutex
+	mu    deadlock.Mutex
 	state map[discord.Snowflake]*MemberList
 
 	// All mutex guarded
@@ -19,7 +18,7 @@ type MemberListState struct {
 }
 
 type MemberList struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	ID          string
 	MemberCount uint64

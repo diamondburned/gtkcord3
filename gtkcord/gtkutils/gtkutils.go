@@ -232,7 +232,7 @@ func DiffClass(old *string, new string, style *gtk.StyleContext) {
 	}
 
 	if *old != "" {
-		semaphore.IdleMust(style.RemoveClass, *old)
+		semaphore.Async(style.RemoveClass, *old)
 	}
 
 	*old = new
@@ -241,7 +241,7 @@ func DiffClass(old *string, new string, style *gtk.StyleContext) {
 		return
 	}
 
-	semaphore.IdleMust(style.AddClass, new)
+	semaphore.Async(style.AddClass, new)
 }
 
 func DiffClassUnsafe(old *string, new string, style *gtk.StyleContext) {

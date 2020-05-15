@@ -237,53 +237,54 @@ func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 }
 
 func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
-	ch, err := guilds.state.Store.Channel(chrs.ChannelID)
-	if err != nil {
-		return
-	}
-	if !ch.GuildID.Valid() {
-		// DM:
-		guilds.DMButton.setUnread(unread)
-		return
-	}
+	semaphore.Async(func() {
+		ch, err := guilds.state.Store.Channel(chrs.ChannelID)
+		if err != nil {
+			return
+		}
+		if !ch.GuildID.Valid() {
+			// DM:
+			guilds.DMButton.setUnread(unread)
+			return
+		}
 
-	guild, _ := guilds.FindByID(ch.GuildID)
-	if guild == nil {
-		return
-	}
+		guild, _ := guilds.FindByID(ch.GuildID)
+		if guild == nil {
+			return
+		}
 
-	pinged := chrs.MentionCount > 0
+		pinged := chrs.MentionCount > 0
 
-	if guilds.state.Muted.Channel(ch.ID) {
-		unread = false
-	}
+		if guilds.state.Muted.Channel(ch.ID) {
+			unread = false
+		}
 
-	guild.busy.Lock()
-	defer guild.busy.Unlock()
+		// TODO: confirm that nothing breaks with this running prematurely.
+		if guild.muted {
+			return
+		}
 
-	// TODO: confirm that nothing breaks with this running prematurely.
-	if guild.muted {
-		return
-	}
+		guild.unread.mut.Lock()
+		defer guild.unread.mut.Unlock()
 
-	if !unread {
-		delete(guild.unreadChs, ch.ID)
-	} else {
-		guild.unreadChs[ch.ID] = pinged
-	}
+		if !unread {
+			delete(guild.unread.chs, ch.ID)
+		} else {
+			guild.unread.chs[ch.ID] = pinged
+		}
 
-	if !unread || !pinged {
-		for _, chPinged := range guild.unreadChs {
-			unread = true
-			if pinged {
-				break
-			}
-			if !pinged && chPinged {
-				pinged = true
+		if !unread || !pinged {
+			for _, chPinged := range guild.unread.chs {
+				unread = true
+				if pinged {
+					break
+				}
+				if !pinged && chPinged {
+					pinged = true
+				}
 			}
 		}
-	}
 
-	// IdleMust so the mutex is affected.
-	semaphore.IdleMust(guild.setUnread, unread, pinged)
+		guild.setUnread(unread, pinged)
+	})
 }

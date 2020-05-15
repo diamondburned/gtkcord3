@@ -10,7 +10,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/sasha-s/go-deadlock"
 )
 
 type PrivateChannels struct {
@@ -25,7 +24,6 @@ type PrivateChannels struct {
 	// Channels map[discord.Snowflake]*PrivateChannel
 	Channels map[string]*PrivateChannel
 
-	busy  deadlock.RWMutex
 	state *ningen.State
 
 	OnSelect func(pm *PrivateChannel)
@@ -94,9 +92,6 @@ func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs
 }
 
 func (pcs *PrivateChannels) Cleanup() {
-	pcs.busy.Lock()
-	defer pcs.busy.Unlock()
-
 	if pcs.Channels != nil {
 		for _, ch := range pcs.Channels {
 			pcs.List.Remove(ch)
@@ -108,10 +103,6 @@ func (pcs *PrivateChannels) Cleanup() {
 
 // thread-safe
 func (pcs *PrivateChannels) LoadChannels() error {
-	pcs.busy.Lock()
-	defer pcs.busy.Unlock()
-	// defer at the end of the bottom goroutine.
-
 	channels, err := pcs.state.PrivateChannels()
 	if err != nil {
 		return err
@@ -145,9 +136,6 @@ func (pcs *PrivateChannels) LoadChannels() error {
 	}
 
 	go func() {
-		pcs.busy.Lock()
-		defer pcs.busy.Unlock()
-
 		for _, channel := range channels {
 			rs := pcs.state.Read.FindLast(channel.ID)
 			if rs == nil {
@@ -156,8 +144,10 @@ func (pcs *PrivateChannels) LoadChannels() error {
 
 			// Snowflakes have timestamps, which allow us to do this:
 			if channel.LastMessageID.Time().After(rs.LastMessageID.Time()) {
-				ch := pcs.Channels[channel.ID.String()]
-				semaphore.Async(ch.setUnread, true)
+				semaphore.Async(func() {
+					ch := pcs.Channels[channel.ID.String()]
+					ch.setUnread(true)
+				})
 			}
 		}
 	}()
@@ -166,9 +156,6 @@ func (pcs *PrivateChannels) LoadChannels() error {
 }
 
 func (pcs *PrivateChannels) Selected() *PrivateChannel {
-	pcs.busy.RLock()
-	defer pcs.busy.RUnlock()
-
 	if len(pcs.Channels) == 0 {
 		return nil
 	}
@@ -201,26 +188,22 @@ func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
 }
 
 func (pcs *PrivateChannels) TraverseReadState(rs gateway.ReadState, unread bool) {
-	// Read lock is used, as the size of the slice isn't directly modified.
-	pcs.busy.RLock()
-	defer pcs.busy.RUnlock()
+	semaphore.Async(func() {
+		if len(pcs.Channels) == 0 {
+			return
+		}
 
-	if len(pcs.Channels) == 0 {
-		return
-	}
+		pc, ok := pcs.Channels[rs.ChannelID.String()]
+		if !ok {
+			return
+		}
 
-	pc, ok := pcs.Channels[rs.ChannelID.String()]
-	if !ok {
-		return
-	}
-
-	// Prepend/move to top.
-	semaphore.IdleMust(func() {
+		// Prepend/move to top.
 		pcs.List.Remove(pc)
 		pcs.List.Prepend(pc)
-	})
 
-	pc.setUnread(unread)
+		pc.setUnread(unread)
+	})
 }
 
 func (pcs *PrivateChannels) FindByID(id discord.Snowflake) *PrivateChannel {

@@ -1,9 +1,7 @@
 package gtkcord
 
 import (
-	"math/rand"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/api"
@@ -22,6 +20,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
@@ -29,6 +28,7 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 var HTTPClient = http.Client{
@@ -48,11 +48,6 @@ func discordSettings() {
 	gateway.Identity = gateway.IdentifyProperties{
 		OS: "linux",
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	discordSettings()
 }
 
 const (
@@ -96,7 +91,7 @@ type Application struct {
 
 	// GuildID -> ChannelID; if GuildID == 0 then DM
 	LastAccess map[discord.Snowflake]discord.Snowflake
-	lastAccMut sync.Mutex
+	lastAccMut deadlock.Mutex
 
 	busy moreatomic.BusyMutex
 	// done chan int // exit code
@@ -108,6 +103,7 @@ func New(app *gtk.Application) *Application {
 	if err != nil {
 		log.Fatalln("Failed to load plugins:", err)
 	}
+	discordSettings()
 
 	return &Application{
 		Application: app,
@@ -141,7 +137,7 @@ func (a *Application) Activate() {
 	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
 
 	// Set the window specs:
-	window.Resize(1200, 900)
+	window.Resize(variables.WindowWidth, variables.WindowHeight)
 	window.SetTitle("gtkcord")
 
 	// Create the preferences/settings window, which applies settings as a side
@@ -219,7 +215,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		// Make the main widgets:
 		a.init()
 		window.HeaderDisplay(a.Header) // restore header post login.
-		window.Resize(1200, 900)
+		window.Resize(variables.WindowWidth, variables.WindowHeight)
 	})
 
 	switch s.Ready.Settings.Theme {

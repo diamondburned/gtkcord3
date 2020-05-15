@@ -18,27 +18,24 @@ func (m *Messages) injectHandlers() {
 }
 
 func (m *Messages) find(id discord.Snowflake, found func(m *Message)) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	for _, message := range m.messages {
-		if message.ID != id {
-			continue
+	semaphore.IdleMust(func() {
+		for _, message := range m.messages {
+			if message.ID != id {
+				continue
+			}
+			found(message)
+			return
 		}
-		found(message)
-		return
-	}
+	})
 }
 
 func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
 	if m.channelID.Get() != t.ChannelID {
 		return
 	}
-
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	go m.Input.Typing.Add(t)
+	semaphore.IdleMust(func() {
+		m.Input.Typing.Add(t)
+	})
 }
 
 func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
@@ -46,10 +43,12 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 		return
 	}
 
-	m.Upsert(&c.Message)
+	semaphore.IdleMust(func() {
+		m.UpsertUnsafe(&c.Message)
 
-	// Check typing
-	m.Input.Typing.Remove(c.Author.ID)
+		// Check typing
+		m.Input.Typing.Remove(c.Author.ID)
+	})
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
@@ -57,7 +56,9 @@ func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
 		return
 	}
 
-	m.Update(&u.Message)
+	semaphore.IdleMust(func() {
+		m.UpdateUnsafe(&u.Message)
+	})
 }
 
 func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
@@ -65,10 +66,9 @@ func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	m.delete(d.ID)
+	semaphore.IdleMust(func() {
+		m.deleteUnsafe(d.ID)
+	})
 }
 
 func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
@@ -76,10 +76,9 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	m.delete(d.IDs...)
+	semaphore.IdleMust(func() {
+		m.deleteUnsafe(d.IDs...)
+	})
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
@@ -90,9 +89,6 @@ func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
 	guildID := m.guildID.Get()
 
 	semaphore.IdleMust(func() {
-		m.guard.RLock()
-		defer m.guard.RUnlock()
-
 		for _, n := range c.Members {
 			for _, message := range m.messages {
 				if message.AuthorID != n.User.ID {

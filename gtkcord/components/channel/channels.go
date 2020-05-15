@@ -10,7 +10,6 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
-	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -33,7 +32,6 @@ type Channels struct {
 	Channels []*Channel
 	Selected *Channel
 
-	busy  deadlock.RWMutex
 	state *ningen.State
 
 	OnSelect func(ch *Channel)
@@ -79,9 +77,6 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 }
 
 func (chs *Channels) Cleanup() {
-	chs.busy.Lock()
-	defer chs.busy.Unlock()
-
 	if chs.Channels == nil {
 		return
 	}
@@ -104,20 +99,15 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 	}
 	channels = filterChannels(chs.state, channels)
 
-	chs.busy.Lock()
-	defer chs.busy.Unlock()
-
-	go func() {
-		guild, err := chs.state.Guild(chs.GuildID)
-		if err == nil && guild.Banner != "" {
-			chs.UpdateBanner(guild.BannerURL())
-		}
-	}()
+	guild, err := chs.state.Store.Guild(chs.GuildID)
+	if err == nil && guild.Banner != "" {
+		chs.UpdateBanner(guild.BannerURL())
+	}
 
 	chs.Channels = transformChannels(chs.state, channels)
 
-	for _, ch := range chs.Channels {
-		chs.ChList.Insert(ch, -1)
+	for i, ch := range chs.Channels {
+		chs.ChList.Insert(ch, i)
 	}
 
 	return nil
@@ -125,25 +115,22 @@ func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
 
 func (chs *Channels) UpdateBanner(url string) {
 	if chs.BannerImage == nil {
-		semaphore.IdleMust(func() {
-			chs.BannerImage, _ = gtk.ImageNew()
-			chs.BannerImage.SetSizeRequest(ChannelsWidth, BannerHeight)
-			chs.Main.PackStart(chs.BannerImage, false, false, 0)
-		})
+		chs.BannerImage, _ = gtk.ImageNew()
+		chs.BannerImage.SetSizeRequest(ChannelsWidth, BannerHeight)
+		chs.Main.PackStart(chs.BannerImage, false, false, 0)
 	}
 
 	const w, h = ChannelsWidth, BannerHeight
 
-	if err := cache.SetImageScaled(url+"?size=512", chs.BannerImage, w, h); err != nil {
-		log.Errorln("Failed to get the pixbuf guild icon:", err)
-		return
-	}
+	go func() {
+		if err := cache.SetImageScaled(url+"?size=512", chs.BannerImage, w, h); err != nil {
+			log.Errorln("Failed to get the pixbuf guild icon:", err)
+			return
+		}
+	}()
 }
 
 func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
-	chs.busy.RLock()
-	defer chs.busy.RUnlock()
-
 	for _, ch := range chs.Channels {
 		if ch.ID == id {
 			return ch
@@ -153,9 +140,6 @@ func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
 }
 
 func (chs *Channels) First() *Channel {
-	chs.busy.RLock()
-	defer chs.busy.RUnlock()
-
 	for _, ch := range chs.Channels {
 		if ch.Category {
 			continue
@@ -166,15 +150,14 @@ func (chs *Channels) First() *Channel {
 }
 
 func (chs *Channels) TraverseReadState(rs gateway.ReadState, unread bool) {
-	chs.busy.RLock()
-	defer chs.busy.RUnlock()
-
 	for _, ch := range chs.Channels {
 		if ch.ID != rs.ChannelID {
 			continue
 		}
 
-		ch.setUnread(unread, rs.MentionCount > 0)
+		semaphore.Async(func() {
+			ch.setUnread(unread, rs.MentionCount > 0)
+		})
 		break
 	}
 }

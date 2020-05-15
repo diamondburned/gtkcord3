@@ -3,6 +3,9 @@ package variables
 import "github.com/gotk3/gotk3/gtk"
 
 var (
+	WindowWidth  = 1200
+	WindowHeight = 900
+
 	EmbedAvatarSize = 24
 	EmbedMaxWidth   = 300
 	EmbedImgHeight  = 300 // max

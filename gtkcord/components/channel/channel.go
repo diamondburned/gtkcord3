@@ -177,7 +177,7 @@ func (ch *Channel) ChannelInfo() (name, topic string) {
 }
 
 func (ch *Channel) setClass(class string) {
-	gtkutils.DiffClass(&ch.stateClass, class, ch.Style)
+	gtkutils.DiffClassUnsafe(&ch.stateClass, class, ch.Style)
 }
 
 func (ch *Channel) setUnread(unread, pinged bool) {

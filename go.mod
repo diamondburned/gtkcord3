@@ -8,7 +8,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/diamondburned/arikawa v0.6.4
 	github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329
-	github.com/diamondburned/ningen v0.0.0-20200512005947-0e0922a1c1d7
+	github.com/diamondburned/ningen v0.0.0-20200515163503-6722e2cc2e59
 	github.com/disintegration/imaging v1.6.2
 	github.com/goodsign/monday v1.0.0
 	github.com/gotk3/gotk3 v0.4.1-0.20200508185535-d1638cba009b

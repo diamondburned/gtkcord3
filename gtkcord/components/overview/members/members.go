@@ -3,7 +3,6 @@ package members
 import (
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -12,6 +11,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type Container struct {
@@ -20,7 +20,7 @@ type Container struct {
 
 	GuildID discord.Snowflake
 
-	mutex sync.Mutex
+	mutex deadlock.Mutex
 	state *ningen.State
 }
 
