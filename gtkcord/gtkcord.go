@@ -16,6 +16,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/config/lastread"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
@@ -28,7 +29,6 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
-	"github.com/sasha-s/go-deadlock"
 )
 
 var HTTPClient = http.Client{
@@ -50,10 +50,8 @@ func discordSettings() {
 	}
 }
 
-const (
-	SpinnerSize  = 56
-	ChannelWidth = 240
-)
+const SettingsFile = "settings.json"
+const LastReadFile = "lastread.json"
 
 type Application struct {
 	*gtk.Application
@@ -89,9 +87,9 @@ type Application struct {
 	Channels *channel.Channels
 	Messages *message.Messages
 
-	// GuildID -> ChannelID; if GuildID == 0 then DM
-	LastAccess map[discord.Snowflake]discord.Snowflake
-	lastAccMut deadlock.Mutex
+	// LastRead contains the persistent state of the latest channels mapped from
+	// guilds.
+	LastRead lastread.State
 
 	busy moreatomic.BusyMutex
 	// done chan int // exit code
@@ -103,11 +101,13 @@ func New(app *gtk.Application) *Application {
 	if err != nil {
 		log.Fatalln("Failed to load plugins:", err)
 	}
-	discordSettings()
 
+	discordSettings()
 	return &Application{
 		Application: app,
 		Plugins:     plugins,
+		LastRead:    lastread.New(LastReadFile),
+		Settings:    MakeSettings(),
 	}
 }
 
@@ -134,7 +134,6 @@ func (a *Application) Activate() {
 	a.Window = window.Window
 
 	a.leftCols = map[int]gtk.IWidget{}
-	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
 
 	// Set the window specs:
 	window.Resize(variables.WindowWidth, variables.WindowHeight)
@@ -142,7 +141,7 @@ func (a *Application) Activate() {
 
 	// Create the preferences/settings window, which applies settings as a side
 	// effect:
-	a.Settings = a.makeSettings()
+	a.Settings.InitWidgets(a)
 }
 
 func (a *Application) init() {
@@ -319,10 +318,6 @@ func (a *Application) Ready(s *ningen.State) error {
 			}
 		})
 
-		// Set widths:
-		a.Channels.SetSizeRequest(ChannelWidth, -1)
-		a.Privates.SetSizeRequest(ChannelWidth, -1)
-
 		// Guilds and Channels grid:
 		g1, _ := gtk.GridNew()
 		g1.Show()
@@ -407,17 +402,11 @@ func (a *Application) LogOut() {
 }
 
 func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake {
-	a.lastAccMut.Lock()
-	defer a.lastAccMut.Unlock()
-
+	// read
 	if !ch.Valid() {
-		if id, ok := a.LastAccess[guild]; ok {
-			return id
-		}
-		return 0
+		return a.LastRead.Access(guild)
 	}
-
-	a.LastAccess[guild] = ch
+	a.LastRead.SetAccess(guild, ch)
 	return ch
 }
 

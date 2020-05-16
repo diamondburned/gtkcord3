@@ -17,5 +17,8 @@ var (
 	// used as fallback, the settings one overrides this
 	MaxMessageWidth = 750
 
+	SpinnerSize  = 56
+	ChannelWidth = 240
+
 	InputIconSize = gtk.ICON_SIZE_LARGE_TOOLBAR
 )

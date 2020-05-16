@@ -1,17 +1,15 @@
 package members
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/sasha-s/go-deadlock"
 )
 
 type Container struct {
@@ -20,11 +18,10 @@ type Container struct {
 
 	GuildID discord.Snowflake
 
-	mutex deadlock.Mutex
 	state *ningen.State
 }
 
-// thread-safe
+// thread-unsafe
 func New(s *ningen.State) (m *Container) {
 	list, _ := gtk.ListBoxNew()
 	list.Show()
@@ -35,7 +32,8 @@ func New(s *ningen.State) (m *Container) {
 		state:   s,
 		Rows:    []gtkutils.ExtendedWidget{},
 	}
-	s.MemberList.OnOP = m.handle
+	// TODO
+	// s.MemberList.OnOP = m.handle
 	s.MemberList.OnSync = m.handleSync
 
 	// unreference these things
@@ -65,9 +63,6 @@ func New(s *ningen.State) (m *Container) {
 }
 
 func (m *Container) handleSync(ml *ningen.MemberList, guildID discord.Snowflake) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	if m.GuildID != guildID {
 		return
 	}
@@ -78,25 +73,25 @@ func (m *Container) handleSync(ml *ningen.MemberList, guildID discord.Snowflake)
 		return
 	}
 
-	m.cleanup()
-	m.reset(ml, *guild)
+	semaphore.Async(func() {
+		m.cleanup()
+		m.reset(ml, *guild)
+	})
 }
 
-func (m *Container) handle(
-	ml *ningen.MemberList, guildID discord.Snowflake, op gateway.GuildMemberListOp) {
+// TODO
+// func (m *Container) handleUnsafe(
+// 	ml *ningen.MemberList, guildID discord.Snowflake, op gateway.GuildMemberListOp) {
 
-	if m.GuildID != guildID {
-		return
-	}
+// 	if m.GuildID != guildID {
+// 		return
+// 	}
 
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-}
+// 	m.mutex.Lock()
+// 	defer m.mutex.Unlock()
+// }
 
 func (m *Container) cleanup() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	for i, r := range m.Rows {
 		m.ListBox.Remove(r)
 		m.Rows[i] = nil
@@ -106,9 +101,6 @@ func (m *Container) cleanup() {
 
 // LoadGuild is thread-safe.
 func (m *Container) LoadGuild(guild discord.Guild) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	m.GuildID = guild.ID
 
 	// Borrow MemberList's mutex
@@ -187,65 +179,3 @@ func (m *Container) reset(ml *ningen.MemberList, guild discord.Guild) {
 // 	}
 // 	return
 // }
-
-func GetTopRole(roles []discord.Role) *discord.Role {
-	var pos, ind = -1, -1
-
-	for i, r := range roles {
-		if r.Position < pos || pos == -1 {
-			ind = i
-			pos = r.Position
-		}
-	}
-
-	if ind < 0 {
-		return nil
-	}
-	return &roles[ind]
-}
-
-func GetTopRoleID(
-	ids []discord.Snowflake, roles map[discord.Snowflake]*discord.Role) *discord.Role {
-
-	var pos, ind = -1, -1
-
-	for i, id := range ids {
-		if r := roles[id]; r.Position < pos || pos == -1 {
-			ind = i
-			pos = r.Position
-		}
-	}
-
-	if ind < 0 {
-		return nil
-	}
-
-	return roles[ids[ind]]
-}
-
-func FilterHoistRoles(roles []discord.Role) []discord.Role {
-	filtered := roles[:0]
-
-	for i, r := range roles {
-		if r.Hoist {
-			filtered = append(filtered, roles[i])
-		}
-	}
-
-	return filtered
-}
-
-func SortRoles(roles []discord.Role) {
-	sort.Slice(roles, func(i, j int) bool {
-		return roles[i].Position > roles[j].Position
-	})
-}
-
-func MapRoles(roles []discord.Role) map[discord.Snowflake]*discord.Role {
-	var mapped = make(map[discord.Snowflake]*discord.Role, len(roles))
-	for i, r := range roles {
-		mapped[r.ID] = &roles[i]
-	}
-
-	return mapped
-}

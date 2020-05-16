@@ -12,8 +12,6 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-const SettingsFile = "settings.json"
-
 type Settings struct {
 	*handy.PreferencesWindow `json:"-"`
 
@@ -60,7 +58,21 @@ type Settings struct {
 	} `json:"integrations"`
 }
 
-func (s *Settings) initWidgets(a *Application) {
+func MakeSettings() *Settings {
+	s := &Settings{}
+	s.General.Behavior.OnTyping = true
+	s.General.Customization.MessageWidth = 750
+	s.General.Customization.HighlightStyle = "monokai"
+	s.Integrations.RichPresence.MPRIS = true
+
+	if err := config.UnmarshalFromFile(SettingsFile, s); err != nil {
+		log.Errorln("Failed to load settings, using default. Error:", err)
+	}
+
+	return s
+}
+
+func (s *Settings) InitWidgets(a *Application) {
 	// Main window
 	s.PreferencesWindow = handy.PreferencesWindowNew()
 	s.PreferencesWindow.SetTitle("Preferences")
@@ -241,19 +253,4 @@ func (s *Settings) initWidgets(a *Application) {
 	// Just for sure:
 	s.General.ShowAll()
 	s.Integrations.ShowAll()
-}
-
-func (a *Application) makeSettings() *Settings {
-	s := &Settings{}
-	s.General.Behavior.OnTyping = true
-	s.General.Customization.MessageWidth = 750
-	s.General.Customization.HighlightStyle = "monokai"
-	s.Integrations.RichPresence.MPRIS = true
-
-	if err := config.UnmarshalFromFile(SettingsFile, s); err != nil {
-		log.Errorln("Failed to load settings, using default. Error:", err)
-	}
-
-	s.initWidgets(a)
-	return s
 }

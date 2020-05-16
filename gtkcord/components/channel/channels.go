@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
@@ -44,6 +45,7 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 
 		cs, _ := gtk.ScrolledWindowNew(nil, nil)
 		cs.Show()
+		cs.SetSizeRequest(variables.ChannelWidth, -1)
 		cs.Add(main)
 
 		cl, _ := gtk.ListBoxNew()
