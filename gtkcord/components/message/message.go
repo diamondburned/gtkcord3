@@ -337,7 +337,7 @@ func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord
 	if gID.Valid() && !m.Webhook {
 		n, err := s.Store.Member(gID, m.AuthorID)
 		if err != nil {
-			go s.RequestMember(gID, m.AuthorID)
+			s.Members.RequestMember(gID, m.AuthorID)
 		} else {
 			m.updateMember(s, gID, *n)
 			return

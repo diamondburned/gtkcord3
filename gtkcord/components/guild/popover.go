@@ -87,7 +87,14 @@ func BindNameDirect(conn binder, hoverer Hoverable, name *string) {
 	// shared state
 	var popover *gtk.Popover
 
-	conn.SetEvents(int(gdk.ENTER_NOTIFY_MASK | gdk.LEAVE_NOTIFY_MASK))
+	conn.SetEvents(int(0 |
+		gdk.ENTER_NOTIFY_MASK |
+		gdk.LEAVE_NOTIFY_MASK |
+		gdk.BUTTON_PRESS_MASK |
+		gdk.BUTTON_RELEASE_MASK |
+		gdk.KEY_PRESS_MASK |
+		gdk.KEY_RELEASE_MASK,
+	))
 
 	conn.Connect("enter-notify-event", func() bool {
 		if text := *name; text != "" {

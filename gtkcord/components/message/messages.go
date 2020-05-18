@@ -240,21 +240,23 @@ func (m *Messages) Load(channel discord.Snowflake, done func(error)) {
 		return
 	}
 
-	// Set GuildID and subscribe if it's valid:
-	var guildID discord.Snowflake
-	if len(messages) > 0 {
-		guildID = messages[0].GuildID
-		if guildID.Valid() {
-			go m.c.Subscribe(guildID, channel, 0)
-		}
-
-	} else {
-		// If there are no messages, don't bother.
+	// If there are no messages, don't bother.
+	if len(messages) == 0 {
 		semaphore.Async(func() {
 			// Pretend we're done.
 			done(nil)
 		})
 		return
+	}
+
+	// Set GuildID and subscribe if it's valid:
+	var guildID = messages[0].GuildID
+
+	if guildID.Valid() {
+		// Ensure there's a member list.
+		if err := m.c.Members.GetMemberList(guildID, channel, nil); err != nil {
+			m.c.Members.RequestMemberList(guildID, channel, 0)
+		}
 	}
 
 	// Sort so that latest is last:

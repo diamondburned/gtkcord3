@@ -92,7 +92,7 @@ func (s *StatefulPopupBody) initialize() {
 
 	// fetch above presence if error not nil
 	if err != nil {
-		s.state.RequestMember(s.Guild, s.Prefetch.ID)
+		s.state.Members.RequestMember(s.Guild, s.Prefetch.ID)
 	}
 
 	// Permit fetching member through the API.

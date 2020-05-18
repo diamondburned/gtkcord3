@@ -27,7 +27,9 @@ type GuildFolder struct {
 }
 
 func newGuildFolder(
-	s *ningen.State, folder gateway.GuildFolder, onSelect func(g *Guild)) (*GuildFolder, error) {
+	s *ningen.State,
+	folder gateway.GuildFolder,
+	onSelect func(gf *GuildFolder, g *Guild)) (*GuildFolder, error) {
 
 	if folder.Color == 0 {
 		folder.Color = 0x7289DA
@@ -49,7 +51,7 @@ func newGuildFolder(
 
 		row := Folder.Guilds[i]
 		row.Unread.SetActive(true)
-		onSelect(row)
+		onSelect(Folder, row)
 	})
 
 	// Used to mark read and unread.
@@ -262,9 +264,10 @@ func newRevealerRow(button, reveal gtk.IWidget, click func(reveal bool)) *Reveal
 
 	row, _ := gtk.ListBoxRowNew()
 	row.Show()
+	row.SetActivatable(true)
+	row.SetSelectable(false)
 	row.SetHAlign(gtk.ALIGN_CENTER)
 	row.SetVAlign(gtk.ALIGN_CENTER)
-	row.SetSelectable(false)
 	row.Add(strip)
 
 	btn.Connect("clicked", func() {

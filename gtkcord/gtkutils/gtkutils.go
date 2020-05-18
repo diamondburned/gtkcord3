@@ -219,10 +219,7 @@ type Connector interface {
 
 func Connect(connector Connector, event string, cb interface{}, data ...interface{}) {
 	semaphore.IdleMust(func() {
-		_, err := connector.Connect(event, cb, data...)
-		if err != nil {
-			log.Panicln("Failed to connect:", err)
-		}
+		connector.Connect(event, cb, data...)
 	})
 }
 

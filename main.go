@@ -4,6 +4,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"runtime/trace"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
@@ -29,6 +30,17 @@ func init() {
 
 	// Set the right envs:
 	LoadEnvs()
+
+	debug.SetTraceback("all")
+
+	f, err := os.OpenFile("/tmp/gtkcord-trace", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0750)
+	if err != nil {
+		log.Fatalln("Failed to open trace file:", err)
+	}
+
+	if err := trace.Start(f); err != nil {
+		log.Fatalln("Failed to start trace:", err)
+	}
 }
 
 func LoadToken() string {

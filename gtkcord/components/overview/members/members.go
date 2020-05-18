@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/ningen/states/member"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -34,10 +35,10 @@ func New(s *ningen.State) (m *Container) {
 	}
 	// TODO
 	// s.MemberList.OnOP = m.handle
-	s.MemberList.OnSync = m.handleSync
+	s.Members.OnSync(m.handleSync)
 
 	// unreference these things
-	// list.Connect("destroy", m.cleanup)
+	list.Connect("destroy", m.cleanup)
 
 	list.SetSelectionMode(gtk.SELECTION_NONE)
 	list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -62,20 +63,13 @@ func New(s *ningen.State) (m *Container) {
 	return
 }
 
-func (m *Container) handleSync(ml *ningen.MemberList, guildID discord.Snowflake) {
-	if m.GuildID != guildID {
-		return
-	}
-
-	guild, err := m.state.Store.Guild(guildID)
-	if err != nil {
-		log.Errorln("Failed to get guild:", err)
-		return
-	}
-
+func (m *Container) handleSync(id string, ml *member.List, guildID discord.Snowflake) {
 	semaphore.Async(func() {
+		if m.GuildID != guildID {
+			return
+		}
 		m.cleanup()
-		m.reset(ml, *guild)
+		m.reset(ml, guildID)
 	})
 }
 
@@ -92,29 +86,34 @@ func (m *Container) handleSync(ml *ningen.MemberList, guildID discord.Snowflake)
 // }
 
 func (m *Container) cleanup() {
-	for i, r := range m.Rows {
+	for _, r := range m.Rows {
 		m.ListBox.Remove(r)
-		m.Rows[i] = nil
 	}
 	m.Rows = nil
 }
 
-// LoadGuild is thread-safe.
-func (m *Container) LoadGuild(guild discord.Guild) {
-	m.GuildID = guild.ID
+// LoadGuild is thread-unsafe.
+func (m *Container) LoadChannel(guildID, channelID discord.Snowflake) {
+	m.GuildID = guildID
 
 	// Borrow MemberList's mutex
-	ml := m.state.MemberList.GetMemberList(guild.ID)
-	if ml == nil {
+	err := m.state.Members.GetMemberList(guildID, channelID, func(l *member.List) {
+		m.reset(l, guildID)
+	})
+	// Request a member list if none.
+	if err != nil {
+		m.state.Members.RequestMemberList(guildID, channelID, 0)
 		return
 	}
-	unlock := ml.Acquire()
-	defer unlock()
-
-	m.reset(ml, guild)
 }
 
-func (m *Container) reset(ml *ningen.MemberList, guild discord.Guild) {
+func (m *Container) reset(ml *member.List, guildID discord.Snowflake) {
+	g, err := m.state.Store.Guild(guildID)
+	if err != nil {
+		log.Errorln("Failed to get guild:", err)
+		return
+	}
+
 	for i, it := range ml.Items {
 		var item gtkutils.ExtendedWidget
 
@@ -139,43 +138,10 @@ func (m *Container) reset(ml *ningen.MemberList, guild discord.Guild) {
 			item = NewSection(name, it.Group.Count)
 
 		case it.Member != nil:
-			item = NewMember(it.Member.Member, it.Member.Presence, guild)
+			item = NewMember(it.Member.Member, it.Member.Presence, *g)
 		}
 
 		m.Rows = append(m.Rows, item)
-		m.ListBox.Insert(item, -1)
+		m.ListBox.Insert(item, i)
 	}
 }
-
-// func (m *Container) getHoistRoles() ([]discord.Role, error) {
-// 	r, err := m.state.Store.Roles(m.GuildID)
-// 	if err != nil {
-// 		return nil, errors.Wrap(err, "Failed to get roles")
-// 	}
-// 	return FilterHoistRoles(r), nil
-// }
-
-// func (m *Container) memberSelect(s *RoleSection, r *gtk.ListBoxRow) {
-// 	if member := s.getFromRow(r); member != nil {
-// 		p := popup.NewPopover(r)
-
-// 		body := popup.NewStatefulPopupBody(m.state, member.ID, m.GuildID)
-// 		body.ParentStyle, _ = p.GetStyleContext()
-// 		body.AddUnhandler(func() {
-// 			s.Members.SelectRow(nil)
-// 		})
-
-// 		p.SetChildren(body)
-// 		p.Show()
-// 	}
-// }
-
-// // sumMembers ignores ID == 0
-// func sumMembers(sections []*RoleSection) (sum int) {
-// 	for _, s := range sections {
-// 		if s.ID > 0 {
-// 			sum += len(s.members)
-// 		}
-// 	}
-// 	return
-// }

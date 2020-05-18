@@ -12,9 +12,9 @@ func (m *Messages) injectHandlers() {
 	m.c.AddHandler(m.onMessageUpdate)
 	m.c.AddHandler(m.onMessageDelete)
 	m.c.AddHandler(m.onMessageDeleteBulk)
-	m.c.AddHandler(m.onGuildMembersChunk)
 	m.c.AddHandler(m.react)
 	m.c.AddHandler(m.unreact)
+	m.c.Members.OnMember(m.onGuildMember)
 }
 
 func (m *Messages) find(id discord.Snowflake, found func(m *Message)) {
@@ -81,21 +81,17 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 	})
 }
 
-func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	if m.guildID.Get() != c.GuildID {
+func (m *Messages) onGuildMember(guildID discord.Snowflake, member discord.Member) {
+	if m.guildID.Get() != guildID {
 		return
 	}
 
-	guildID := m.guildID.Get()
-
 	semaphore.IdleMust(func() {
-		for _, n := range c.Members {
-			for _, message := range m.messages {
-				if message.AuthorID != n.User.ID {
-					continue
-				}
-				message.updateMember(m.c, guildID, n)
+		for _, message := range m.messages {
+			if message.AuthorID != member.User.ID {
+				continue
 			}
+			message.updateMember(m.c, guildID, member)
 		}
 	})
 }

@@ -18,7 +18,7 @@ type Guilds struct {
 	ListBox  *gtk.ListBox
 	DMButton *DMButton
 
-	Guilds   []gtkutils.ExtendedWidget
+	guilds   []gtkutils.ExtendedWidget
 	Current  *Guild
 	OnSelect func(g *Guild)
 
@@ -61,9 +61,7 @@ func newGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 		}
 	}
 
-	g.Guilds = rows
-	initGuilds(g, s)
-	return g, nil
+	return initGuilds(g, s, rows), nil
 }
 
 func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, error) {
@@ -97,17 +95,11 @@ func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 		rows = append(rows, r)
 	}
 
-	g := &Guilds{
-		Guilds: rows,
-	}
-	initGuilds(g, s)
-	return g, nil
+	return initGuilds(&Guilds{}, s, rows), nil
 }
 
-func initGuilds(g *Guilds, s *ningen.State) {
+func initGuilds(g *Guilds, s *ningen.State, guilds []gtkutils.ExtendedWidget) *Guilds {
 	g.state = s
-
-	dm := NewPMButton(s)
 
 	gw, _ := gtk.ScrolledWindowNew(nil, nil)
 	gw.Show()
@@ -116,6 +108,7 @@ func initGuilds(g *Guilds, s *ningen.State) {
 
 	l, _ := gtk.ListBoxNew()
 	l.Show()
+	l.SetSelectionMode(gtk.SELECTION_NONE)
 	l.SetActivateOnSingleClick(true)
 	gtkutils.InjectCSSUnsafe(l, "guilds", "")
 
@@ -123,26 +116,29 @@ func initGuilds(g *Guilds, s *ningen.State) {
 	g.ListBox = l
 
 	// Add the button to the second of the list:
-	g.DMButton = dm
-	l.Insert(dm, -1)
+	g.DMButton = NewPMButton(s)
 
-	// Add the rest:
-	for _, g := range g.Guilds {
-		l.Insert(g, -1)
+	// Prepend the DM button.
+	g.guilds = append([]gtkutils.ExtendedWidget{g.DMButton}, guilds...)
+
+	// Add everything.
+	for i, g := range g.guilds {
+		l.Insert(g, i)
 		g.ShowAll()
 	}
-	l.Connect("row-activated", g.rowActivated)
-	s.Read.OnChange(g.TraverseReadState)
-}
 
-func (g *Guilds) rowActivated(l *gtk.ListBox, r *gtk.ListBoxRow) {
-	guild, dm := g.preSelect(r)
-	switch {
-	case guild != nil:
-		g.onSelect(guild)
-	case dm:
-		g.DMButton.OnClick()
-	}
+	s.Read.OnChange(g.TraverseReadState)
+	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		guild, dm := g.preSelect(r)
+		switch {
+		case guild != nil:
+			g.onSelect(guild)
+		case dm:
+			g.DMButton.OnClick()
+		}
+	})
+
+	return g
 }
 
 func (g *Guilds) Select(r *gtk.ListBoxRow) {
@@ -150,23 +146,26 @@ func (g *Guilds) Select(r *gtk.ListBoxRow) {
 	g.preSelect(r)
 }
 
-func (g *Guilds) preSelect(r *gtk.ListBoxRow) (guild *Guild, dm bool) {
-	var index = -1
-	if r != nil {
-		index = r.GetIndex()
-	}
+func (guilds *Guilds) onFolderSelect(gf *GuildFolder, g *Guild) {
+	guilds.ListBox.SelectRow(nil)
+	// unselectAll here because parent list won't trigger row-activated.
+	guilds.unselectAll(gf.GetIndex())
+	guilds.onSelect(g)
+}
 
-	switch {
-	case index < 1:
-		g.unselectAll(-1)
+func (g *Guilds) preSelect(r *gtk.ListBoxRow) (guild *Guild, dm bool) {
+	var index = r.GetIndex()
+
+	switch index {
+	case 0:
+		g.unselectAll(0)
 		g.DMButton.Unread.SetActive(true)
 		return nil, true
 	default:
 		g.DMButton.inactive() // manual work
-		index--
 	}
 
-	var row = g.Guilds[index]
+	var row = g.guilds[index]
 
 	// Unselect all guild folders except the current one:
 	g.unselectAll(index)
@@ -181,25 +180,21 @@ func (g *Guilds) preSelect(r *gtk.ListBoxRow) (guild *Guild, dm bool) {
 
 func (g *Guilds) unselectAll(except int) {
 	// Unselect all guild folders except the current one:
-	for i, r := range g.Guilds {
+	for i, r := range g.guilds {
 		if i == except {
 			continue
 		}
 
 		switch r := r.(type) {
+		case *DMButton:
+			r.Unread.SetActive(false)
 		case *Guild:
 			r.Unread.SetActive(false)
 		case *GuildFolder:
-			// TODO: r.Unread.SetSuppress(true)
 			r.unselectAll(-1) // will never be the current folder.
 			r.List.SelectRow(nil)
 		}
 	}
-}
-
-func (guilds *Guilds) onFolderSelect(g *Guild) {
-	guilds.ListBox.SelectRow(nil)
-	guilds.onSelect(g)
 }
 
 func (guilds *Guilds) onSelect(g *Guild) {
@@ -218,7 +213,7 @@ func (guilds *Guilds) FindByID(guildID discord.Snowflake) (*Guild, *GuildFolder)
 }
 
 func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
-	for _, v := range guilds.Guilds {
+	for _, v := range guilds.guilds {
 		switch v := v.(type) {
 		case *Guild:
 			if fn(v) {

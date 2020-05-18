@@ -14,7 +14,7 @@ type Members struct {
 	Members *members.Container
 }
 
-func NewMembers(s *ningen.State, g discord.Guild) *Members {
+func NewMembers(s *ningen.State, guildID, channelID discord.Snowflake) *Members {
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	b.Show()
 
@@ -25,7 +25,7 @@ func NewMembers(s *ningen.State, g discord.Guild) *Members {
 	h.SetMarginBottom(8)
 
 	m := members.New(s)
-	m.LoadGuild(g)
+	m.LoadChannel(guildID, channelID)
 	m.SetMarginStart(CommonMargin)
 	m.SetMarginEnd(CommonMargin)
 

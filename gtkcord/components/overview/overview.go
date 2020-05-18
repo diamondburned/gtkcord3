@@ -45,7 +45,7 @@ func NewContainer(state *ningen.State, gID, chID discord.Snowflake) (*Container,
 
 	ginfo := NewGuildInfo(*guild)
 	cinfo := NewChannelInfo(*ch)
-	membs := NewMembers(state, *guild)
+	membs := NewMembers(state, gID, chID)
 
 	b.Add(ginfo)
 	b.Add(newSeparator())

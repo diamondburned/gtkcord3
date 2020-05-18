@@ -22,7 +22,7 @@ func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 			continue
 		}
 
-		if !p.Has(discord.PermissionReadMessageHistory) {
+		if !p.Has(discord.PermissionViewChannel) {
 			continue
 		}
 

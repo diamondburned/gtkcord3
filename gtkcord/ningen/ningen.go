@@ -10,7 +10,6 @@ import (
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen"
 	"github.com/pkg/errors"
-	"github.com/sasha-s/go-deadlock"
 )
 
 func init() {
@@ -23,13 +22,7 @@ func init() {
 	}
 }
 
-type State struct {
-	*ningen.State
-	MemberList *MemberListState
-
-	gmu    deadlock.Mutex
-	guilds map[discord.Snowflake]*guildState
-}
+type State = ningen.State
 
 func Connect(token string, onReady func(s *State)) (*State, error) {
 	store := state.NewDefaultStore(&state.DefaultStoreOptions{
@@ -49,51 +42,40 @@ func Connect(token string, onReady func(s *State)) (*State, error) {
 		return nil, errors.Wrap(err, "Faield to create ningen")
 	}
 
-	state := &State{
-		State:      n,
-		MemberList: NewMemberListState(n),
-	}
-
 	n.AddHandler(func(r *gateway.ReadyEvent) {
-		onReady(state)
+		onReady(n)
 	})
 	n.AddHandler(func(r *gateway.ResumedEvent) {
-		onReady(state)
-	})
-	n.AddHandler(func(ev *gateway.GuildMemberListUpdate) {
-		for _, op := range ev.Ops {
-			items := append(op.Items, op.Item)
-
-			for _, it := range items {
-				if it.Member == nil {
-					continue
-				}
-
-				s.Store.MemberSet(ev.GuildID, &it.Member.Member)
-				s.Store.PresenceSet(ev.GuildID, &it.Member.Presence)
-
-				// If the user is the current user, then we store a copy with no
-				// guild. This is useful since popup.Hamburger reads this.
-				if it.Member.User.ID == s.Ready.User.ID {
-					s.Store.PresenceSet(0, &it.Member.Presence)
-				}
-			}
-		}
-	})
-	n.AddHandler(func(c *gateway.GuildMembersChunkEvent) {
-		state.gmu.Lock()
-		defer state.gmu.Unlock()
-
-		gd := state.getGuild(c.GuildID)
-
-		for _, m := range c.Members {
-			delete(gd.requestingMembers, m.User.ID)
-		}
+		onReady(n)
 	})
 
-	if err := state.Open(); err != nil {
+	if err := n.Open(); err != nil {
 		return nil, errors.Wrap(err, "Failed to connect to Discord")
 	}
 
-	return state, nil
+	return n, nil
+}
+
+type Presencer interface {
+	Presence(guild, user discord.Snowflake) (*discord.Presence, error)
+}
+
+var _ Presencer = (*State)(nil)
+
+type GuildRequester interface {
+	RequestGuildMembers(gateway.RequestGuildMembersData) error
+	GuildSubscribe(gateway.GuildSubscribeData) error
+}
+
+func EmojiString(e *discord.Emoji) string {
+	if e == nil {
+		return ""
+	}
+
+	var emoji = e.Name
+	if e.ID.Valid() { // if the emoji is custom:
+		emoji = ":" + emoji + ":"
+	}
+
+	return emoji
 }

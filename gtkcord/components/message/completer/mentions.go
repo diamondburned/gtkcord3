@@ -57,7 +57,7 @@ func (c *State) completeMentions(word string) {
 
 	if len(c.members) == 0 {
 		// Request the member in a background goroutine
-		c.state.SearchMember(guildID, word)
+		c.state.Members.SearchMember(guildID, word)
 		return
 	}
 

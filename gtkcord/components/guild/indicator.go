@@ -79,6 +79,7 @@ func NewUnreadStrip(child gtk.IWidget) *UnreadStrip {
 
 	revealer.Add(strip)
 	overlay.AddOverlay(revealer)
+	overlay.SetOverlayPassThrough(child, true)
 
 	return &UnreadStrip{
 		Overlay:  overlay,

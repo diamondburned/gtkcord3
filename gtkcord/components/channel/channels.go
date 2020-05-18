@@ -152,14 +152,14 @@ func (chs *Channels) First() *Channel {
 }
 
 func (chs *Channels) TraverseReadState(rs gateway.ReadState, unread bool) {
-	for _, ch := range chs.Channels {
-		if ch.ID != rs.ChannelID {
-			continue
-		}
+	semaphore.Async(func() {
+		for _, ch := range chs.Channels {
+			if ch.ID != rs.ChannelID {
+				continue
+			}
 
-		semaphore.Async(func() {
 			ch.setUnread(unread, rs.MentionCount > 0)
-		})
-		break
-	}
+			break
+		}
+	})
 }

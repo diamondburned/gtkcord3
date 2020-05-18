@@ -19,7 +19,7 @@ const EmojiSize = 22
 
 type Container struct {
 	*gtk.FlowBox
-	Reactions map[api.EmojiAPI]*Reaction
+	Reactions map[api.Emoji]*Reaction
 
 	MessageID discord.Snowflake
 	ChannelID discord.Snowflake
@@ -34,7 +34,7 @@ func NewContainer(m *discord.Message) *Container {
 
 	container := &Container{
 		FlowBox:   f,
-		Reactions: map[api.EmojiAPI]*Reaction{},
+		Reactions: map[api.Emoji]*Reaction{},
 		MessageID: m.ID,
 		ChannelID: m.ChannelID,
 	}
@@ -58,7 +58,7 @@ func (c *Container) SetState(s *ningen.State) {
 	c.state = s
 }
 
-func (c *Container) Search(chID, msgID discord.Snowflake, emoji api.EmojiAPI) *Reaction {
+func (c *Container) Search(chID, msgID discord.Snowflake, emoji api.Emoji) *Reaction {
 	if r, ok := c.Reactions[emoji]; ok {
 		return r
 	}
@@ -197,7 +197,7 @@ type Reaction struct {
 	Button *gtk.ToggleButton
 	Emoji  gtk.IWidget // *gtk.Image or *gtk.Label
 
-	String api.EmojiAPI
+	String api.Emoji
 }
 
 func newReaction(emoji discord.Emoji, count int, me bool) *Reaction {
