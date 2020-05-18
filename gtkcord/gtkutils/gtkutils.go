@@ -217,9 +217,9 @@ type Connector interface {
 	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
 }
 
-func Connect(connector Connector, event string, cb interface{}, data ...interface{}) {
+func Connect(connector Connector, event string, cb interface{}) {
 	semaphore.IdleMust(func() {
-		connector.Connect(event, cb, data...)
+		connector.Connect(event, cb)
 	})
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -295,7 +296,7 @@ func getPixbufFromFile(path string, w, h int) (*gdk.Pixbuf, error) {
 	}
 
 	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ interface{}, imgW, imgH int) {
+		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
 			w, h = MaxSize(imgW, imgH, w, h)
 			if w != imgW || h != imgH {
 				l.SetSize(w, h)
@@ -337,7 +338,7 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int, stream bool
 	defer l.Close()
 
 	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ interface{}, imgW, imgH int) {
+		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
 			w, h = MaxSize(imgW, imgH, w, h)
 
 			// If the new sizes don't match, then we need to resize the image:
