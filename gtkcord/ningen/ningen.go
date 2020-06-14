@@ -35,18 +35,8 @@ func Connect(token string, onReady func(s *State)) (*State, error) {
 		return nil, errors.Wrap(err, "Failed to create a new Discord session")
 	}
 
-	s.AddHandler(func(r *gateway.ReadyEvent) {
-		for _, g := range r.Guilds {
-			if g.Name == "nixhub" {
-				for _, ch := range g.Channels {
-					log.Println("Channel nane:", ch.Name)
-				}
-			}
-		}
-	})
-
 	s.OnRequest = append(s.OnRequest, func(r httpdriver.Request) error {
-		log.Println("Request:", r.GetPath())
+		log.Debugln("Request:", r.GetPath())
 		return nil
 	})
 

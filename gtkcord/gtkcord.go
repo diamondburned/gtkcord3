@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/session"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/hamburger"
@@ -191,7 +192,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// When the websocket closes, the screen must be changed to a busy one. The
 	// websocket may close if it's disconnected unexpectedly.
-	s.Gateway.AfterClose = func(error) {
+	s.AddHandler(func(*session.Closed) {
 		// Is the application already dead?
 		if a.Application == nil {
 			return
@@ -200,7 +201,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		// Run this asynchronously. This guarantees that the UI thread would
 		// never be hardlocked.
 		semaphore.Async(window.NowLoading)
-	}
+	})
 
 	// Store the token:
 	keyring.Set(s.Token)

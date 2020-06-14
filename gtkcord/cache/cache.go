@@ -21,7 +21,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
@@ -296,7 +295,7 @@ func getPixbufFromFile(path string, w, h int) (*gdk.Pixbuf, error) {
 	}
 
 	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
+		gtkutils.Connect(l, "size-prepared", func(l *gdk.PixbufLoader, imgW, imgH int) {
 			w, h = MaxSize(imgW, imgH, w, h)
 			if w != imgW || h != imgH {
 				l.SetSize(w, h)
@@ -337,39 +336,7 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int, stream bool
 	}
 	defer l.Close()
 
-	if w > 0 && h > 0 {
-		gtkutils.Connect(l, "size-prepared", func(_ *glib.Object, imgW, imgH int) {
-			w, h = MaxSize(imgW, imgH, w, h)
-
-			// If the new sizes don't match, then we need to resize the image:
-			if w != imgW || h != imgH {
-				l.SetSize(w, h)
-			}
-
-			// If the image's size hasn't been set before, we set it:
-			if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
-				semaphore.Async(img.SetSizeRequest, w, h)
-			}
-		})
-	}
-
 	var p interface{}
-
-	gtkutils.Connect(l, "area-prepared", func() {
-		if gif {
-			p, err = l.GetAnimation()
-			if err != nil || p == nil {
-				log.Errorln("Failed to get animation during area-prepared:", err)
-				return
-			}
-		} else {
-			p, err = l.GetPixbuf()
-			if err != nil || p == nil {
-				log.Errorln("Failed to get pixbuf during area-prepared:", err)
-				return
-			}
-		}
-	})
 
 	var event = "area-updated"
 	if !stream {
@@ -378,15 +345,52 @@ func setImageStream(r io.Reader, img *gtk.Image, gif bool, w, h int, stream bool
 		event = "closed"
 	}
 
-	gtkutils.Connect(l, event, func() {
-		switch {
-		case p == nil:
-			return
-		case gif:
-			semaphore.Async(img.SetFromAnimation, p)
-		default:
-			semaphore.Async(img.SetFromPixbuf, p)
+	semaphore.IdleMust(func() {
+		if w > 0 && h > 0 {
+			l.Connect("size-prepared", func(l *gdk.PixbufLoader, imgW, imgH int) {
+				w, h = MaxSize(imgW, imgH, w, h)
+
+				// If the new sizes don't match, then we need to resize the image:
+				if w != imgW || h != imgH {
+					l.SetSize(w, h)
+				}
+
+				// If the image's size hasn't been set before, we set it:
+				if sw, sh := img.GetSizeRequest(); sw < 1 && sh < 1 {
+					semaphore.Async(img.SetSizeRequest, w, h)
+				}
+			})
 		}
+
+		l.Connect("area-prepared", func() {
+			if gif {
+				p, err = l.GetAnimation()
+				if err != nil || p == nil {
+					log.Errorln("Failed to get animation during area-prepared:", err)
+					return
+				}
+			} else {
+				p, err = l.GetPixbuf()
+				if err != nil || p == nil {
+					log.Errorln("Failed to get pixbuf during area-prepared:", err)
+					return
+				}
+			}
+		})
+
+		l.Connect(event, func() {
+			if p == nil {
+				return
+			}
+
+			semaphore.Async(func() {
+				if gif {
+					img.SetFromAnimation(p.(*gdk.PixbufAnimation))
+				} else {
+					img.SetFromPixbuf(p.(*gdk.Pixbuf))
+				}
+			})
+		})
 	})
 
 	if _, err := io.Copy(l, r); err != nil {

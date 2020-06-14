@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"runtime/trace"
+	"time"
 
 	"github.com/diamondburned/gtkcord3/gtkcord"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
@@ -128,6 +129,13 @@ func main() {
 		runtime.SetBlockProfileRate(5000000) // 5ms
 		go http.ListenAndServe("localhost:6969", nil)
 	}
+
+	// I will do what's called an epic gamer move.
+	go func() {
+		for range time.Tick(30 * time.Second) {
+			runtime.GC()
+		}
+	}()
 
 	if sig := a.Run(os.Args); sig > 0 {
 		os.Exit(sig)

@@ -307,14 +307,12 @@ func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
 func (m *Messages) Cleanup() {
 	m.Input.Typing.Stop()
 
-	for _, msg := range m.messages {
-		// DESTROY!!!!
-		// https://stackoverflow.com/questions/2862509/free-object-widget-in-gtk
-		m.Messages.Remove(msg)
-	}
-
 	// Destroy the slice in Go as well, but the GC will pick it up:
 	m.messages = nil
+
+	m.Messages.GetChildren().Foreach(func(v interface{}) {
+		m.Messages.Remove(v.(gtk.IWidget))
+	})
 }
 
 func (m *Messages) ScrollToBottom() {
