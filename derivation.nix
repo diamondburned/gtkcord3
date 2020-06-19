@@ -1,4 +1,4 @@
-{ pkgs, pkgsStatic, buildGoModule, makeDesktopItem, lib }:
+{ pkgs, buildGoModule, makeDesktopItem, lib }:
 
 with import ./shell.nix { inherit pkgs; };
 
@@ -7,7 +7,7 @@ buildGoModule rec {
 	inherit version;
 	inherit nativeBuildInputs;
 
-	buildInputs = with pkgsStatic; [
+	buildInputs = with pkgs; [
 		gnome3.glib gnome3.gtk libhandy
 	];
 
@@ -29,6 +29,6 @@ buildGoModule rec {
 		cp "${./logo.png}" $out/share/icons/hicolor/256x256/apps/gtkcord3.png
 	'';
 
-	vendorSha256 = "0rjazx7a25d6vhmja5xrf30nzvk03g5pmk9i7fgiy2srn562gca4";
+	vendorSha256 = "0jppx3m4qpp1k1k5b7xrw5pnlpbir7jmhvp2l06bgv2vpfzk0jqn";
 	subPackages  = [ "." ];
 }
