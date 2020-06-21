@@ -17,6 +17,8 @@ func NewSimpleMarkupRenderer() *SimpleMarkupRenderer {
 }
 
 func (r *SimpleMarkupRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
+	w = md.UnescapeWriter(w)
+
 	ast.Walk(n, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		switch n := n.(type) {
 		case *md.Inline:

@@ -17,6 +17,8 @@ func NewMarkupRenderer() *MarkupRenderer {
 }
 
 func (r *MarkupRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
+	w = md.UnescapeWriter(w)
+
 	ast.Walk(n, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		r.switchNode(w, n, source, enter)
 		return ast.WalkContinue, nil

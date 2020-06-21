@@ -166,6 +166,7 @@ func (r *Renderer) insertWithTag(content []byte, tag *gtk.TextTag) {
 		tag = r.tags.tag
 	}
 
+	content = md.Unescape(content)
 	r.Buffer.InsertWithTag(r.Buffer.GetEndIter(), string(content), tag)
 }
 
