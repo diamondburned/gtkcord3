@@ -14,7 +14,7 @@
 - Faster than the official Discord application
 - Uses less system resources than the official Discord application
 - Is just as easy to use as the official Discord application
-- Uses your prefered GTK theme
+- Uses your preferred GTK theme
 
 ## Build gtkcord
 **Required:** `go` (1.13+), `gtk`, `libhandy`, `pkgconfig` (refer to `shell.nix`)
