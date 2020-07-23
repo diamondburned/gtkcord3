@@ -7,7 +7,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/handlerrepo"
 	"github.com/gotk3/gotk3/gtk"
 )
 
