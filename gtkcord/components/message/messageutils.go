@@ -29,7 +29,7 @@ func shouldCondense(msgs []*Message, msg, lastSameAuthor *Message) bool {
 	return msg.Timestamp.Sub(lastSameAuthor.Timestamp) < 5*time.Minute
 }
 
-func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
+func lastMessageFrom(msgs []*Message, author discord.UserID) *Message {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msg := msgs[i]; msg.AuthorID == author && !msg.Condensed {
 			return msg

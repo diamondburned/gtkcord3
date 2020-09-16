@@ -25,8 +25,8 @@ type Message struct {
 	style *gtk.StyleContext
 
 	Nonce    string
-	ID       discord.Snowflake
-	AuthorID discord.Snowflake
+	ID       discord.MessageID
+	AuthorID discord.UserID
 	Author   string
 	Webhook  bool
 
@@ -77,7 +77,7 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
-	if !m.ID.Valid() {
+	if !m.ID.IsValid() {
 		message.setAvailableUnsafe(false)
 	}
 
@@ -157,7 +157,7 @@ func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
 		ID:        m.ID,
 		AuthorID:  m.Author.ID,
 		Author:    m.Author.Username,
-		Webhook:   m.WebhookID.Valid(),
+		Webhook:   m.WebhookID.IsValid(),
 		Timestamp: m.Timestamp.Time().Local(),
 		Edited:    m.EditedTimestamp.Time().Local(),
 
@@ -332,12 +332,12 @@ func (m *Message) setCondensed() {
 	m.main.Add(m.right)
 }
 
-func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
+func (m *Message) updateAuthor(s *ningen.State, gID discord.GuildID, u discord.User) {
 	// Webhooks don't have users.
-	if gID.Valid() && !m.Webhook {
+	if gID.IsValid() && !m.Webhook {
 		n, err := s.Store.Member(gID, m.AuthorID)
 		if err != nil {
-			s.Members.RequestMember(gID, m.AuthorID)
+			s.MemberState.RequestMember(gID, m.AuthorID)
 		} else {
 			m.updateMember(s, gID, *n)
 			return
@@ -348,11 +348,11 @@ func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord
 	m.author.SetMarkup(`<span weight="bold">` + html.EscapeString(u.Username) + `</span>`)
 }
 
-func (m *Message) UpdateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
+func (m *Message) UpdateMember(s *ningen.State, gID discord.GuildID, n discord.Member) {
 	semaphore.IdleMust(m.updateMember, s, gID, n)
 }
 
-func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
+func (m *Message) updateMember(s *ningen.State, gID discord.GuildID, n discord.Member) {
 	var name = html.EscapeString(n.User.Username)
 	if n.Nick != "" {
 		name = html.EscapeString(n.Nick)
@@ -360,7 +360,7 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 
 	m.author.SetTooltipMarkup(name)
 
-	if gID.Valid() {
+	if gID.IsValid() {
 		if g, err := s.Store.Guild(gID); err == nil {
 			if color := discord.MemberColor(*g, n); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)

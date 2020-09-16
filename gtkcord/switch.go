@@ -12,7 +12,7 @@ import (
 )
 
 // SwitchToID returns true if it can find the channel.
-func (a *Application) SwitchToID(chID, guildID discord.Snowflake) bool {
+func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID) bool {
 	var row *gtk.ListBoxRow
 
 	guild, folder := a.Guilds.FindByID(guildID)
@@ -67,7 +67,7 @@ func (a *Application) SwitchLastChannel(g *guild.Guild) {
 	var lastCh *channel.Channel
 
 	var chID = a.lastAccess(g.ID, 0)
-	if !chID.Valid() {
+	if !chID.IsValid() {
 		lastCh = a.Channels.First()
 	} else {
 		lastCh = a.Channels.FindByID(chID)
@@ -140,7 +140,7 @@ func (a *Application) SwitchDM() {
 		Checker: func() bool {
 			// If the guildID is valid, that means the channel does have a
 			// guild, so we're not in DMs.
-			return a.Messages.GetGuildID().Valid()
+			return a.Messages.GetGuildID().IsValid()
 		},
 		Setter: func(w gtk.IWidget) {
 			a.setLeftGridCol(w, 2)
@@ -162,8 +162,8 @@ func (a *Application) SwitchDM() {
 }
 
 type Channel interface {
-	GuildID() discord.Snowflake
-	ChannelID() discord.Snowflake
+	GuildID() discord.GuildID
+	ChannelID() discord.ChannelID
 	ChannelInfo() (name, topic string)
 }
 
@@ -200,7 +200,7 @@ func (a *Application) SwitchChannel(ch Channel) {
 			window.SetTitle("#" + name + " - gtkcord")
 
 			// Show the channel menu if we're in a guild:
-			if a.Messages.GetGuildID().Valid() {
+			if a.Messages.GetGuildID().IsValid() {
 				a.Header.ChMenuBtn.SetRevealChild(true)
 			}
 		},

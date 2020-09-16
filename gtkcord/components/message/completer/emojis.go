@@ -14,7 +14,7 @@ func (c *State) completeEmojis(word string) {
 	}
 
 	guildID := c.container.GetGuildID()
-	guildEmojis, err := c.state.Emoji.Get(guildID)
+	guildEmojis, err := c.state.EmojiState.Get(guildID)
 	if err != nil {
 		log.Errorln("Failed to get emojis:", err)
 		return

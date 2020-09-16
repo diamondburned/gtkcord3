@@ -15,8 +15,8 @@ func (a *Application) bindActions() {
 	})
 }
 
-func (a *Application) actionLoadChannel(_ *glib.SimpleAction, id int64) {
-	ch, err := a.State.Store.Channel(discord.Snowflake(id))
+func (a *Application) actionLoadChannel(_ *glib.SimpleAction, id uint64) {
+	ch, err := a.State.Store.Channel(discord.ChannelID(id))
 	if err != nil {
 		log.Errorln("Can't find channel")
 		return

@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/ningen/states/read"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -89,7 +89,7 @@ func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs
 		})
 	})
 
-	s.Read.OnChange(pcs.TraverseReadState)
+	s.ReadState.OnUpdate(pcs.TraverseReadState)
 	return
 }
 
@@ -139,7 +139,7 @@ func (pcs *PrivateChannels) LoadChannels() error {
 
 	go func() {
 		for _, channel := range channels {
-			rs := pcs.state.Read.FindLast(channel.ID)
+			rs := pcs.state.ReadState.FindLast(channel.ID)
 			if rs == nil {
 				continue
 			}
@@ -189,7 +189,8 @@ func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
 	return strings.Contains(strings.ToLower(pc.Name), pcs.search)
 }
 
-func (pcs *PrivateChannels) TraverseReadState(rs gateway.ReadState, unread bool) {
+func (pcs *PrivateChannels) TraverseReadState(e *read.UpdateEvent) {
+	rs, unread := e.ReadState, e.Unread
 	semaphore.Async(func() {
 		if len(pcs.Channels) == 0 {
 			return
@@ -208,7 +209,7 @@ func (pcs *PrivateChannels) TraverseReadState(rs gateway.ReadState, unread bool)
 	})
 }
 
-func (pcs *PrivateChannels) FindByID(id discord.Snowflake) *PrivateChannel {
+func (pcs *PrivateChannels) FindByID(id discord.ChannelID) *PrivateChannel {
 	ch, _ := pcs.Channels[id.String()]
 	return ch
 }

@@ -79,7 +79,7 @@ type Member struct {
 	User *user.Container
 
 	// user
-	ID discord.Snowflake
+	ID discord.UserID
 }
 
 func NewMember(m discord.Member, p discord.Presence, guild discord.Guild) *Member {
@@ -101,7 +101,7 @@ func NewMemberUnavailable() *Member {
 	return newMember(body, 0)
 }
 
-func newMember(body *user.Container, uID discord.Snowflake) *Member {
+func newMember(body *user.Container, uID discord.UserID) *Member {
 	r, _ := gtk.ListBoxRowNew()
 	r.Show()
 	r.Add(body)

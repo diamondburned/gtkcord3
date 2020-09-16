@@ -63,7 +63,7 @@ func Connect(token string, onReady func(s *State)) (*State, error) {
 }
 
 type Presencer interface {
-	Presence(guild, user discord.Snowflake) (*discord.Presence, error)
+	Presence(guild discord.GuildID, user discord.UserID) (*discord.Presence, error)
 }
 
 var _ Presencer = (*State)(nil)
@@ -79,7 +79,7 @@ func EmojiString(e *discord.Emoji) string {
 	}
 
 	var emoji = e.Name
-	if e.ID.Valid() { // if the emoji is custom:
+	if e.ID.IsValid() { // if the emoji is custom:
 		emoji = ":" + emoji + ":"
 	}
 

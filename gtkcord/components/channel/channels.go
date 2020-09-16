@@ -2,10 +2,10 @@ package channel
 
 import (
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/ningen/states/read"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -23,7 +23,7 @@ type Channels struct {
 	*gtk.ScrolledWindow
 	Main *gtk.Box
 
-	GuildID discord.Snowflake
+	GuildID discord.GuildID
 
 	// Headers
 	BannerImage *gtk.Image
@@ -74,7 +74,7 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 		})
 	})
 
-	state.Read.OnChange(chs.TraverseReadState)
+	state.ReadState.OnUpdate(chs.TraverseReadState)
 	return
 }
 
@@ -92,7 +92,7 @@ func (chs *Channels) Cleanup() {
 	chs.Channels = nil
 }
 
-func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
+func (chs *Channels) LoadGuild(guildID discord.GuildID) error {
 	chs.GuildID = guildID
 
 	channels, err := chs.state.Channels(chs.GuildID)
@@ -132,7 +132,7 @@ func (chs *Channels) UpdateBanner(url string) {
 	}()
 }
 
-func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
+func (chs *Channels) FindByID(id discord.ChannelID) *Channel {
 	for _, ch := range chs.Channels {
 		if ch.ID == id {
 			return ch
@@ -151,7 +151,8 @@ func (chs *Channels) First() *Channel {
 	return nil
 }
 
-func (chs *Channels) TraverseReadState(rs gateway.ReadState, unread bool) {
+func (chs *Channels) TraverseReadState(e *read.UpdateEvent) { 
+	rs, unread := e.ReadState, e.Unread
 	semaphore.Async(func() {
 		for _, ch := range chs.Channels {
 			if ch.ID != rs.ChannelID {

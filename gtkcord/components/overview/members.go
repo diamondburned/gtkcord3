@@ -14,7 +14,7 @@ type Members struct {
 	Members *members.Container
 }
 
-func NewMembers(s *ningen.State, guildID, channelID discord.Snowflake) *Members {
+func NewMembers(s *ningen.State, guildID discord.GuildID, channelID discord.ChannelID) *Members {
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	b.Show()
 

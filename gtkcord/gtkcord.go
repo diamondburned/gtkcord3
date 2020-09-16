@@ -294,7 +294,7 @@ func (a *Application) Ready(s *ningen.State) error {
 		guID := a.Messages.GetGuildID()
 		chID := a.Messages.GetChannelID()
 
-		if !chID.Valid() || !guID.Valid() {
+		if !chID.IsValid() || !guID.IsValid() {
 			// guarded, shouldn't happen.
 			return nil
 		}
@@ -356,12 +356,12 @@ func (a *Application) Ready(s *ningen.State) error {
 		// Make a Quick switcher
 		quickswitcher.Bind(quickswitcher.Spawner{
 			State: s,
-			OnGuild: func(id discord.Snowflake) {
+			OnGuild: func(id discord.GuildID) {
 				if g, _ := a.Guilds.FindByID(id); g != nil {
 					g.Activate()
 				}
 			},
-			OnChannel: func(ch, guild discord.Snowflake) {
+			OnChannel: func(ch discord.ChannelID, guild discord.GuildID) {
 				a.SwitchToID(ch, guild)
 			},
 		})
@@ -402,9 +402,9 @@ func (a *Application) LogOut() {
 	})
 }
 
-func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake {
+func (a *Application) lastAccess(guild discord.GuildID, ch discord.ChannelID) discord.ChannelID {
 	// read
-	if !ch.Valid() {
+	if !ch.IsValid() {
 		return a.LastRead.Access(guild)
 	}
 	a.LastRead.SetAccess(guild, ch)

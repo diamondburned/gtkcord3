@@ -91,7 +91,7 @@ type State struct {
 }
 
 type typingUser struct {
-	ID   discord.Snowflake
+	ID   discord.UserID
 	Name string
 	Time time.Time
 }
@@ -125,7 +125,7 @@ func NewState(s *state.State) *State {
 }
 
 // Type is async. Kind of.
-func (t *State) Type(chID discord.Snowflake) {
+func (t *State) Type(chID discord.ChannelID) {
 	now := time.Now()
 	// if we sent a typing request the past $TypingTimeout:
 	if now.Add(-TypingTimeout).Before(t.lastTyped) {
@@ -269,7 +269,7 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 	}
 
 	// Attempt 2: if the event has a GuildID
-	if user.Name == "" && typing.GuildID.Valid() {
+	if user.Name == "" && typing.GuildID.IsValid() {
 		m, err := t.state.Store.Member(typing.GuildID, typing.UserID)
 		if err == nil {
 			if m.Nick != "" {
@@ -301,7 +301,7 @@ func (t *State) Add(typing *gateway.TypingStartEvent) {
 	t.Users = append(t.Users, user)
 }
 
-func (t *State) Remove(id discord.Snowflake) {
+func (t *State) Remove(id discord.UserID) {
 	defer t.Update()
 
 	for i := range t.Users {

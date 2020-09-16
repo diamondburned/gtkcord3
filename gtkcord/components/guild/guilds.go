@@ -5,6 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/ningen/states/read"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
@@ -64,7 +65,7 @@ func newGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guil
 	return initGuilds(g, s, rows), nil
 }
 
-func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, error) {
+func newGuildsLegacy(s *ningen.State, positions []discord.GuildID) (*Guilds, error) {
 	guilds, err := s.Guilds()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get guilds")
@@ -127,7 +128,7 @@ func initGuilds(g *Guilds, s *ningen.State, guilds []gtkutils.ExtendedWidget) *G
 		g.ShowAll()
 	}
 
-	s.Read.OnChange(g.TraverseReadState)
+	s.ReadState.OnUpdate(g.TraverseReadState)
 	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
 		guild, dm := g.preSelect(r)
 		switch {
@@ -206,7 +207,7 @@ func (guilds *Guilds) onSelect(g *Guild) {
 	guilds.OnSelect(g)
 }
 
-func (guilds *Guilds) FindByID(guildID discord.Snowflake) (*Guild, *GuildFolder) {
+func (guilds *Guilds) FindByID(guildID discord.GuildID) (*Guild, *GuildFolder) {
 	return guilds.Find(func(g *Guild) bool {
 		return g.ID == guildID
 	})
@@ -231,13 +232,14 @@ func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 	return nil, nil
 }
 
-func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
+func (guilds *Guilds) TraverseReadState(e *read.UpdateEvent) {
+	chrs, unread := e.ReadState, e.Unread
 	semaphore.Async(func() {
 		ch, err := guilds.state.Store.Channel(chrs.ChannelID)
 		if err != nil {
 			return
 		}
-		if !ch.GuildID.Valid() {
+		if !ch.GuildID.IsValid() {
 			// DM:
 			guilds.DMButton.setUnread(unread)
 			return
@@ -250,7 +252,7 @@ func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
 
 		pinged := chrs.MentionCount > 0
 
-		if guilds.state.Muted.Channel(ch.ID) {
+		if guilds.state.MutedState.Channel(ch.ID) {
 			unread = false
 		}
 

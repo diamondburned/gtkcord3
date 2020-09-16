@@ -71,7 +71,7 @@ func (dm *DMButton) resetRead(s *ningen.State) {
 	}
 
 	for _, ch := range chs {
-		rs := s.Read.FindLast(ch.ID)
+		rs := s.ReadState.FindLast(ch.ID)
 		if rs == nil {
 			continue
 		}

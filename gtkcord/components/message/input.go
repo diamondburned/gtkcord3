@@ -361,7 +361,7 @@ func (i *Input) stopEditing() {
 	i.EditRevealer.SetRevealChild(false)
 }
 
-func (i *Input) editMessage(id discord.Snowflake) error {
+func (i *Input) editMessage(id discord.MessageID) error {
 	m, err := i.Messages.c.State.Store.Message(i.Messages.GetChannelID(), id)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get message")

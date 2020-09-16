@@ -24,8 +24,8 @@ type Messages struct {
 	Opts
 	gtkutils.ExtendedWidget
 
-	channelID moreatomic.Snowflake
-	guildID   moreatomic.Snowflake
+	channelID moreatomic.ChannelID
+	guildID   moreatomic.GuildID
 
 	c     *ningen.State
 	fetch int // max messages
@@ -191,17 +191,17 @@ func (m *Messages) Focus() {
 	m.Input.Input.GrabFocus()
 }
 
-func (m *Messages) GetChannelID() discord.Snowflake {
+func (m *Messages) GetChannelID() discord.ChannelID {
 	return m.channelID.Get()
 }
 
-func (m *Messages) GetGuildID() discord.Snowflake {
+func (m *Messages) GetGuildID() discord.GuildID {
 	return m.guildID.Get()
 }
 
-func (m *Messages) GetRecentAuthorsUnsafe(limit int) []discord.Snowflake {
-	ids := make([]discord.Snowflake, 0, limit)
-	added := make(map[discord.Snowflake]struct{}, limit)
+func (m *Messages) GetRecentAuthorsUnsafe(limit int) []discord.UserID {
+	ids := make([]discord.UserID, 0, limit)
+	added := make(map[discord.UserID]struct{}, limit)
 
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		message := m.messages[i]
@@ -228,7 +228,7 @@ func (m *Messages) LastFromMeUnsafe() *Message {
 }
 
 // Load is thread-safe. Done will be called in the main thread.
-func (m *Messages) Load(channel discord.Snowflake, done func(error)) {
+func (m *Messages) Load(channel discord.ChannelID, done func(error)) {
 	m.channelID.Set(channel)
 
 	// Order: latest is first.
@@ -252,10 +252,10 @@ func (m *Messages) Load(channel discord.Snowflake, done func(error)) {
 	// Set GuildID and subscribe if it's valid:
 	var guildID = messages[0].GuildID
 
-	if guildID.Valid() {
+	if guildID.IsValid() {
 		// Ensure there's a member list.
-		if err := m.c.Members.GetMemberList(guildID, channel, nil); err != nil {
-			m.c.Members.RequestMemberList(guildID, channel, 0)
+		if _, err := m.c.MemberState.GetMemberList(guildID, channel); err != nil {
+			m.c.MemberState.RequestMemberList(guildID, channel, 0)
 		}
 	}
 
@@ -300,7 +300,7 @@ func (m *Messages) Load(channel discord.Snowflake, done func(error)) {
 	})
 }
 
-func (m *Messages) lastMessageFrom(author discord.Snowflake) *Message {
+func (m *Messages) lastMessageFrom(author discord.UserID) *Message {
 	return lastMessageFrom(m.messages, author)
 }
 
@@ -345,12 +345,12 @@ func (m *Messages) onEdgeReached(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	// Find the latest message and ack it. Since MarkRead calls the onChanges
 	// functions which would be using semaphore.IdleMust, we need to spawn this
 	// in a goroutine.
-	r := m.c.Read.FindLast(chID)
+	r := m.c.ReadState.FindLast(chID)
 	if r == nil || r.LastMessageID == lastID {
 		return
 	}
 
-	m.c.Read.MarkRead(chID, lastID)
+	m.c.ReadState.MarkRead(chID, lastID)
 }
 
 // mainly used for fetching extra message when scrolled to the top
@@ -377,7 +377,7 @@ func (m *Messages) onEdgeOvershot(_ *gtk.ScrolledWindow, pos gtk.PositionType) {
 	go m.fetchMore(m.messages[0].ID)
 }
 
-func (m *Messages) fetchMore(first discord.Snowflake) {
+func (m *Messages) fetchMore(first discord.MessageID) {
 	// Grab the channel and guild dID:
 	channelID := m.channelID.Get()
 	guildID := m.guildID.Get()
@@ -505,7 +505,7 @@ func (m *Messages) UpdateUnsafe(update *discord.Message) bool {
 
 	for _, message := range m.messages {
 		if false ||
-			(message.ID.Valid() && message.ID == update.ID) ||
+			(message.ID.IsValid() && message.ID == update.ID) ||
 			(message.Nonce != "" && message.Nonce == update.Nonce) {
 
 			target = message
@@ -533,13 +533,12 @@ func (m *Messages) UpdateUnsafe(update *discord.Message) bool {
 	return true
 }
 
-func (m *Messages) deleteUnsafe(ids ...discord.Snowflake) {
+func (m *Messages) deleteUnsafe(ids ...discord.MessageID) {
 	for _, id := range ids {
 		for i, message := range m.messages {
 			if message.ID != id {
 				continue
-			}
-
+			} 
 			oldMessage := m.messages[i]
 
 			m.messages = append(m.messages[:i], m.messages[i+1:]...)

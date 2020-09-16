@@ -20,8 +20,8 @@ type Channel struct {
 
 	Label *gtk.Label
 
-	ID       discord.Snowflake
-	Guild    discord.Snowflake
+	ID       discord.ChannelID
+	Guild    discord.GuildID
 	Name     string
 	Topic    string
 	Category bool
@@ -37,13 +37,13 @@ func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 		return
 	}
 
-	if s.Muted.Channel(ch.ID) {
+	if s.MutedState.Channel(ch.ID) {
 		w.stateClass = "muted"
 		w.Style.AddClass("muted")
 		return
 	}
 
-	if rs := s.Read.FindLast(ch.ID); rs != nil {
+	if rs := s.ReadState.FindLast(ch.ID); rs != nil {
 		w.unread = ch.LastMessageID != rs.LastMessageID
 		pinged := w.unread && rs.MentionCount > 0
 
@@ -164,11 +164,11 @@ func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	return chw
 }
 
-func (ch *Channel) ChannelID() discord.Snowflake {
+func (ch *Channel) ChannelID() discord.ChannelID {
 	return ch.ID
 }
 
-func (ch *Channel) GuildID() discord.Snowflake {
+func (ch *Channel) GuildID() discord.GuildID {
 	return ch.Guild
 }
 

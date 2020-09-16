@@ -23,9 +23,9 @@ const MaxEntries = 80
 type Spawner struct {
 	State *ningen.State
 
-	OnGuild   func(discord.Snowflake)
-	OnChannel func(_, _ discord.Snowflake)
-	OnFriend  func(discord.Snowflake)
+	OnGuild   func(discord.GuildID)
+	OnChannel func(_ discord.ChannelID, _ discord.GuildID)
+	OnFriend  func(discord.UserID)
 }
 
 func (s Spawner) Spawn() {
@@ -47,9 +47,9 @@ type Dialog struct {
 	state *ningen.State
 
 	// callback functions
-	OnGuild   func(guildid discord.Snowflake)
-	OnChannel func(channel, guild discord.Snowflake)
-	OnFriend  func(userid discord.Snowflake)
+	OnGuild   func(guildid discord.GuildID)
+	OnChannel func(channel discord.ChannelID, guild discord.GuildID)
+	OnFriend  func(userid discord.UserID)
 
 	// reusable slices
 	list []Entry
@@ -79,9 +79,9 @@ type Entry struct {
 	longString    string
 
 	// enum
-	GuildID   discord.Snowflake
-	ChannelID discord.Snowflake // could be DM, visible as one
-	FriendID  discord.Snowflake // only called if needed a new channel
+	GuildID   discord.GuildID
+	ChannelID discord.ChannelID // could be DM, visible as one
+	FriendID  discord.UserID // only called if needed a new channel
 }
 
 func NewDialog(s *ningen.State) *Dialog {
@@ -220,9 +220,9 @@ func (d *Dialog) onActivate(_ *gtk.ListBox, r *gtk.ListBoxRow) {
 	d.Destroy()
 
 	switch entry := d.list[d.visible[i]]; {
-	case entry.ChannelID.Valid():
+	case entry.ChannelID.IsValid():
 		d.OnChannel(entry.ChannelID, entry.GuildID)
-	case entry.GuildID.Valid():
+	case entry.GuildID.IsValid():
 		d.OnGuild(entry.GuildID)
 	}
 }
@@ -284,7 +284,7 @@ func (d *Dialog) populateEntries() {
 
 	for _, g := range guilds {
 		// If somehow the guild is broken.
-		if g.Name == "" || !g.ID.Valid() {
+		if g.Name == "" || !g.ID.IsValid() {
 			continue
 		}
 

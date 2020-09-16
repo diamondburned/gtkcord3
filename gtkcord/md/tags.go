@@ -232,7 +232,7 @@ func (s *TagState) hyperlink(url string) *gtk.TextTag {
 	return t
 }
 
-func searchMember(state state.Store, guild, user discord.Snowflake) *discord.GuildUser {
+func searchMember(state state.Store, guild discord.GuildID, user discord.UserID) *discord.GuildUser {
 	m, err := state.Member(guild, user)
 	if err == nil {
 		return &discord.GuildUser{

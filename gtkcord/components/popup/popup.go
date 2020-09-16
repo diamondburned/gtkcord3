@@ -337,7 +337,7 @@ type UserPopupRole struct {
 
 // thread-safe
 func NewUserPopupRoles(s *ningen.State,
-	guild discord.Snowflake, ids []discord.Snowflake) (*UserPopupRoles, error) {
+	guild discord.GuildID, ids []discord.RoleID) (*UserPopupRoles, error) {
 
 	// TODO: optimize this
 

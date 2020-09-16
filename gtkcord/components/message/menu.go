@@ -62,7 +62,7 @@ func (m *Messages) menuAddDebug(msg *Message, menu gtkutils.Container) {
 	cpchID.Show()
 	menu.Add(cpchID)
 
-	if m.GetGuildID().Valid() {
+	if m.GetGuildID().IsValid() {
 		cpgID, _ := gtk.MenuItemNewWithLabel("Copy Guild ID")
 		cpgID.Connect("activate", func() {
 			window.Window.Clipboard.SetText(m.GetGuildID().String())
