@@ -17,12 +17,12 @@ type store struct {
 	sync.Mutex `json:"-"`
 
 	// GuildID -> ChannelID; if GuildID == 0 then DM
-	Access map[discord.Snowflake]discord.Snowflake
+	Access map[discord.GuildID]discord.ChannelID
 }
 
 func New(file string) State {
 	store := &store{
-		Access: make(map[discord.Snowflake]discord.Snowflake),
+		Access: make(map[discord.GuildID]discord.ChannelID),
 	}
 
 	if err := store.load(file); err != nil {
@@ -49,7 +49,7 @@ func (store *store) save(file string) error {
 	return config.MarshalToFile(file, store)
 }
 
-func (s *State) Access(guild discord.Snowflake) discord.Snowflake {
+func (s *State) Access(guild discord.GuildID) discord.ChannelID {
 	s.store.Lock()
 	defer s.store.Unlock()
 
@@ -57,7 +57,7 @@ func (s *State) Access(guild discord.Snowflake) discord.Snowflake {
 	return id
 }
 
-func (s *State) SetAccess(guild, channel discord.Snowflake) {
+func (s *State) SetAccess(guild discord.GuildID, channel discord.ChannelID) {
 	s.store.Lock()
 	s.store.Access[guild] = channel
 	s.store.Unlock()

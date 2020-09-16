@@ -43,7 +43,7 @@ func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 }
 
 func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
-	var tree = map[discord.Snowflake]*_sortStructure{}
+	var tree = map[discord.ChannelID]*_sortStructure{}
 
 	for _, ch := range chs {
 		if ch.Type == discord.GuildCategory {
@@ -59,7 +59,7 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 			continue
 		}
 
-		if ch.CategoryID.Valid() {
+		if ch.CategoryID.IsValid() {
 			v, ok := tree[ch.CategoryID]
 			if ok {
 				v.children = append(v.children, ch)
@@ -102,7 +102,7 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 	for i := range list {
 		sch := list[i]
 
-		if sch.parent.ID.Valid() {
+		if sch.parent.ID.IsValid() {
 			channels = append(channels, createChannelRead(&sch.parent, s))
 		}
 

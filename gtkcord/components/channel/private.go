@@ -21,7 +21,7 @@ type PrivateChannel struct {
 
 	Body *user.Container
 
-	ID   discord.Snowflake
+	ID   discord.ChannelID
 	Name string
 
 	Group bool
@@ -76,9 +76,9 @@ func _ChIDFromRow(row *gtk.ListBoxRow) string {
 	return v.(string)
 }
 
-func (pc *PrivateChannel) GuildID() discord.Snowflake { return 0 }
+func (pc *PrivateChannel) GuildID() discord.GuildID { return 0 }
 
-func (pc *PrivateChannel) ChannelID() discord.Snowflake {
+func (pc *PrivateChannel) ChannelID() discord.ChannelID {
 	return pc.ID
 }
 

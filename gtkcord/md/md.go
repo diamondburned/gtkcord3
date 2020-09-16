@@ -35,7 +35,7 @@ func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message
 	renderToBuf(NewRenderer(dst), b, node)
 
 	// Is the not message edited? (Or if we don't want a timestamp)
-	if !msg || !m.EditedTimestamp.Valid() {
+	if !msg || !m.EditedTimestamp.IsValid() {
 		return
 	}
 

@@ -19,18 +19,18 @@ type StatefulPopupBody struct {
 	ParentStyle *gtk.StyleContext
 	parentClass string
 
-	User  discord.Snowflake
-	Guild discord.Snowflake
+	User  discord.UserID
+	Guild discord.GuildID
 
 	Prefetch *discord.User
 
 	stateHandlers interface {
-		handler.AddHandler
-		handler.Unbinder
+		handlerrepo.AddHandler
+		handlerrepo.Unbinder
 	}
 }
 
-func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *StatefulPopupBody {
+func NewStatefulPopupBody(s *ningen.State, user discord.UserID, guild discord.GuildID) *StatefulPopupBody {
 	return statefulPopupUser(&StatefulPopupBody{
 		state: s,
 		User:  user,
@@ -38,7 +38,7 @@ func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *State
 	})
 }
 
-func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.Snowflake) *StatefulPopupBody {
+func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.GuildID) *StatefulPopupBody {
 	return statefulPopupUser(&StatefulPopupBody{
 		state:    s,
 		User:     user.ID,
@@ -48,7 +48,7 @@ func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.Snow
 }
 
 func statefulPopupUser(body *StatefulPopupBody) *StatefulPopupBody {
-	body.stateHandlers = handler.NewRepository(body.state)
+	body.stateHandlers = handlerrepo.NewRepository(body.state)
 	body.UserPopupBody = NewUserPopupBody()
 	go body.initialize()
 	return body
@@ -56,7 +56,7 @@ func statefulPopupUser(body *StatefulPopupBody) *StatefulPopupBody {
 
 // must be thread-safe, function is running in a goroutine
 func (s *StatefulPopupBody) initialize() {
-	if !s.User.Valid() {
+	if !s.User.IsValid() {
 		return
 	}
 
@@ -92,7 +92,7 @@ func (s *StatefulPopupBody) initialize() {
 
 	// fetch above presence if error not nil
 	if err != nil {
-		s.state.Members.RequestMember(s.Guild, s.Prefetch.ID)
+		s.state.MemberState.RequestMember(s.Guild, s.Prefetch.ID)
 	}
 
 	// Permit fetching member through the API.
@@ -120,9 +120,9 @@ func (s *StatefulPopupBody) initialize() {
 }
 
 func (s *StatefulPopupBody) injectHandlers() {
-	if s.Guild.Valid() {
+	if s.Guild.IsValid() {
 		s.stateHandlers.AddHandler(func(g *gateway.PresenceUpdateEvent) {
-			if s.Guild.Valid() && g.User.ID == s.User {
+			if s.Guild.IsValid() && g.User.ID == s.User {
 				s.idlemust(func() {
 					s.UserPopupBody.UpdateMemberPart(g.Nick, g.User)
 					s.UserPopupBody.UpdateStatus(g.Status)

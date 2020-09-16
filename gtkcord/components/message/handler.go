@@ -14,13 +14,13 @@ func (m *Messages) injectHandlers() {
 	m.c.AddHandler(m.onMessageDeleteBulk)
 	m.c.AddHandler(m.react)
 	m.c.AddHandler(m.unreact)
-	m.c.Members.OnMember(m.onGuildMember)
+	//m.c.MemberState.OnMember(m.onGuildMember)
 }
 
-func (m *Messages) find(id discord.Snowflake, found func(m *Message)) {
+func (m *Messages) find(id discord.MessageID, found func(m *Message)) {
 	semaphore.IdleMust(func() {
 		for _, message := range m.messages {
-			if message.ID != id {
+			if discord.MessageID(message.ID) != id {
 				continue
 			}
 			found(message)
@@ -81,14 +81,14 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 	})
 }
 
-func (m *Messages) onGuildMember(guildID discord.Snowflake, member discord.Member) {
-	if m.guildID.Get() != guildID {
+func (m *Messages) onGuildMember(guildID discord.GuildID, member discord.Member) {
+	if discord.GuildID(m.guildID.Get()) != guildID {
 		return
 	}
 
 	semaphore.IdleMust(func() {
 		for _, message := range m.messages {
-			if message.AuthorID != member.User.ID {
+			if discord.UserID(message.AuthorID) != member.User.ID {
 				continue
 			}
 			message.updateMember(m.c, guildID, member)

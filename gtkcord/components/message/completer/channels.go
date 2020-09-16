@@ -10,7 +10,7 @@ import (
 
 func (c *State) completeChannels(word string) {
 	guildID := c.container.GetGuildID()
-	if !guildID.Valid() {
+	if !guildID.IsValid() {
 		return
 	}
 

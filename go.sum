@@ -51,6 +51,8 @@ github.com/diamondburned/arikawa v0.9.5 h1:P1ffsp+NHT22wWKYFVC8CdlGRLzPuUV9FcCBK
 github.com/diamondburned/arikawa v0.9.5/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
 github.com/diamondburned/arikawa v0.9.6 h1:6TpfTKa2btoVQGxojNqv8g2YC0tIc/tX5w/OCVZPF5Q=
 github.com/diamondburned/arikawa v0.9.6/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
+github.com/diamondburned/arikawa v1.3.2 h1:ftWgP95IJGXNvCvtO5x0QBYsnFSnIBY0SvDdGoC3ILA=
+github.com/diamondburned/arikawa v1.3.2/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
 github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329 h1:X70pQLoXq/tT8Ew0h4uMj/DlGEGRugAB3CTBAtMhng4=
 github.com/diamondburned/handy v0.0.0-20200415062301-8c5fb8c91329/go.mod h1:tV5WTkJhC1A4PeQtQ2Y3GwB6g2yOxi47VlGmAMdb5Ag=
 github.com/diamondburned/ningen v0.0.0-20200518061450-43b7fbffceef h1:w3iwcE9AVJ6JVEfojk2d7aG2dwuI7PU4S3L8bxDjVKM=
@@ -67,6 +69,8 @@ github.com/diamondburned/ningen v0.1.1-0.20200623233255-4fb5b22b177e h1:T7OVLLtZ
 github.com/diamondburned/ningen v0.1.1-0.20200623233255-4fb5b22b177e/go.mod h1:xW9hpBZsGi8KpAh10TyP+YQlYBo+Xc+2w4TR6N0951A=
 github.com/diamondburned/ningen v0.1.1-0.20200629180226-1c71b160c542 h1:/6q1kwADE0wp4oBDbTHg1f0R4BjP/c34cfh+i8wJHNU=
 github.com/diamondburned/ningen v0.1.1-0.20200629180226-1c71b160c542/go.mod h1:FNezDLQIhoDS+RkXLSQ7dJNrt6BW/nVl1krzDgWMQwg=
+github.com/diamondburned/ningen v0.2.0 h1:QwPfexsEzZpqXvEctrMZcMCt10iqD+x6AIZYQtO15mA=
+github.com/diamondburned/ningen v0.2.0/go.mod h1:TcvJV0bK4bp7t+7m29/Tz9dCqgA0sJBKM/Igt0WkvT4=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
 github.com/dlclark/regexp2 v1.1.6 h1:CqB4MjHw0MFCDj+PHHjiESmHX+N7t0tJzKvC6M97BRg=

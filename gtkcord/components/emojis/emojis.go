@@ -44,7 +44,7 @@ func New(s *ningen.State, click func(string)) *Spawner {
 	}
 }
 
-func (s *Spawner) Spawn(relative gtk.IWidget, currentGuild discord.Snowflake) *Picker {
+func (s *Spawner) Spawn(relative gtk.IWidget, currentGuild discord.GuildID) *Picker {
 	// Destroy the old picker if it's opened:
 	if s.opened != nil {
 		s.opened.Destroy()
@@ -63,7 +63,7 @@ func (s *Spawner) Spawn(relative gtk.IWidget, currentGuild discord.Snowflake) *P
 	return picker
 }
 
-func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Picker {
+func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.GuildID) *Picker {
 	picker := &Picker{}
 	picker.PageView, _ = gtk.StackNew()
 	picker.Popover, _ = gtk.PopoverNew(r)
@@ -103,7 +103,7 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Pick
 	picker.ShowAll()
 
 	// Make all guild pages
-	e, err := s.state.Emoji.Get(currentGuild)
+	e, err := s.state.Emojis(currentGuild)
 	if err != nil {
 		log.Errorln("Failed to get emojis:", err)
 

@@ -133,7 +133,7 @@ func newNormalEmbedUnsafe(
 		}
 	}
 
-	if embed.Footer != nil || embed.Timestamp.Valid() {
+	if embed.Footer != nil || embed.Timestamp.IsValid() {
 		footer, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 		embedSetMargin(footer)
 
@@ -158,7 +158,7 @@ func newNormalEmbedUnsafe(
 			}
 		}
 
-		if embed.Timestamp.Valid() {
+		if embed.Timestamp.IsValid() {
 			time := humanize.TimeAgo(embed.Timestamp.Time())
 
 			var text, _ = gtk.LabelNew(time)

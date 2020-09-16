@@ -9,7 +9,6 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/gtkcord3/internal/moreatomic"
-	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -45,19 +44,19 @@ func newMainPage(p *Picker, click func(string)) MainPage {
 	return page
 }
 
-func (page *MainPage) init(guildEmojis []emoji.Guild) {
+func (page *MainPage) init(guildEmojis []discord.Emoji) {
 	page.Sections = make([]*Section, 0, len(guildEmojis))
 
 	// Adding 100 guilds right now, since it's not that expensive.
 	for i, group := range guildEmojis {
 		s := Section{
-			Emojis: guildEmojis[i].Emojis,
+			Emojis: guildEmojis,
 		}
 
 		// Copy the integer to use with the click callback.
 		guildN := i
 
-		header := newHeader(group.Name, group.IconURL())
+		header := newHeader(group.Name, group.EmojiURL())
 
 		s.Body = newFlowBox()
 		s.RevealerBox = newRevealerBox(header, s.Body, func() {

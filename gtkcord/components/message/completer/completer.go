@@ -61,9 +61,9 @@ type Entry struct {
 }
 
 type MessageContainer interface {
-	GetChannelID() discord.Snowflake
-	GetGuildID() discord.Snowflake
-	GetRecentAuthorsUnsafe(limit int) []discord.Snowflake
+	GetChannelID() discord.ChannelID
+	GetGuildID() discord.GuildID
+	GetRecentAuthorsUnsafe(limit int) []discord.UserID
 }
 
 func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *State {

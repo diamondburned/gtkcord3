@@ -21,8 +21,8 @@ type Container struct {
 	*gtk.FlowBox
 	Reactions map[api.Emoji]*Reaction
 
-	MessageID discord.Snowflake
-	ChannelID discord.Snowflake
+	MessageID discord.MessageID
+	ChannelID discord.ChannelID
 
 	state *ningen.State
 }
@@ -58,7 +58,7 @@ func (c *Container) SetState(s *ningen.State) {
 	c.state = s
 }
 
-func (c *Container) Search(chID, msgID discord.Snowflake, emoji api.Emoji) *Reaction {
+func (c *Container) Search(chID discord.ChannelID, msgID discord.MessageID, emoji api.Emoji) *Reaction {
 	if r, ok := c.Reactions[emoji]; ok {
 		return r
 	}
@@ -111,7 +111,7 @@ func (c *Container) removeAll(emoji *discord.Emoji) {
 }
 
 // add or remove? dunno, but this is short code, i like. 0: add, 1: remove.
-func (c *Container) reactSomething(ch, msg discord.Snowflake, emoji discord.Emoji, code int) {
+func (c *Container) reactSomething(ch discord.ChannelID, msg discord.MessageID, emoji discord.Emoji, code int) {
 	if c.ChannelID != ch || c.MessageID != msg || c.state == nil {
 		return
 	}
@@ -173,8 +173,7 @@ func (c *Container) react(r *Reaction) {
 		// Worked.
 		return
 	}
-
-	// Unactivate the button, because there won't be an event.
+// Unactivate the button, because there won't be an event.
 	semaphore.Async(r.Button.SetActive, false)
 }
 
@@ -218,7 +217,7 @@ func newReaction(emoji discord.Emoji, count int, me bool) *Reaction {
 	reaction := &Reaction{FlowBoxChild: f, Button: b, String: emoji.APIString()}
 
 	// If the emoji is a custom one:
-	if emoji.ID.Valid() {
+	if emoji.ID.IsValid() {
 		url := md.EmojiURL(emoji.ID.String(), emoji.Animated)
 
 		i, _ := gtk.ImageNew()

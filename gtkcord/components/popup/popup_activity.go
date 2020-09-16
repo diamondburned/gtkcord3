@@ -127,7 +127,7 @@ func (a *UserPopupActivity) header(name string) {
 	a.Header.SetMarkup(`<span size="smaller" weight="bold">` + name + `</span>`)
 }
 
-func (a *UserPopupActivity) image(id discord.Snowflake, assets *discord.ActivityAssets) {
+func (a *UserPopupActivity) image(id discord.AppID, assets *discord.ActivityAssets) {
 	var asset, text string
 	if assets != nil {
 		asset = assets.LargeImage

@@ -60,7 +60,7 @@ func (b *ChMenuButton) Cleanup() {
 	b.SetRevealChild(false)
 }
 
-func NewChMenuBody(p *gtk.Popover, s *ningen.State, gID, chID discord.Snowflake) *gtk.Box {
+func NewChMenuBody(p *gtk.Popover, s *ningen.State, gID discord.GuildID, chID discord.ChannelID) *gtk.Box {
 	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	b.Show()
 	gtkutils.Margin(b, 10)

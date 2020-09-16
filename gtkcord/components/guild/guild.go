@@ -32,7 +32,7 @@ type Guild struct {
 
 	BannerURL string
 
-	ID   discord.Snowflake
+	ID   discord.GuildID
 	Name string
 
 	// busy      deadlock.Mutex
@@ -42,7 +42,7 @@ type Guild struct {
 
 type unread struct {
 	mut deadlock.Mutex
-	chs map[discord.Snowflake]bool
+	chs map[discord.ChannelID]bool
 }
 
 func marginate(r *gtk.ListBoxRow, i *gtk.Image) {
@@ -56,7 +56,7 @@ func marginate(r *gtk.ListBoxRow, i *gtk.Image) {
 
 func newGuildRow(
 	s *ningen.State,
-	guildID discord.Snowflake,
+	guildID discord.GuildID,
 	g *discord.Guild,
 	parent *GuildFolder) (*Guild, error) {
 
@@ -102,7 +102,7 @@ func newGuildRow(
 		BannerURL: g.BannerURL(),
 
 		unread: unread{
-			chs: make(map[discord.Snowflake]bool),
+			chs: make(map[discord.ChannelID]bool),
 		},
 	}
 
@@ -120,7 +120,7 @@ func newGuildRow(
 		// Update the guild icon in the background.
 		guild.UpdateImage()
 
-		if s.Muted.Guild(guildID, false) {
+		if s.MutedState.Guild(guildID, false) {
 			guild.muted = true
 			return
 		}
@@ -165,7 +165,7 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 	guild.unread.mut.Lock()
 	defer guild.unread.mut.Unlock()
 
-	guild.unread.chs = map[discord.Snowflake]bool{}
+	guild.unread.chs = map[discord.ChannelID]bool{}
 	var found *gateway.ReadState
 
 	for _, ch := range channels {
@@ -174,11 +174,11 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 			continue
 		}
 
-		if s.Muted.Category(ch.ID) || s.Muted.Channel(ch.ID) {
+		if s.MutedState.Category(ch.ID) || s.MutedState.Channel(ch.ID) {
 			continue
 		}
 
-		if rs := s.Read.FindLast(ch.ID); rs != nil {
+		if rs := s.ReadState.FindLast(ch.ID); rs != nil {
 			if ch.LastMessageID == rs.LastMessageID {
 				continue
 			}

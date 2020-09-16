@@ -37,7 +37,7 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 	if ch, _ := a.State.Store.Channel(create.ChannelID); ch != nil && ch.Name != "" {
 		var suffix = " (#" + ch.Name + ")"
 
-		if create.GuildID.Valid() {
+		if create.GuildID.IsValid() {
 			if g, _ := a.State.Store.Guild(create.GuildID); g != nil {
 				suffix = " (#" + ch.Name + ", " + g.Name + ")"
 			}
@@ -56,7 +56,7 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 				ID:    "default",
 				Label: "Open",
 				Callback: func() {
-					a.actionLoadChannel(nil, int64(create.ChannelID))
+					a.actionLoadChannel(nil, uint64(create.ChannelID))
 				},
 			},
 		},

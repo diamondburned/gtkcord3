@@ -34,7 +34,7 @@ func (c *State) completeMentions(word string) {
 	}
 
 	guildID := c.container.GetGuildID()
-	if !guildID.Valid() {
+	if !guildID.IsValid() {
 		c.completeMentionsDM(word)
 		return
 	}
@@ -57,7 +57,7 @@ func (c *State) completeMentions(word string) {
 
 	if len(c.members) == 0 {
 		// Request the member in a background goroutine
-		c.state.Members.SearchMember(guildID, word)
+		c.state.MemberState.SearchMember(guildID, word)
 		return
 	}
 

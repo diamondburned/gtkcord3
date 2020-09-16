@@ -19,7 +19,7 @@ type Container struct {
 	Members *Members
 }
 
-func NewContainer(state *ningen.State, gID, chID discord.Snowflake) (*Container, error) {
+func NewContainer(state *ningen.State, gID discord.GuildID, chID discord.ChannelID) (*Container, error) {
 	guild, err := state.Store.Guild(gID)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get guild")
