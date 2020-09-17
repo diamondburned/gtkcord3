@@ -103,7 +103,7 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.GuildID) *Picker
 	picker.ShowAll()
 
 	// Make all guild pages
-	e, err := s.state.Emojis(currentGuild)
+	e, err := s.state.EmojiState.Get(currentGuild)
 	if err != nil {
 		log.Errorln("Failed to get emojis:", err)
 
