@@ -3,13 +3,12 @@ package emojis
 import (
 	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
 )
 
 // Size is the emoji size.
@@ -44,7 +43,7 @@ func New(s *ningen.State, click func(string)) *Spawner {
 	}
 }
 
-func (s *Spawner) Spawn(relative gtk.IWidget, currentGuild discord.Snowflake) *Picker {
+func (s *Spawner) Spawn(relative gtk.Widgetter, currentGuild discord.GuildID) *Picker {
 	// Destroy the old picker if it's opened:
 	if s.opened != nil {
 		s.opened.Destroy()
@@ -63,35 +62,32 @@ func (s *Spawner) Spawn(relative gtk.IWidget, currentGuild discord.Snowflake) *P
 	return picker
 }
 
-func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Picker {
+func (s *Spawner) newPicker(r gtk.Widgetter, currentGuild discord.GuildID) *Picker {
 	picker := &Picker{}
-	picker.PageView, _ = gtk.StackNew()
-	picker.Popover, _ = gtk.PopoverNew(r)
-	picker.Main, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	picker.PageView = gtk.NewStack()
+	picker.Popover = gtk.NewPopover(r)
+	picker.Main = gtk.NewBox(gtk.OrientationVertical, 0)
 
-	picker.search, _ = gtk.EntryNew()
-	picker.Search = handy.SearchBarNew()
+	picker.search = gtk.NewEntry()
+	picker.Search = handy.NewSearchBar()
 
-	gtkutils.InjectCSSUnsafe(picker.Popover, "emojiview", "")
+	gtkutils.InjectCSS(picker.Popover, "emojiview", "")
 
 	picker.search.Connect("changed", picker.entryChanged)
 	picker.Popover.Connect("closed", picker.Destroy)
 
-	picker.PageView.SetTransitionType(gtk.STACK_TRANSITION_TYPE_CROSSFADE)
+	picker.PageView.SetTransitionType(gtk.StackTransitionTypeCrossfade)
 	picker.PageView.SetTransitionDuration(75)
 
 	picker.MainPage = newMainPage(picker, s.click)
 	picker.SearchPage = newSearchPage(picker)
-	picker.Error, _ = gtk.LabelNew("")
+	picker.Error = gtk.NewLabel("")
 
 	picker.Main.Add(picker.Search)
 	picker.Main.Add(picker.PageView)
 	picker.Main.Add(picker.Error)
-
 	picker.Popover.Add(picker.Main)
-	picker.Popover.Connect("key-press-event", func(p *gtk.Popover, ev *gdk.Event) bool {
-		return picker.Search.HandleEvent(ev)
-	})
+
 	picker.Search.SetSearchMode(true)
 	picker.Search.Add(picker.search)
 
@@ -103,7 +99,7 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Pick
 	picker.ShowAll()
 
 	// Make all guild pages
-	e, err := s.state.Emoji.Get(currentGuild)
+	e, err := s.state.EmojiState.Get(currentGuild)
 	if err != nil {
 		log.Errorln("Failed to get emojis:", err)
 
@@ -122,7 +118,7 @@ func (s *Spawner) newPicker(r gtk.IWidget, currentGuild discord.Snowflake) *Pick
 }
 
 func (p *Picker) entryChanged(e *gtk.Entry) {
-	text, _ := e.GetText()
+	text := e.Text()
 	if text == "" {
 		p.PageView.SetVisibleChild(p.MainPage)
 		return

@@ -3,10 +3,10 @@ package main
 import (
 	"log"
 
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/gotk3/gotk3/gtk"
+	
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
 var (
@@ -16,14 +16,14 @@ var (
 
 func Ready(a *gtkcord.Application) {
 	a.State.AddHandler(onTypingStart)
-	semaphore.IdleMust(func() {
+	BAD_SEMAPHORE_CALL(func() {
 		a.Channels.Main.Add(pluginButton())
 	})
 }
 
 func pluginButton() *gtk.Button {
 	// Gtk errors can be ignored, things will panic on their own anyway.
-	pb, _ := gtk.ButtonNew()
+	pb := gtk.NewButton()
 	pb.SetLabel("BOTTOM TEXT")
 	pb.SetSizeRequest(128, 128)
 	pb.Show()

@@ -3,7 +3,7 @@ package emojis
 import (
 	"strings"
 
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
 type SearchPage struct {
@@ -17,13 +17,13 @@ type SearchPage struct {
 
 func newSearchPage(p *Picker) SearchPage {
 	search := SearchPage{}
-	search.ScrolledWindow, _ = gtk.ScrolledWindowNew(nil, nil)
+	search.ScrolledWindow = gtk.NewScrolledWindow(nil, nil)
 	search.Flow = newFlowBox()
 
-	search.ScrolledWindow.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-	search.ScrolledWindow.SetProperty("propagate-natural-height", true)
-	search.ScrolledWindow.SetProperty("min-content-height", 400)
-	search.ScrolledWindow.SetProperty("max-content-height", 400)
+	search.ScrolledWindow.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
+	search.ScrolledWindow.SetPropagateNaturalHeight(true)
+	search.ScrolledWindow.SetMinContentHeight(400)
+	search.ScrolledWindow.SetMaxContentHeight(400)
 	search.ScrolledWindow.Add(search.Flow)
 
 	return search
@@ -37,7 +37,7 @@ func (s *SearchPage) search(text string) {
 	s.visible = s.visible[:0]
 
 	for i, e := range s.emojis {
-		if n, _ := e.GetName(); strings.Contains(n, text) {
+		if strings.Contains(e.Name(), text) {
 			s.Add(e)
 			s.visible = append(s.visible, i)
 		}

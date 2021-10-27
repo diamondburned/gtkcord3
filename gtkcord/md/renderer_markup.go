@@ -4,7 +4,7 @@ import (
 	"html"
 	"io"
 
-	"github.com/diamondburned/ningen/md"
+	"github.com/diamondburned/ningen/v2/md"
 	"github.com/yuin/goldmark/ast"
 )
 
@@ -168,5 +168,5 @@ func (r *MarkupRenderer) closeAttr(w io.Writer) {
 }
 
 func writeEscape(w io.Writer, unescaped []byte) {
-	w.Write([]byte(html.EscapeString(string(unescaped))))
+	io.WriteString(w, html.EscapeString(string(unescaped)))
 }

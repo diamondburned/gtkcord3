@@ -1,6 +1,6 @@
 package variables
 
-import "github.com/gotk3/gotk3/gtk"
+import "github.com/diamondburned/gotk4/pkg/gtk/v3"
 
 var (
 	EmbedAvatarSize = 24
@@ -14,5 +14,5 @@ var (
 	// used as fallback, the settings one overrides this
 	MaxMessageWidth = 750
 
-	InputIconSize = gtk.ICON_SIZE_LARGE_TOOLBAR
+	InputIconSize = gtk.IconSizeLargeToolbar
 )

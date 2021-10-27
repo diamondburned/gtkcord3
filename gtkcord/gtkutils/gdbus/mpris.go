@@ -1,25 +1,30 @@
 package gdbus
 
-// #include <glib-2.0/glib.h>
-import "C"
-
 import (
-	"log"
+	"time"
 
-	"github.com/gotk3/gotk3/glib"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
+// MPRISWatcher wraps around a GIO DBus Connection to listen to the system's
+// MPRIS events.
 type MPRISWatcher struct {
-	*Connection
+	*gio.DBusConnection
 
+	id      uint
 	enabled bool
 
 	// Last states
 	metadata Metadata
 	playing  bool
+	changed  bool
 
-	OnMetadata       func(m Metadata, playing bool)
-	OnPlaybackStatus func(m Metadata, playing bool)
+	debounce     time.Time
+	bounceHandle glib.SourceHandle
+
+	OnPlayback func(m Metadata, playing bool)
 }
 
 // Metadata maps some fields from
@@ -30,43 +35,49 @@ type Metadata struct {
 	Album   string
 }
 
-func NewMPRISWatcher(c *Connection) *MPRISWatcher {
+// NewMPRISWatcher creates a new MPRIS watcher instance.
+func NewMPRISWatcher(c *gio.DBusConnection) *MPRISWatcher {
+	if c == nil {
+		return &MPRISWatcher{}
+	}
+
 	w := &MPRISWatcher{
-		Connection: c,
-		enabled:    true,
-		OnMetadata: func(m Metadata, playing bool) {
-			log.Println("MPRIS update:", m)
-		},
-		OnPlaybackStatus: func(m Metadata, playing bool) {
+		DBusConnection: c,
+		enabled:        true,
+		OnPlayback: func(m Metadata, playing bool) {
 			log.Println("Playing:", playing)
 		},
 	}
 
-	c.SignalSubscribe(
+	w.id = c.SignalSubscribe(
 		"", "org.freedesktop.DBus.Properties",
 		"PropertiesChanged", "/org/mpris/MediaPlayer2", "",
-		DBUS_SIGNAL_FLAGS_NONE,
-		func(_ *Connection, _, _, _, _ string, vparams *glib.Variant) {
-			if !w.enabled {
+		gio.DBusSignalFlagsNone,
+		func(_ *gio.DBusConnection, _, _, _, _ string, params *glib.Variant) {
+			// Brief checks.
+			if params.NChildren() < 2 {
 				return
 			}
 
-			params := VariantTuple(vparams, 2)
-			if params[0].GetString() != "org.mpris.MediaPlayer2.Player" {
+			k := params.ChildValue(0)
+			v := params.ChildValue(1)
+			if k == nil || v == nil {
 				return
 			}
 
-			if params[1] == nil {
+			if k.String() != "org.mpris.MediaPlayer2.Player" {
 				return
 			}
 
-			arrayIterKeyVariant(variantNative(params[1]), func(k string, v *C.GVariant) {
-				switch k {
-				case "PlaybackStatus":
-					w.onPlaybackStatusChange(v)
-				case "Metadata":
-					w.onMetadataChange(v)
+			glib.IdleAdd(func() {
+				if !w.IsEnabled() {
+					return
 				}
+				readDict(v, map[string]dictEntry{
+					"PlaybackStatus": {"s", w.onPlaybackStatusChange},
+					"Metadata":       {"", w.onMetadataChange},
+				})
+				w.update()
 			})
 		},
 	)
@@ -74,57 +85,90 @@ func NewMPRISWatcher(c *Connection) *MPRISWatcher {
 	return w
 }
 
+// Close stops the watcher.
+func (w *MPRISWatcher) Close() {
+	w.SignalUnsubscribe(w.id)
+	w.id = 0
+}
+
 func (w *MPRISWatcher) SetEnabled(enabled bool) {
+	if w.DBusConnection == nil {
+		w.enabled = false
+		return
+	}
+
 	w.enabled = enabled
 
 	// Force pause if we're disabling:
-	if !enabled && w.playing {
+	if !w.IsEnabled() && w.playing {
 		w.playing = false
-		w.OnPlaybackStatus(w.metadata, false)
+		w.OnPlayback(w.metadata, false)
 	}
 }
 
 func (w *MPRISWatcher) IsEnabled() bool {
-	return w.enabled
+	return w.enabled && w.id > 0
 }
 
-func (w *MPRISWatcher) onPlaybackStatusChange(vstring *C.GVariant) {
-	playing := variantString(vstring) == "Playing"
+func (w *MPRISWatcher) onPlaybackStatusChange(v *glib.Variant) {
+	playing := v.String() == "Playing"
 
 	w.playing = playing
+	w.changed = true
 
 	// Don't update a zero-value
 	if w.metadata.Title == "" {
 		return
 	}
-
-	go w.OnPlaybackStatus(w.metadata, playing)
 }
 
-func (w *MPRISWatcher) onMetadataChange(array *C.GVariant) {
+func (w *MPRISWatcher) onMetadataChange(dict *glib.Variant) {
 	// Clear
 	w.metadata.Title = ""
 	w.metadata.Album = ""
 	w.metadata.Artists = w.metadata.Artists[:0]
 
 	w.playing = true
+	w.changed = true
 
-	// array is a slice of dictionaries.
+	readDict(dict, map[string]dictEntry{
+		"xesam:title": {"s", func(v *glib.Variant) { w.metadata.Title = v.String() }},
+		"xesam:album": {"s", func(v *glib.Variant) { w.metadata.Album = v.String() }},
+		"xesam:artist": {"", func(v *glib.Variant) {
+			switch v.TypeString() {
+			case "s":
+				w.metadata.Artists = []string{v.String()}
+			case "as":
+				w.metadata.Artists = v.Strv()
+			}
+		}},
+	})
+}
 
-	// iterate:
-	arrayIterKeyVariant(array, func(k string, v *C.GVariant) {
-		switch k {
-		case "xesam:title":
-			w.metadata.Title = variantString(v)
-		case "xesam:album":
-			w.metadata.Album = variantString(v)
-		case "xesam:artist":
-			arrayIter(v, func(v *C.GVariant) {
-				// We can probably get away with letting Go grow the slice:
-				w.metadata.Artists = append(w.metadata.Artists, variantString(v))
+const debounce = 3 * time.Second
+
+func (w *MPRISWatcher) update() {
+	now := time.Now()
+
+	if t := w.debounce.Add(debounce); t.After(now) {
+		// Too fast. Check if we've already debounced. If not, queue.
+		if w.bounceHandle == 0 {
+			secs := uint(t.Sub(now).Round(time.Second).Seconds())
+
+			w.bounceHandle = glib.TimeoutSecondsAdd(secs, func() {
+				w.mustUpdate()
+				w.debounce = time.Now()
+				w.bounceHandle = 0
 			})
 		}
-	})
 
-	go w.OnMetadata(w.metadata, w.playing)
+		return
+	}
+
+	w.mustUpdate()
+	w.debounce = now
+}
+
+func (w *MPRISWatcher) mustUpdate() {
+	w.OnPlayback(w.metadata, w.playing)
 }

@@ -4,21 +4,22 @@ import (
 	"fmt"
 	"html"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
 )
 
 const AvatarSize = 32
-const AvatarSizeGtk = gtk.ICON_SIZE_DND
+const AvatarSizeGtk = gtk.IconSizeDND
 
 type Container struct {
 	*gtk.Box
 
-	Avatar *gtk.Image
+	Avatar *roundimage.Image
 	AStyle *gtk.StyleContext
 
 	// Right side Box is not here
@@ -31,32 +32,32 @@ type Container struct {
 	lastStatusClass string
 }
 
-// NOT thread-safe
 func New() *Container {
-	labelBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	labelBox := gtk.NewBox(gtk.OrientationVertical, 0)
 	labelBox.SetMarginStart(8)
-	labelBox.SetVAlign(gtk.ALIGN_CENTER)
+	labelBox.SetVAlign(gtk.AlignCenter)
 	labelBox.Show()
 
-	l, _ := gtk.LabelNew("")
+	l := gtk.NewLabel("")
 	l.SetLineWrap(false)
-	l.SetEllipsize(pango.ELLIPSIZE_END)
+	l.SetEllipsize(pango.EllipsizeEnd)
 	l.Show()
 	l.SetXAlign(0.0)
-	l.SetHAlign(gtk.ALIGN_START)
+	l.SetHAlign(gtk.AlignStart)
 	labelBox.Add(l)
 
-	a, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_DND)
-	a.Show()
-	a.SetVAlign(gtk.ALIGN_CENTER)
-	a.SetHAlign(gtk.ALIGN_CENTER)
-	gtkutils.ImageSetIcon(a, "avatar-default-symbolic", AvatarSize)
+	a := roundimage.NewImage(0)
+	a.SetFromIconName("avatar-default-symbolic", 0)
+	a.SetPixelSize(AvatarSize)
+	a.SetVAlign(gtk.AlignCenter)
+	a.SetHAlign(gtk.AlignCenter)
 	gtkutils.Margin4(a, 2, 2, 8, 0)
+	a.Show()
 
-	s, _ := a.GetStyleContext()
+	s := a.StyleContext()
 	s.AddClass("status")
 
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	b.Show()
 	b.Add(a)
 	b.Add(labelBox)
@@ -73,7 +74,7 @@ func New() *Container {
 }
 
 func (c *Container) setStatusClass(class string) {
-	gtkutils.DiffClassUnsafe(&c.lastStatusClass, class, c.AStyle)
+	gtkutils.DiffClass(&c.lastStatusClass, class, c.AStyle)
 }
 
 func (c *Container) UpdateActivity(ac *discord.Activity) {
@@ -88,11 +89,11 @@ func (c *Container) UpdateActivity(ac *discord.Activity) {
 	}
 
 	if c.Activity == nil {
-		lAct, _ := gtk.LabelNew("")
+		lAct := gtk.NewLabel("")
 		lAct.Show()
 		lAct.SetUseMarkup(true)
-		lAct.SetHAlign(gtk.ALIGN_START)
-		lAct.SetEllipsize(pango.ELLIPSIZE_END)
+		lAct.SetHAlign(gtk.AlignStart)
+		lAct.SetEllipsize(pango.EllipsizeEnd)
 
 		c.Activity = lAct
 		c.LabelBox.Add(lAct)
@@ -109,22 +110,29 @@ func (c *Container) UpdateActivity(ac *discord.Activity) {
 	case discord.StreamingActivity:
 		game = "Streaming " + ac.Details
 	case discord.CustomActivity:
-		game = ningen.EmojiString(ac.Emoji) + " " + ac.State
+		switch {
+		case ac.Emoji == nil:
+			game = ac.State
+		case ac.Emoji.ID.IsValid():
+			game = ":" + ac.Emoji.Name + ": " + ac.State
+		default:
+			game = ac.Emoji.Name + " " + ac.State
+		}
 	}
 
 	c.Activity.SetMarkup(`<span size="smaller">` + html.EscapeString(game) + "</span>")
 	c.Activity.SetTooltipText(game)
 }
 
-func (c *Container) UpdateStatus(status discord.Status) {
+func (c *Container) UpdateStatus(status gateway.Status) {
 	switch status {
-	case discord.OnlineStatus:
+	case gateway.OnlineStatus:
 		c.setStatusClass("online")
-	case discord.DoNotDisturbStatus:
+	case gateway.DoNotDisturbStatus:
 		c.setStatusClass("busy")
-	case discord.IdleStatus:
+	case gateway.IdleStatus:
 		c.setStatusClass("idle")
-	case discord.InvisibleStatus, discord.OfflineStatus, discord.UnknownStatus:
+	case gateway.InvisibleStatus, gateway.OfflineStatus, gateway.UnknownStatus:
 		c.setStatusClass("offline")
 	}
 }
@@ -146,7 +154,7 @@ func (c *Container) UpdateMember(m discord.Member, guild discord.Guild) {
 
 	// Escape name
 	name = html.EscapeString(name)
-	var colored = name
+	colored := name
 
 	// Check role color
 	if color := discord.MemberColor(guild, m); color > 0 {
@@ -158,48 +166,6 @@ func (c *Container) UpdateMember(m discord.Member, guild discord.Guild) {
 	c.Name.SetTooltipText(name)
 }
 
-func (c *Container) UpdatePresence(m discord.Presence, guild discord.Guild) {
-	var name = m.User.Username
-	if m.Nick != "" {
-		name = m.Nick
-	}
-
-	c.NameValue = name
-
-	// Escape name
-	name = html.EscapeString(name)
-	var colored = name
-
-	// Check role color
-	if color := PresenceColor(guild, m); color > 0 {
-		colored = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
-	}
-
-	// Set name
-	c.Name.SetMarkup(colored)
-	c.Name.SetTooltipText(name)
-}
-
-func (c *Container) UpdateAvatar(url string) {
-	cache.AsyncFetchUnsafe(url+"?size=64", c.Avatar, AvatarSize, AvatarSize, cache.Round)
-}
-
-func PresenceColor(guild discord.Guild, member discord.Presence) discord.Color {
-	var c = discord.DefaultMemberColor
-	var pos int
-
-	for _, r := range guild.Roles {
-		for _, mr := range member.RoleIDs {
-			if mr != r.ID {
-				continue
-			}
-
-			if r.Color > 0 && r.Position > pos {
-				c = r.Color
-				pos = r.Position
-			}
-		}
-	}
-
-	return c
+func (c *Container) UpdateAvatar(url discord.URL) {
+	cache.SetImageURLScaled(c.Avatar, url+"?size=64", AvatarSize, AvatarSize)
 }

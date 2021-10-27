@@ -1,23 +1,19 @@
 package extras
 
 import (
-	"fmt"
 	"path"
 	"strings"
 
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
+
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
 type PreviewDialog struct {
-	*handy.Dialog
+	*gtk.Dialog
 	Content *gtk.Box
 
 	Image *gtk.Image
@@ -35,19 +31,19 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	// Main dialog
 
-	w := window.Window.GetAllocatedWidth()
-	h := window.Window.GetAllocatedHeight()
+	w := window.Window.AllocatedWidth()
+	h := window.Window.AllocatedHeight()
 	w = int(float64(w) * 0.85)
 	h = int(float64(h) * 0.8)
 
-	d := handy.DialogNew(window.Window)
-	if !d.GetNarrow() {
-		d.SetDefaultSize(w, h)
-	}
+	d := gtk.NewDialog()
+	d.SetTransientFor(&window.Window.Window)
+	d.SetDefaultSize(w, h)
 
 	// Hack for close button
+	// ??? unsure where this is triggered
 	d.Connect("response", func(_ *glib.Object, resp gtk.ResponseType) {
-		if resp == gtk.RESPONSE_DELETE_EVENT {
+		if resp == gtk.ResponseDeleteEvent {
 			d.Hide()
 			d.Destroy()
 		}
@@ -55,16 +51,16 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	// Header
 
-	header, _ := gtk.HeaderBarNew()
+	header := gtk.NewHeaderBar()
 	header.SetShowCloseButton(true)
 
-	bOriginal, _ := gtk.ButtonNewFromIconName(
+	bOriginal := gtk.NewButtonFromIconName(
 		"image-x-generic-symbolic",
-		gtk.ICON_SIZE_LARGE_TOOLBAR,
+		int(gtk.IconSizeLargeToolbar),
 	)
 	bOriginal.SetTooltipText("Open Original")
 	bOriginal.SetMarginStart(10)
-	bOriginal.SetHAlign(gtk.ALIGN_START)
+	bOriginal.SetHAlign(gtk.AlignStart)
 
 	header.PackStart(bOriginal)
 	header.SetTitle(path.Base(imageURL))
@@ -73,16 +69,13 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 
 	// Content box: image
 
-	i, err := gtk.ImageNewFromIconName("image-loading", gtk.ICON_SIZE_DIALOG)
-	if err != nil {
-		log.Panicln("Icon image-loading not found:", err)
-	}
+	i := gtk.NewImageFromIconName("image-loading", int(gtk.IconSizeDialog))
 
-	s, _ := gtk.ScrolledWindowNew(nil, nil)
+	s := gtk.NewScrolledWindow(nil, nil)
 	s.Add(i)
 	s.SetVExpand(true)
 
-	c, _ := d.GetContentArea()
+	c := d.ContentArea()
 	d.Remove(c)
 	d.Add(s)
 	d.ShowAll()
@@ -108,26 +101,10 @@ func SpawnPreviewDialog(proxy, imageURL string) {
 	// w = w * 8 / 10
 	h = h * 9 / 10
 
-	go pd.Fetch(w, h)
+	pd.Fetch(w, h)
 	d.Run()
 }
 
 func (pd *PreviewDialog) Fetch(w, h int) {
-	err := cache.SetImageAsync(pd.Proxy, pd.Image, w, h)
-	if err == nil {
-		return
-	}
-
-	err = errors.Wrap(err, "Failed to download the image")
-	log.Errorln(err)
-
-	errText := fmt.Sprintf(`<span color="red">%s</span>`, err)
-
-	semaphore.IdleMust(func() {
-		l, _ := gtk.LabelNew("")
-		l.SetMarkup(errText)
-
-		pd.Content.Remove(pd.Image)
-		pd.Content.Add(l)
-	})
+	cache.SetImageStreamed(pd.Image, pd.Proxy, w, h)
 }

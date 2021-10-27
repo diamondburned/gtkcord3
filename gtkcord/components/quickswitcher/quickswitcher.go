@@ -4,15 +4,16 @@ import (
 	"html"
 	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
+	"github.com/diamondburned/ningen/v2"
 )
 
 const IconSize = 24
@@ -21,11 +22,10 @@ const IconSize = 24
 const MaxEntries = 80
 
 type Spawner struct {
-	State *ningen.State
-
-	OnGuild   func(discord.Snowflake)
-	OnChannel func(_, _ discord.Snowflake)
-	OnFriend  func(discord.Snowflake)
+	State     *ningen.State
+	OnGuild   func(discord.GuildID)
+	OnChannel func(discord.ChannelID, discord.GuildID)
+	OnFriend  func(discord.UserID)
 }
 
 func (s Spawner) Spawn() {
@@ -47,13 +47,12 @@ type Dialog struct {
 	state *ningen.State
 
 	// callback functions
-	OnGuild   func(guildid discord.Snowflake)
-	OnChannel func(channel, guild discord.Snowflake)
-	OnFriend  func(userid discord.Snowflake)
+	OnGuild   func(discord.GuildID)
+	OnChannel func(discord.ChannelID, discord.GuildID)
+	OnFriend  func(discord.UserID)
 
 	// reusable slices
 	list []Entry
-	done chan struct{}
 
 	visible []int // key to rows
 	rows    map[int]*Row
@@ -79,32 +78,32 @@ type Entry struct {
 	longString    string
 
 	// enum
-	GuildID   discord.Snowflake
-	ChannelID discord.Snowflake // could be DM, visible as one
-	FriendID  discord.Snowflake // only called if needed a new channel
+	GuildID   discord.GuildID
+	ChannelID discord.ChannelID // could be DM, visible as one
+	FriendID  discord.UserID    // only called if needed a new channel
 }
 
 func NewDialog(s *ningen.State) *Dialog {
-	d, _ := gtk.DialogNew()
+	d := gtk.NewDialog()
 	d.SetModal(true)
-	d.SetTransientFor(window.Window)
+	d.SetTransientFor(&window.Window.Window)
 	d.SetDefaultSize(500, 400)
 
-	gtkutils.InjectCSSUnsafe(d, "quickswitcher", "")
+	gtkutils.InjectCSS(d, "quickswitcher", "")
 
 	d.Connect("response", func(_ *gtk.Dialog, resp gtk.ResponseType) {
-		if resp == gtk.RESPONSE_DELETE_EVENT {
+		if resp == gtk.ResponseDeleteEvent {
 			d.Destroy()
 		}
 	})
 
 	// Header
 
-	header, _ := gtk.HeaderBarNew()
+	header := gtk.NewHeaderBar()
 	header.Show()
 	header.SetShowCloseButton(true)
 
-	entry, _ := gtk.EntryNew()
+	entry := gtk.NewEntry()
 	entry.Show()
 	entry.GrabFocus()
 	entry.SetPlaceholderText("Search anything")
@@ -117,19 +116,18 @@ func NewDialog(s *ningen.State) *Dialog {
 
 	// Body
 
-	sw, _ := gtk.ScrolledWindowNew(nil, nil)
+	sw := gtk.NewScrolledWindow(nil, nil)
 	sw.Show()
 	sw.SetSizeRequest(400, -1)
-	sw.SetHAlign(gtk.ALIGN_CENTER)
+	sw.SetHAlign(gtk.AlignCenter)
 	sw.SetVExpand(true)
 
-	list, _ := gtk.ListBoxNew()
+	list := gtk.NewListBox()
 	list.Show()
 	list.SetVExpand(true)
 	sw.Add(list)
 
-	c, _ := d.GetContentArea()
-	d.Remove(c)
+	d.Remove(d.ContentArea())
 	d.Add(sw)
 
 	dialog := &Dialog{
@@ -137,22 +135,20 @@ func NewDialog(s *ningen.State) *Dialog {
 		Entry:  entry,
 		List:   list,
 		state:  s,
-		done:   make(chan struct{}),
 	}
 
 	list.Connect("row-activated", dialog.onActivate)
-	list.SetSelectionMode(gtk.SELECTION_SINGLE)
+	list.SetSelectionMode(gtk.SelectionSingle)
 
 	entry.Connect("key-press-event", func(e *gtk.Entry, ev *gdk.Event) bool {
-		evKey := gdk.EventKeyNewFromEvent(ev)
-		if evKey.Type() != gdk.EVENT_KEY_PRESS {
+		if ev.AsType() != gdk.KeyPressType {
 			return false
 		}
 		if len(dialog.list) == 0 {
 			return false
 		}
 
-		switch evKey.KeyVal() {
+		switch ev.AsKey().Keyval() {
 		case gdk.KEY_Up:
 			dialog.Up()
 			return true
@@ -164,23 +160,14 @@ func NewDialog(s *ningen.State) *Dialog {
 		return false
 	})
 	entry.Connect("activate", func() {
-		list.GetSelectedRow().Activate()
+		list.SelectedRow().Activate()
 	})
 	entry.Connect("changed", func() {
-		t, err := entry.GetText()
-		if err != nil {
-			log.Errorln("Failed to get text from quickswitcher:", err)
-			return
-		}
-
+		t := entry.Text()
 		dialog.onEntryChange(strings.ToLower(t))
 	})
 
-	// Populate in the background.
-	go func() {
-		dialog.populateEntries()
-		close(dialog.done) // special behavior, all <-done unblocks instantly
-	}()
+	dialog.populateEntries()
 
 	return dialog
 }
@@ -189,7 +176,7 @@ func (d *Dialog) Down() {
 	if len(d.visible) == 0 {
 		return
 	}
-	i := d.List.GetSelectedRow().GetIndex()
+	i := d.List.SelectedRow().Index()
 	i++
 	if i >= len(d.visible) {
 		i = 0
@@ -201,7 +188,7 @@ func (d *Dialog) Up() {
 	if len(d.visible) == 0 {
 		return
 	}
-	i := d.List.GetSelectedRow().GetIndex()
+	i := d.List.SelectedRow().Index()
 	i--
 	if i < 0 {
 		i = len(d.visible) - 1
@@ -210,7 +197,7 @@ func (d *Dialog) Up() {
 }
 
 func (d *Dialog) onActivate(_ *gtk.ListBox, r *gtk.ListBoxRow) {
-	i := r.GetIndex()
+	i := r.Index()
 	if i < 0 || i >= len(d.visible) {
 		// wtf?
 		return
@@ -220,16 +207,17 @@ func (d *Dialog) onActivate(_ *gtk.ListBox, r *gtk.ListBoxRow) {
 	d.Destroy()
 
 	switch entry := d.list[d.visible[i]]; {
-	case entry.ChannelID.Valid():
+	case entry.ChannelID.IsValid():
 		d.OnChannel(entry.ChannelID, entry.GuildID)
-	case entry.GuildID.Valid():
+	case entry.GuildID.IsValid():
 		d.OnGuild(entry.GuildID)
 	}
 }
 
 func (d *Dialog) onEntryChange(word string) {
-	// Wait for population to be done.
-	<-d.done
+	if d.list == nil {
+		return
+	}
 
 	// Remove old entries:
 	d.List.UnselectAll() // unselect first.
@@ -267,14 +255,16 @@ func (d *Dialog) onEntryChange(word string) {
 	}
 }
 
-func (d *Dialog) populateEntries() {
+func populateEntries(s *ningen.State) []Entry {
+	s = s.Offline()
+
 	// Search for guilds first:
-	guilds, _ := d.state.Store.Guilds()
+	guilds, _ := s.Cabinet.Guilds()
 
 	// Pre-grow the slice.
-	d.list = make([]Entry, 0, len(guilds))
+	list := make([]Entry, 0, len(guilds))
 	for _, g := range guilds {
-		d.list = append(d.list, Entry{
+		list = append(list, Entry{
 			IconURL:     g.IconURL(),
 			IconChar:    '*', // for guild apparently
 			PrimaryText: g.Name,
@@ -284,11 +274,11 @@ func (d *Dialog) populateEntries() {
 
 	for _, g := range guilds {
 		// If somehow the guild is broken.
-		if g.Name == "" || !g.ID.Valid() {
+		if g.Name == "" || !g.ID.IsValid() {
 			continue
 		}
 
-		c, err := d.state.Store.Channels(g.ID)
+		c, err := s.Cabinet.Channels(g.ID)
 		if err != nil {
 			continue
 		}
@@ -309,10 +299,10 @@ func (d *Dialog) populateEntries() {
 		}
 
 		// Batch append:
-		d.list = append(d.list, channels...)
+		list = append(list, channels...)
 	}
 
-	dm, _ := d.state.PrivateChannels()
+	dm, _ := s.PrivateChannels()
 
 	// Prepare another slice to grow to:
 	dmEntries := make([]Entry, 0, len(dm))
@@ -339,63 +329,75 @@ func (d *Dialog) populateEntries() {
 	}
 
 	// Batch append:
-	d.list = append(d.list, dmEntries...)
+	list = append(list, dmEntries...)
 
 	// Form long strings:
-	for i, l := range d.list {
-		d.list[i].longString = string(l.IconChar) +
+	for i, l := range list {
+		list[i].longString = string(l.IconChar) +
 			strings.ToLower(l.PrimaryText+l.SecondaryText+l.RightText)
 	}
 
-	// Pre-allocate (arbitrarily) half the length of list for visible:
-	d.visible = make([]int, 0, len(d.list)/2)
-	d.rows = make(map[int]*Row, len(d.list)/2)
+	return list
+}
+
+func (d *Dialog) populateEntries() {
+	go func() {
+		list := populateEntries(d.state)
+		glib.IdleAdd(func() {
+			d.list = list
+
+			// Pre-allocate (arbitrarily) half the length of list for visible:
+			d.visible = make([]int, 0, len(d.list)/2)
+			d.rows = make(map[int]*Row, len(d.list)/2)
+		})
+	}()
 }
 
 func generateRow(i int, e *Entry) *Row {
 	r := Row{index: i}
-	r.ListBoxRow, _ = gtk.ListBoxRowNew()
+	r.ListBoxRow = gtk.NewListBoxRow()
 
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	r.ListBoxRow.Add(b)
 
 	switch {
 	case e.IconURL != "":
-		i, _ := gtk.ImageNew()
+		i := roundimage.NewImage(0)
 		i.SetSizeRequest(IconSize, IconSize)
-		i.SetHAlign(gtk.ALIGN_CENTER)
-		i.SetVAlign(gtk.ALIGN_CENTER)
+		i.SetFromIconName("user-available-symbolic", 0)
+		i.SetPixelSize(IconSize)
+		i.SetHAlign(gtk.AlignCenter)
+		i.SetVAlign(gtk.AlignCenter)
 		gtkutils.Margin2(i, 2, 8)
-		gtkutils.ImageSetIcon(i, "user-available-symbolic", IconSize)
 
 		b.Add(i)
 
 		if e.IconURL != "" {
-			go cache.SetImageScaled(e.IconURL+"?size=32", i, IconSize, IconSize, cache.Round)
+			cache.SetImageURLScaled(i, e.IconURL+"?size=32", IconSize, IconSize)
 		}
 
 	default:
-		l, _ := gtk.LabelNew(`<span size="larger" weight="bold">` + string(e.IconChar) + `</span>`)
+		l := gtk.NewLabel(`<span size="larger" weight="bold">` + string(e.IconChar) + `</span>`)
 		l.SetUseMarkup(true)
 		l.SetSizeRequest(IconSize, IconSize)
-		l.SetHAlign(gtk.ALIGN_CENTER)
-		l.SetVAlign(gtk.ALIGN_CENTER)
+		l.SetHAlign(gtk.AlignCenter)
+		l.SetVAlign(gtk.AlignCenter)
 		gtkutils.Margin2(l, 2, 8)
 
 		b.Add(l)
 	}
 
 	// Generate primary text
-	p, _ := gtk.LabelNew(`<span weight="bold">` + html.EscapeString(e.PrimaryText) + `</span>`)
+	p := gtk.NewLabel(`<span weight="bold">` + html.EscapeString(e.PrimaryText) + `</span>`)
 	p.SetUseMarkup(true)
-	p.SetEllipsize(pango.ELLIPSIZE_END)
+	p.SetEllipsize(pango.EllipsizeEnd)
 	gtkutils.Margin2(p, 2, 4)
 
 	b.Add(p)
 
 	// Is there a secondary text?
 	if e.SecondaryText != "" {
-		s, _ := gtk.LabelNew(e.SecondaryText)
+		s := gtk.NewLabel(e.SecondaryText)
 		s.SetOpacity(0.8)
 		gtkutils.Margin2(s, 2, 4)
 
@@ -404,11 +406,11 @@ func generateRow(i int, e *Entry) *Row {
 
 	// Is there a right text?
 	if e.RightText != "" {
-		r, _ := gtk.LabelNew(
+		r := gtk.NewLabel(
 			`<span weight="bold" size="smaller">` + html.EscapeString(e.RightText) + `</span>`)
 		r.SetUseMarkup(true)
 		r.SetHExpand(true)
-		r.SetHAlign(gtk.ALIGN_END)
+		r.SetHAlign(gtk.AlignEnd)
 		gtkutils.Margin2(r, 2, 4)
 
 		b.Add(r)

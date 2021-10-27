@@ -1,48 +1,60 @@
 package message
 
 import (
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 )
 
 func (m *Messages) injectHandlers() {
-	m.c.AddHandler(m.onTypingStart)
-	m.c.AddHandler(m.onMessageCreate)
-	m.c.AddHandler(m.onMessageUpdate)
-	m.c.AddHandler(m.onMessageDelete)
-	m.c.AddHandler(m.onMessageDeleteBulk)
-	m.c.AddHandler(m.onGuildMembersChunk)
-	m.c.AddHandler(m.react)
-	m.c.AddHandler(m.unreact)
+	m.c.AddHandler(func(v interface{}) {
+		glib.IdleAdd(func() {
+			switch v := v.(type) {
+			case *gateway.TypingStartEvent:
+				m.onTypingStart(v)
+			case *gateway.MessageCreateEvent:
+				m.onMessageCreate(v)
+			case *gateway.MessageUpdateEvent:
+				m.onMessageUpdate(v)
+			case *gateway.MessageDeleteEvent:
+				m.onMessageDelete(v)
+			case *gateway.MessageDeleteBulkEvent:
+				m.onMessageDeleteBulk(v)
+			case *gateway.GuildMembersChunkEvent:
+				m.onGuildMembersChunk(v)
+			case *gateway.MessageReactionAddEvent:
+				m.react(v)
+			case *gateway.MessageReactionRemoveEvent:
+				m.unreact(v)
+			case *gateway.MessageReactionRemoveAllEvent:
+				m.unreactAll(v)
+			}
+		})
+	})
 }
 
-func (m *Messages) find(id discord.Snowflake, found func(m *Message)) {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+func (m *Messages) Find(id discord.MessageID) *Message { return m.find(id) }
 
+func (m *Messages) find(id discord.MessageID) *Message {
 	for _, message := range m.messages {
 		if message.ID != id {
 			continue
 		}
-		found(message)
-		return
+		return message
 	}
+	return nil
 }
 
 func (m *Messages) onTypingStart(t *gateway.TypingStartEvent) {
-	if m.channelID.Get() != t.ChannelID {
+	if m.channelID != t.ChannelID {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	go m.Input.Typing.Add(t)
+	m.Input.Typing.Add(t)
 }
 
 func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
-	if m.channelID.Get() != c.ChannelID {
+	if m.channelID != c.ChannelID {
 		return
 	}
 
@@ -53,7 +65,7 @@ func (m *Messages) onMessageCreate(c *gateway.MessageCreateEvent) {
 }
 
 func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
-	if m.channelID.Get() != u.ChannelID {
+	if m.channelID != u.ChannelID {
 		return
 	}
 
@@ -61,88 +73,72 @@ func (m *Messages) onMessageUpdate(u *gateway.MessageUpdateEvent) {
 }
 
 func (m *Messages) onMessageDelete(d *gateway.MessageDeleteEvent) {
-	if m.channelID.Get() != d.ChannelID {
+	if m.channelID != d.ChannelID {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	m.delete(d.ID)
+	m.Delete(d.ID)
 }
 
 func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
-	if m.channelID.Get() != d.ChannelID {
+	if m.channelID != d.ChannelID {
 		return
 	}
 
-	m.guard.Lock()
-	defer m.guard.Unlock()
-
-	m.delete(d.IDs...)
+	m.Delete(d.IDs...)
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {
-	if m.guildID.Get() != c.GuildID {
+	if m.guildID != c.GuildID {
 		return
 	}
 
-	guildID := m.guildID.Get()
-
-	semaphore.IdleMust(func() {
-		m.guard.RLock()
-		defer m.guard.RUnlock()
-
-		for _, n := range c.Members {
-			for _, message := range m.messages {
-				if message.AuthorID != n.User.ID {
-					continue
-				}
-				message.updateMember(m.c, guildID, n)
+	for _, n := range c.Members {
+		for _, message := range m.messages {
+			if message.AuthorID != n.User.ID {
+				continue
 			}
+			message.UpdateMember(m.c, m.guildID, n)
 		}
-	})
+	}
 }
 
 func (m *Messages) react(r *gateway.MessageReactionAddEvent) {
-	if m.channelID.Get() != r.ChannelID {
+	if m.channelID != r.ChannelID {
 		return
 	}
 
-	m.find(r.MessageID, func(m *Message) {
-		if m.reactions == nil {
-			return
-		}
-		m.reactions.ReactAdd(r)
-	})
+	if msg := m.find(r.MessageID); msg != nil {
+		msg.reactions.ReactAdd(r)
+	}
 }
 
 func (m *Messages) unreact(r *gateway.MessageReactionRemoveEvent) {
-	if m.channelID.Get() != r.ChannelID {
+	if m.channelID != r.ChannelID {
 		return
 	}
 
-	m.find(r.MessageID, func(m *Message) {
-		m.reactions.ReactRemove(r)
-	})
+	if msg := m.find(r.MessageID); msg != nil {
+		msg.reactions.ReactRemove(r)
+	}
 }
 
-func (m *Messages) unreactEmoji(r *gateway.MessageReactionRemoveEmoji) {
-	if m.channelID.Get() != r.ChannelID {
+func (m *Messages) unreactEmoji(r *gateway.MessageReactionRemoveEmojiEvent) {
+	if m.channelID != r.ChannelID {
 		return
 	}
 
-	m.find(r.MessageID, func(m *Message) {
-		m.reactions.RemoveEmoji(r.Emoji)
-	})
+	if msg := m.find(r.MessageID); msg != nil {
+		msg.reactions.RemoveEmoji(r.Emoji)
+	}
 }
 
 func (m *Messages) unreactAll(r *gateway.MessageReactionRemoveAllEvent) {
-	if m.channelID.Get() != r.ChannelID {
+	if m.channelID != r.ChannelID {
 		return
 	}
 
-	m.find(r.MessageID, func(m *Message) {
-		m.reactions.RemoveAll()
-	})
+	if msg := m.find(r.MessageID); msg != nil {
+		msg.reactions.RemoveAll()
+	}
 }

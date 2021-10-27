@@ -3,42 +3,36 @@ package guild
 import (
 	"html"
 
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
 )
 
-func newNamePopover(name string, relative gtk.IWidget) *gtk.Popover {
-	popover, _ := gtk.PopoverNew(relative)
-	label, _ := gtk.LabelNew("<b>" + html.EscapeString(name) + "</b>")
+func newNamePopover(name string, relative gtk.Widgetter) *gtk.Popover {
+	label := gtk.NewLabel("<b>" + html.EscapeString(name) + "</b>")
 	label.SetUseMarkup(true)
 	label.SetMarginStart(5)
 	label.SetMarginEnd(5)
 	label.SetHExpand(true)
-	label.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	label.SetLineWrapMode(pango.WrapWordChar)
 	label.SetMaxWidthChars(50)
 	label.Show()
 
+	popover := gtk.NewPopover(relative)
 	popover.Add(label)
-	popover.SetPosition(gtk.POS_RIGHT)
+	popover.SetPosition(gtk.PosRight)
 	popover.SetModal(false)
 	popover.Popup()
-	popover.Connect("closed", popover.Destroy)
 
 	return popover
 }
 
-type wrapper interface {
-	gtk.IWidget
-	gtkutils.Marginator
-}
-
-func BindName(container gtkutils.Container, w wrapper, name *string) *gtk.EventBox {
+func BindName(c gtk.Containerer, w gtk.Widgetter, name *string) *gtk.EventBox {
 	// Wrap the image inside this event box.
-	evb, _ := gtk.EventBoxNew()
+	evb := gtk.NewEventBox()
+	evb.AddEvents(int(gdk.EnterNotifyMask | gdk.LeaveNotifyMask))
 	evb.Show()
-	evb.SetEvents(int(gdk.ENTER_NOTIFY_MASK | gdk.LEAVE_NOTIFY_MASK))
 
 	// shared state
 	var popover *gtk.Popover
@@ -67,6 +61,7 @@ func BindName(container gtkutils.Container, w wrapper, name *string) *gtk.EventB
 	})
 
 	// Wrap.
+	container := c.BaseContainer()
 	container.Remove(w)
 	evb.Add(w)
 	container.Add(evb)
@@ -77,17 +72,12 @@ func BindName(container gtkutils.Container, w wrapper, name *string) *gtk.EventB
 	return evb
 }
 
-type binder interface {
-	gtk.IWidget
-	gtkutils.Connector
-	SetEvents(int)
-}
-
-func BindNameDirect(conn binder, hoverer Hoverable, name *string) {
+func BindNameDirect(w gtk.Widgetter, hoverer Hoverable, name *string) {
 	// shared state
 	var popover *gtk.Popover
 
-	conn.SetEvents(int(gdk.ENTER_NOTIFY_MASK | gdk.LEAVE_NOTIFY_MASK))
+	conn := w.BaseWidget()
+	conn.SetEvents(int(gdk.EnterNotifyMask | gdk.LeaveNotifyMask))
 
 	conn.Connect("enter-notify-event", func() bool {
 		if text := *name; text != "" {

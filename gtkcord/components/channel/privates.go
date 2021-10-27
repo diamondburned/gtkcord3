@@ -1,102 +1,96 @@
 package channel
 
 import (
+	"strconv"
 	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/loadstatus"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/diamondburned/ningen/v2"
+	"github.com/diamondburned/ningen/v2/states/read"
 )
 
 type PrivateChannels struct {
-	*gtk.Box
+	*loadstatus.Page
 
+	Main   *gtk.Box
 	List   *gtk.ListBox
 	Scroll *gtk.ScrolledWindow
 
 	Search *gtk.Entry
 	search string
 
-	// Channels map[discord.Snowflake]*PrivateChannel
-	Channels map[string]*PrivateChannel
+	Channels map[discord.ChannelID]*PrivateChannel
 
-	busy  deadlock.RWMutex
 	state *ningen.State
 
 	OnSelect func(pm *PrivateChannel)
 }
 
-// thread-safe
 func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs *PrivateChannels) {
-	semaphore.IdleMust(func() {
-		l, _ := gtk.ListBoxNew()
-		l.Show()
-		gtkutils.InjectCSSUnsafe(l, "dmchannels", "")
+	l := gtk.NewListBox()
+	gtkutils.InjectCSS(l, "dmchannels", "")
 
-		cs, _ := gtk.ScrolledWindowNew(nil, nil)
-		cs.Show()
-		cs.SetVExpand(true)
-		cs.Add(l)
+	cs := gtk.NewScrolledWindow(nil, nil)
+	cs.SetVExpand(true)
+	cs.Add(l)
 
-		e, _ := gtk.EntryNew()
-		e.Show()
-		e.SetPlaceholderText("Find conversation...")
+	e := gtk.NewEntry()
+	e.SetPlaceholderText("Find conversation...")
 
-		b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		b.Show()
-		b.Add(e)
-		b.Add(cs)
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
+	b.Add(e)
+	b.Add(cs)
+	b.ShowAll()
 
-		pcs = &PrivateChannels{
-			Box:    b,
-			List:   l,
-			Scroll: cs,
-			Search: e,
+	page := loadstatus.NewPage()
+	page.SetChild(b)
 
-			state:    s,
-			OnSelect: onSelect,
-		}
+	pcs = &PrivateChannels{
+		Page:   page,
+		Main:   b,
+		List:   l,
+		Scroll: cs,
+		Search: e,
 
-		e.Connect("changed", func() {
-			t, err := e.GetText()
-			if err != nil {
-				log.Errorln("Failed to get text from dmchannels entry:", err)
-				return
-			}
+		state:    s,
+		OnSelect: onSelect,
+	}
 
-			pcs.search = strings.ToLower(t)
-			pcs.List.InvalidateFilter()
-		})
-
-		l.SetFilterFunc(pcs.filter, 0)
-		l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			if len(pcs.Channels) == 0 || pcs.OnSelect == nil || r == nil {
-				return
-			}
-
-			rw, ok := pcs.Channels[_ChIDFromRow(r)]
-			if !ok {
-				log.Errorln("Failed to find channel")
-				return
-			}
-
-			pcs.OnSelect(rw)
-		})
+	e.Connect("changed", func() {
+		pcs.search = strings.ToLower(e.Text())
+		pcs.List.InvalidateFilter()
 	})
 
-	s.Read.OnChange(pcs.TraverseReadState)
+	l.SetFilterFunc(pcs.filter)
+	l.SetSortFunc(pcs.sort)
+
+	l.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		if len(pcs.Channels) == 0 || pcs.OnSelect == nil || r == nil {
+			return
+		}
+
+		rw, ok := pcs.Channels[chIDFromRow(r)]
+		if !ok {
+			log.Errorln("Failed to find channel")
+			return
+		}
+
+		pcs.OnSelect(rw)
+	})
+
+	s.ReadState.OnUpdate(func(rs *read.UpdateEvent) {
+		glib.IdleAdd(func() { pcs.TraverseReadState(rs) })
+	})
+
 	return
 }
 
 func (pcs *PrivateChannels) Cleanup() {
-	pcs.busy.Lock()
-	defer pcs.busy.Unlock()
-
 	if pcs.Channels != nil {
 		for _, ch := range pcs.Channels {
 			pcs.List.Remove(ch)
@@ -106,92 +100,129 @@ func (pcs *PrivateChannels) Cleanup() {
 	}
 }
 
-// thread-safe
-func (pcs *PrivateChannels) LoadChannels() error {
-	pcs.busy.Lock()
-	defer pcs.busy.Unlock()
-	// defer at the end of the bottom goroutine.
-
-	channels, err := pcs.state.PrivateChannels()
-	if err != nil {
-		return err
-	}
-
-	pcs.Channels = make(map[string]*PrivateChannel, len(channels))
-
-	for _, channel := range channels {
-		w := newPrivateChannel(channel)
-
-		if channel.Type == discord.DirectMessage && len(channel.DMRecipients) == 1 {
-			user := channel.DMRecipients[0]
-			w.updateAvatar(user.AvatarURL())
-
-			if p, _ := pcs.state.Presence(0, user.ID); p != nil {
-				var game = p.Game
-				if game == nil && len(p.Activities) > 0 {
-					game = &p.Activities[0]
-				}
-
-				w.updateStatus(p.Status)
-				w.updateActivity(game)
-			}
-
-		} else if channel.Icon != "" {
-			w.updateAvatar(channel.IconURL())
-		}
-
-		pcs.Channels[channel.ID.String()] = w
-		pcs.List.Insert(w, -1)
-	}
+func (pcs *PrivateChannels) Load() {
+	pcs.SetLoading()
 
 	go func() {
-		pcs.busy.Lock()
-		defer pcs.busy.Unlock()
+		channels, err := pcs.state.State.PrivateChannels()
+		if err != nil {
+			glib.IdleAdd(func() { pcs.SetError("Error", err) })
+			return
+		}
+
+		glib.IdleAdd(func() {
+			pcs.SetDone()
+			pcs.Channels = make(map[discord.ChannelID]*PrivateChannel, len(channels))
+
+			for _, channel := range channels {
+				w := newPrivateChannel(channel)
+
+				if channel.Type == discord.DirectMessage && len(channel.DMRecipients) == 1 {
+					user := channel.DMRecipients[0]
+					w.updateAvatar(user.AvatarURL())
+
+					if p, _ := pcs.state.Presence(0, user.ID); p != nil {
+						w.updateStatus(p.Status)
+						if len(p.Activities) > 0 {
+							w.updateActivity(&p.Activities[0])
+						} else {
+							w.updateActivity(nil)
+						}
+					}
+				} else if channel.Icon != "" {
+					w.updateAvatar(channel.IconURL())
+				}
+
+				pcs.Channels[channel.ID] = w
+				pcs.List.Insert(w, -1)
+			}
+
+			pcs.List.InvalidateSort()
+		})
 
 		for _, channel := range channels {
-			rs := pcs.state.Read.FindLast(channel.ID)
+			rs := pcs.state.ReadState.FindLast(channel.ID)
 			if rs == nil {
 				continue
 			}
 
 			// Snowflakes have timestamps, which allow us to do this:
 			if channel.LastMessageID.Time().After(rs.LastMessageID.Time()) {
-				ch := pcs.Channels[channel.ID.String()]
-				semaphore.Async(ch.setUnread, true)
+				chID := channel.ID
+				glib.IdleAdd(func() {
+					ch := pcs.Channels[chID]
+					ch.setUnread(true)
+				})
 			}
 		}
 	}()
-
-	return nil
 }
 
 func (pcs *PrivateChannels) Selected() *PrivateChannel {
-	pcs.busy.RLock()
-	defer pcs.busy.RUnlock()
-
 	if len(pcs.Channels) == 0 {
 		return nil
 	}
 
-	r := pcs.List.GetSelectedRow()
+	r := pcs.List.SelectedRow()
 	if r == nil {
-		r = pcs.List.GetRowAtIndex(0)
+		r = pcs.List.RowAtIndex(0)
 		pcs.List.SelectRow(r)
 	}
 
-	rw, ok := pcs.Channels[_ChIDFromRow(r)]
+	rw, ok := pcs.Channels[chIDFromRow(r)]
 	if !ok || rw == nil {
-		log.Errorln("Failed to find channel row")
+		log.Errorln("failed to find channel row")
 	}
 	return rw
 }
 
-func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
+func (pcs *PrivateChannels) sort(r1, r2 *gtk.ListBoxRow) int { // -1 == less == r1 first
+	int1, _ := strconv.ParseInt(r1.Name(), 10, 64)
+	int2, _ := strconv.ParseInt(r2.Name(), 10, 64)
+
+	chRow1 := pcs.Channels[discord.ChannelID(int1)]
+	chRow2 := pcs.Channels[discord.ChannelID(int2)]
+	if v := putLast(chRow1 == nil, chRow2 == nil); v != 0 {
+		return v
+	}
+
+	ch1, _ := pcs.state.Cabinet.Channel(chRow1.ID)
+	ch2, _ := pcs.state.Cabinet.Channel(chRow2.ID)
+	if v := putLast(ch1 == nil, ch2 == nil); v != 0 {
+		return v
+	}
+
+	if v := putLast(!ch1.LastMessageID.IsValid(), !ch2.LastMessageID.IsValid()); v != 0 {
+		return v
+	}
+
+	if ch1.LastMessageID > ch2.LastMessageID {
+		// ch1 is older, put first.
+		return -1
+	}
+	if ch1.LastMessageID == ch2.LastMessageID {
+		// equal
+		return 0
+	}
+	return 1 // newer
+}
+
+func putLast(b1, b2 bool) int {
+	if b1 {
+		return 1
+	}
+	if b2 {
+		return -1
+	}
+	return 0
+}
+
+func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow) bool {
 	if pcs.search == "" {
 		return true
 	}
 
-	pc, ok := pcs.Channels[_ChIDFromRow(r)]
+	pc, ok := pcs.Channels[chIDFromRow(r)]
 	if !ok {
 		log.Errorln("Failed to get channel for filter")
 		return false
@@ -200,57 +231,23 @@ func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow, _ ...interface{}) bool {
 	return strings.Contains(strings.ToLower(pc.Name), pcs.search)
 }
 
-func (pcs *PrivateChannels) TraverseReadState(rs gateway.ReadState, unread bool) {
-	// Read lock is used, as the size of the slice isn't directly modified.
-	pcs.busy.RLock()
-	defer pcs.busy.RUnlock()
-
+func (pcs *PrivateChannels) TraverseReadState(rs *read.UpdateEvent) {
 	if len(pcs.Channels) == 0 {
 		return
 	}
 
-	pc, ok := pcs.Channels[rs.ChannelID.String()]
+	pc, ok := pcs.Channels[rs.ChannelID]
 	if !ok {
 		return
 	}
 
 	// Prepend/move to top.
-	semaphore.IdleMust(func() {
-		pcs.List.Remove(pc)
-		pcs.List.Prepend(pc)
-	})
+	pcs.List.Remove(pc)
+	pcs.List.Prepend(pc)
 
-	pc.setUnread(unread)
+	pc.setUnread(rs.Unread)
 }
 
-func (pcs *PrivateChannels) FindByID(id discord.Snowflake) *PrivateChannel {
-	ch, _ := pcs.Channels[id.String()]
-	return ch
+func (pcs *PrivateChannels) FindByID(id discord.ChannelID) *PrivateChannel {
+	return pcs.Channels[id]
 }
-
-// func (pcs *PrivateChannels) updatePresence(p discord.Presence) {
-// 	for _, ch := range pcs.Channels {
-// 		if ch.Recp == p.User.ID && !ch.Group {
-// 			ch.UpdateStatus(p.Status)
-// 			ch.UpdateActivity(p.Game)
-// 			break
-// 		}
-// 	}
-// }
-
-// func (pcs *PrivateChannels) setUnread(unread bool) {
-// 	if !unread {
-// 		for _, ch := range pcs.Channels {
-// 			if ch.stateClass == "pinged" {
-// 				unread = true
-// 				break
-// 			}
-// 		}
-// 	}
-
-// 	if unread {
-// 		pcs.setButtonClass("pinged")
-// 	} else {
-// 		pcs.setButtonClass("")
-// 	}
-// }

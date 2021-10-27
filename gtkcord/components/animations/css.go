@@ -1,8 +1,8 @@
 package animations
 
 import (
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/pkg/errors"
 )
 
@@ -26,15 +26,12 @@ const CSS = `
 `
 
 func LoadCSS(s *gdk.Screen) error {
-	css, err := gtk.CssProviderNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to make a CSS provider")
-	}
+	css := gtk.NewCSSProvider()
 
 	if err := css.LoadFromData(CSS); err != nil {
 		return errors.Wrap(err, "Failed to parse CSS")
 	}
 
-	gtk.AddProviderForScreen(s, css, uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
+	gtk.StyleContextAddProviderForScreen(s, css, uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
 	return nil
 }

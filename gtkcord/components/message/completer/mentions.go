@@ -3,18 +3,20 @@ package completer
 import (
 	"strings"
 
-	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 func (c *State) completeRecentMentions() {
-	ids := c.container.GetRecentAuthors(MaxCompletionEntries)
-	guildID := c.container.GetGuildID()
+	guildID := c.container.GuildID()
+	if !guildID.IsValid() {
+		return
+	}
+
+	ids := c.container.RecentAuthors(MaxCompletionEntries)
 
 	for _, id := range ids {
-		m, err := c.state.Store.Member(guildID, id)
+		m, err := c.state.MemberStore.Member(guildID, id)
 		if err != nil {
 			continue
 		}
@@ -22,7 +24,7 @@ func (c *State) completeRecentMentions() {
 		c.members = append(c.members, *m)
 	}
 
-	semaphore.IdleMust(c._completeMembers)
+	c._completeMembers()
 }
 
 func (c *State) completeMentions(word string) {
@@ -31,13 +33,13 @@ func (c *State) completeMentions(word string) {
 		return
 	}
 
-	guildID := c.container.GetGuildID()
-	if !guildID.Valid() {
+	guildID := c.container.GuildID()
+	if !guildID.IsValid() {
 		c.completeMentionsDM(word)
 		return
 	}
 
-	members, err := c.state.Store.Members(guildID)
+	members, err := c.state.MemberStore.Members(guildID)
 	if err != nil {
 		log.Errorln("Failed to get members:", err)
 		return
@@ -55,16 +57,16 @@ func (c *State) completeMentions(word string) {
 
 	if len(c.members) == 0 {
 		// Request the member in a background goroutine
-		c.state.SearchMember(guildID, word)
+		c.state.MemberState.SearchMember(guildID, word)
 		return
 	}
 
-	semaphore.IdleMust(c._completeMembers)
+	c._completeMembers()
 }
 
 func (c *State) _completeMembers() {
 	for _, m := range c.members {
-		b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 
 		var name = m.Nick
 		if m.Nick == "" {
@@ -76,7 +78,7 @@ func (c *State) _completeMembers() {
 			url += "?size=32"
 		}
 
-		b.Add(completerImage(url, cache.Round))
+		b.Add(completerImage(url))
 		b.Add(completerLeftLabel(name))
 		b.Add(completerRightLabel(m.User.Username + "#" + m.User.Discriminator))
 		c.addCompletionEntry(b, m.User.Mention())
@@ -84,9 +86,9 @@ func (c *State) _completeMembers() {
 }
 
 func (c *State) completeMentionsDM(word string) {
-	ch, err := c.state.Channel(c.container.GetChannelID())
+	ch, err := c.state.Channel(c.container.ChannelID())
 	if err != nil {
-		log.Errorln("Failed to get DM channel:", err)
+		log.Errorln("failed to get DM channel:", err)
 		return
 	}
 
@@ -105,19 +107,17 @@ func (c *State) completeMentionsDM(word string) {
 		return
 	}
 
-	semaphore.IdleMust(func() {
-		for _, u := range c.users {
-			b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	for _, u := range c.users {
+		b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 
-			var url = u.AvatarURL()
-			if url != "" {
-				url += "?size=64"
-			}
-
-			b.Add(completerImage(url))
-			b.Add(completerLeftLabel(u.Username))
-			b.Add(completerRightLabel(u.Username + "#" + u.Discriminator))
-			c.addCompletionEntry(b, u.Mention())
+		var url = u.AvatarURL()
+		if url != "" {
+			url += "?size=64"
 		}
-	})
+
+		b.Add(completerImage(url))
+		b.Add(completerLeftLabel(u.Username))
+		b.Add(completerRightLabel(u.Username + "#" + u.Discriminator))
+		c.addCompletionEntry(b, u.Mention())
+	}
 }

@@ -1,12 +1,14 @@
 package channel
 
 import (
-	"github.com/diamondburned/arikawa/discord"
+	"strconv"
+
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/user"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 const (
@@ -21,21 +23,20 @@ type PrivateChannel struct {
 
 	Body *user.Container
 
-	ID   discord.Snowflake
 	Name string
+	ID   discord.ChannelID
 
 	Group bool
 }
 
 // NOT thread-safe
 func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
-	var name = ch.Name
+	name := ch.Name
 	if name == "" {
-		var names = make([]string, len(ch.DMRecipients))
+		names := make([]string, len(ch.DMRecipients))
 		for i := range ch.DMRecipients {
 			names[i] = ch.DMRecipients[i].Username
 		}
-
 		name = humanize.Strings(names)
 	}
 
@@ -47,13 +48,12 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	body.Show()
 	body.Name.SetText(name)
 
-	r, _ := gtk.ListBoxRowNew()
+	r := gtk.NewListBoxRow()
+	r.SetName(ch.ID.String())
 	r.Add(body)
 	r.Show()
-	// set the channel ID to searches
-	r.SetProperty("name", ch.ID.String())
 
-	rs, _ := r.GetStyleContext()
+	rs := r.StyleContext()
 	rs.AddClass("dmchannel")
 
 	return &PrivateChannel{
@@ -67,18 +67,14 @@ func newPrivateChannel(ch discord.Channel) (pc *PrivateChannel) {
 	}
 }
 
-func _ChIDFromRow(row *gtk.ListBoxRow) string {
-	v, err := row.GetProperty("name")
-	if err != nil {
-		log.Errorln("Failed to get channel ID:", err)
-		return ""
-	}
-	return v.(string)
+func chIDFromRow(row *gtk.ListBoxRow) discord.ChannelID {
+	v, _ := strconv.ParseInt(row.Name(), 10, 64)
+	return discord.ChannelID(v)
 }
 
-func (pc *PrivateChannel) GuildID() discord.Snowflake { return 0 }
+func (pc *PrivateChannel) GuildID() discord.GuildID { return 0 }
 
-func (pc *PrivateChannel) ChannelID() discord.Snowflake {
+func (pc *PrivateChannel) ChannelID() discord.ChannelID {
 	return pc.ID
 }
 
@@ -87,14 +83,14 @@ func (pc *PrivateChannel) ChannelInfo() (name, topic string) {
 }
 
 func (pc *PrivateChannel) setClass(class string) {
-	gtkutils.DiffClassUnsafe(&pc.stateClass, class, pc.Style)
+	gtkutils.DiffClass(&pc.stateClass, class, pc.Style)
 }
 
 func (pc *PrivateChannel) updateActivity(ac *discord.Activity) {
 	pc.Body.UpdateActivity(ac)
 }
 
-func (pc *PrivateChannel) updateStatus(status discord.Status) {
+func (pc *PrivateChannel) updateStatus(status gateway.Status) {
 	pc.Body.UpdateStatus(status)
 }
 

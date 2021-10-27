@@ -1,21 +1,16 @@
 package singlebox
 
 import (
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
 type Box struct {
 	*gtk.Box
-	Children gtk.IWidget
+	Children gtk.Widgetter
 }
 
-func BoxNew(o gtk.Orientation, spacing int) (*Box, error) {
-	b, err := gtk.BoxNew(o, spacing)
-	if err != nil {
-		return nil, err
-	}
-
-	return WrapBox(b), nil
+func NewBox(o gtk.Orientation, spacing int) *Box {
+	return WrapBox(gtk.NewBox(o, spacing))
 }
 
 func WrapBox(box *gtk.Box) *Box {
@@ -25,10 +20,14 @@ func WrapBox(box *gtk.Box) *Box {
 }
 
 func (b *Box) Clear() {
-	b.Add(nil)
+	b.SetChild(nil)
 }
 
-func (b *Box) Add(w gtk.IWidget) {
+func (b *Box) Add(w gtk.Widgetter) {
+	b.SetChild(w)
+}
+
+func (b *Box) SetChild(w gtk.Widgetter) {
 	if b.Children != nil {
 		b.Box.Remove(b.Children)
 	}

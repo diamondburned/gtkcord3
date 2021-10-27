@@ -3,16 +3,18 @@ package main
 import (
 	"os"
 	"runtime"
-	"runtime/debug"
+	"strconv"
 
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
+
+	_ "embed"
 
 	// Profiler
 	"net/http"
@@ -21,98 +23,50 @@ import (
 
 var profile bool
 
-func init() {
-	// flag.BoolVar(&profile, "prof", false, "Enable the profiler")
+//go:embed logo.png
+var logoPNG []byte
 
-	// AGGRESSIVE GC
-	debug.SetGCPercent(100)
+func init() {
+	glib.LogUseDefaultLogger()
+
+	// flag.BoolVar(&profile, "prof", false, "Enable the profiler")
+	logo.PNG = logoPNG
 
 	// Set the right envs:
-	LoadEnvs()
-}
-
-func LoadToken() string {
-	var token = os.Getenv("TOKEN")
-	if token != "" {
-		return token
+	if css := os.Getenv("GTKCORD_CUSTOM_CSS"); css != "" {
+		window.CustomCSS = css
 	}
 
-	// flag.StringVar(&token, "t", "", "Token")
-	// flag.Parse()
+	if w, _ := strconv.Atoi(os.Getenv("GTKCORD_MSGWIDTH")); w > 100 { // min 100
+		variables.MaxMessageWidth = w
+	}
 
-	return token
+	if os.Getenv("GTKCORD_QUIET") == "0" {
+		log.Quiet = false
+		profile = true
+	}
 }
 
 func LoadKeyring() string {
-	// If $TOKEN or -t is provided, override it in the keyring and use it:
-	if token := LoadToken(); token != "" {
+	if token := os.Getenv("TOKEN"); token != "" {
 		return token
 	}
 
-	// Does the keyring have the token? Maybe.
 	return keyring.Get()
 }
 
-func Login(finish func(s *ningen.State)) error {
-	var lastErr error
-	var token = LoadKeyring()
-
-	if token != "" {
-		_, err := ningen.Connect(token, finish)
-		if err == nil {
-			return nil
-		}
-
-		log.Errorln("Failed to re-use token:", err)
-		lastErr = err
-	}
-
-	// No, so we need to display the login window:
-	semaphore.IdleMust(func() {
-		l := login.NewLogin(finish)
-		l.LastError = lastErr
-		l.LastToken = token
-
-		l.Run()
-	})
-
-	return nil
-}
-
-func Finish(a *gtkcord.Application) func(s *ningen.State) {
-	return func(s *ningen.State) {
-		if err := a.Ready(s); err != nil {
-			log.Fatalln("Failed to get gtkcord ready:", err)
-		}
-	}
-}
-
 func main() {
-	a, err := gtk.ApplicationNew("com.github.diamondburned.gtkcord3", glib.APPLICATION_FLAGS_NONE)
-	if err != nil {
-		log.Fatalln("Failed to create a new *gtk.Application:", err)
-	}
-
+	a := gtk.NewApplication("com.github.diamondburned.gtkcord3", 0)
 	g := gtkcord.New(a)
 
 	a.Connect("activate", func() {
 		g.Activate()
-
-		go func() {
-			// Try and log in:
-			if err := Login(Finish(g)); err != nil {
-				log.Fatalln("Failed to login:", err)
-			}
-		}()
+		g.ShowLogin(LoadKeyring())
 	})
 
-	a.Connect("shutdown", func() {
-		g.Close()
-	})
+	a.Connect("shutdown", func() { g.Close() })
 
 	if profile {
-		// Profiler
-		runtime.SetMutexProfileFraction(5)   // ???
 		runtime.SetBlockProfileRate(5000000) // 5ms
 		go http.ListenAndServe("localhost:6969", nil)
 	}

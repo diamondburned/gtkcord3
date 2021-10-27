@@ -1,8 +1,8 @@
 package guild
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 // (
@@ -25,57 +25,63 @@ type UnreadStrip struct {
 	Style    *gtk.StyleContext
 
 	// interact states
+	intrclass string
 	suppress  bool
 	hover     bool
 	active    bool
-	intrclass string
 
 	// read states
+	readclass string
 	unread    bool
 	pinged    bool
-	readclass string
 }
 
-func NewUnreadStrip(child gtk.IWidget) *UnreadStrip {
-	overlay, _ := gtk.OverlayNew()
-	overlay.SetVAlign(gtk.ALIGN_START)
-	overlay.Show()
-	overlay.Add(child)
+var stripCSS = gtkutils.CSSAdder(`
+	@define-color pinged rgb(240, 71, 71);
 
-	revealer, _ := gtk.RevealerNew()
-	revealer.Show()
+	.read-indicator {
+		padding: 6px 3px; /* Always show, use revealer to hide */
+		transition: 70ms linear;
+		border-radius: 0 99px 99px 0;
+		background-color: @theme_fg_color;
+	}
+	.read-indicator.pinged {
+		background-color: @pinged;
+	}
+	.read-indicator.hover {
+		padding: 10px 3px;
+	}
+	.read-indicator.active {
+		padding: 20px 3px;
+	}
+`)
+
+func NewUnreadStrip(child gtk.Widgetter) *UnreadStrip {
+	box := gtk.NewBox(gtk.OrientationVertical, 0)
+	box.SetHAlign(gtk.AlignCenter)
+	box.StyleContext().AddClass("child-box")
+	box.Add(child)
+
+	overlay := gtk.NewOverlay()
+	overlay.SetVAlign(gtk.AlignCenter)
+	overlay.Add(box)
+	overlay.Show()
+
+	revealer := gtk.NewRevealer()
 	revealer.SetVExpand(true)
-	revealer.SetVAlign(gtk.ALIGN_CENTER)
-	revealer.SetHAlign(gtk.ALIGN_START)
+	revealer.SetVAlign(gtk.AlignCenter)
+	revealer.SetHAlign(gtk.AlignStart)
 	revealer.SetRevealChild(false)
 	revealer.SetTransitionDuration(70)
-	revealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
+	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
+	revealer.Show()
 
-	strip, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	strip := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	strip.Show()
 
-	style, _ := strip.GetStyleContext()
+	style := strip.StyleContext()
 	style.AddClass("read-indicator")
-
-	gtkutils.AddCSSUnsafe(style, `
-		@define-color pinged rgb(240, 71, 71);
-
-		.read-indicator {
-			padding: 6px 3px; /* Always show, use revealer to hide */
-			transition: 70ms linear;
-			border-radius: 0 99px 99px 0;
-			background-color: @theme_fg_color;
-		}
-		.read-indicator.pinged {
-			background-color: @pinged;
-		}
-		.read-indicator.hover {
-			padding: 10px 3px;
-		}
-		.read-indicator.active {
-			padding: 20px 3px;
-		}
-	`)
+	stripCSS(style)
 
 	revealer.Add(strip)
 	overlay.AddOverlay(revealer)
@@ -96,22 +102,22 @@ func (r *UnreadStrip) updateState() {
 	// Change the interaction state:
 	switch {
 	case r.hover:
-		gtkutils.DiffClassUnsafe(&r.intrclass, "hover", r.Style)
+		gtkutils.DiffClass(&r.intrclass, "hover", r.Style)
 	case r.active:
-		gtkutils.DiffClassUnsafe(&r.intrclass, "active", r.Style)
+		gtkutils.DiffClass(&r.intrclass, "active", r.Style)
 	default:
-		gtkutils.DiffClassUnsafe(&r.intrclass, "", r.Style)
+		gtkutils.DiffClass(&r.intrclass, "", r.Style)
 	}
 
 	switch {
 	case r.pinged:
-		gtkutils.DiffClassUnsafe(&r.readclass, "pinged", r.Style)
+		gtkutils.DiffClass(&r.readclass, "pinged", r.Style)
 	case r.unread:
 		// Technically this doesn't do anything, but it removes all other
 		// classes. It also gives extra flexibility.
-		gtkutils.DiffClassUnsafe(&r.readclass, "unread", r.Style)
+		gtkutils.DiffClass(&r.readclass, "unread", r.Style)
 	default:
-		gtkutils.DiffClassUnsafe(&r.readclass, "", r.Style)
+		gtkutils.DiffClass(&r.readclass, "", r.Style)
 	}
 
 	// Hide the strip if we're not displaying anything. Suppress must be false.

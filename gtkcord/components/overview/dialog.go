@@ -1,32 +1,24 @@
 package overview
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
 )
 
-func SpawnDialog(c *Container) {
-	d := handy.DialogNew(window.Window)
-	d.SetDefaultSize(600, 600)
-
-	// Hack for close button
-	d.Connect("response", func(_ *glib.Object, resp gtk.ResponseType) {
-		if resp == gtk.RESPONSE_DELETE_EVENT {
-			d.Destroy()
-		}
-	})
-
-	header, _ := gtk.HeaderBarNew()
+func SpawnDialog(w gtk.Widgetter) {
+	header := gtk.NewHeaderBar()
 	header.Show()
 	header.SetTitle("Details")
 	header.SetShowCloseButton(true)
+
+	d := gtk.NewDialog()
+	d.SetTransientFor(&window.Window.Window)
+	d.SetDefaultSize(600, 600)
 	d.SetTitlebar(header)
 
-	a, _ := d.GetContentArea()
+	a := d.ContentArea()
 	d.Remove(a)
-	d.Add(c)
+	d.Add(w)
 
 	d.Run()
 	d.GrabFocus()

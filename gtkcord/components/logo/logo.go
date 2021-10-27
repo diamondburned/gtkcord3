@@ -1,42 +1,34 @@
 package logo
 
 import (
-	"io/ioutil"
+	"log"
 
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/markbates/pkger"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/gotk4/pkg/cairo"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 )
 
-func PNG() ([]byte, error) {
-	f, err := pkger.Open("/logo.png")
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to open logo")
-	}
+// PNG is set by package main on init.
+var PNG []byte
 
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to read logo")
-	}
-
-	return b, nil
-}
-
-func Pixbuf(sz int) (*gdk.Pixbuf, error) {
-	b, err := PNG()
-	if err != nil {
-		return nil, err
-	}
-
-	l, err := gdk.PixbufLoaderNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a pixbuf loader")
-	}
-
+func Pixbuf(sz int) *gdkpixbuf.Pixbuf {
+	l := gdkpixbuf.NewPixbufLoader()
 	if sz > 0 {
 		l.SetSize(sz, sz)
 	}
 
-	p, err := l.WriteAndReturnPixbuf(b)
-	return p, errors.Wrap(err, "Failed to write to pixbuf")
+	if err := l.Write(PNG); err != nil {
+		log.Panicln("BUG: failed to write logo for pixbuf:", err)
+	}
+
+	if err := l.Close(); err != nil {
+		log.Panicln("BUG: close logo pixbuf error:", err)
+	}
+
+	return l.Pixbuf()
+}
+
+func Surface(sz, scale int) *cairo.Surface {
+	pixbuf := Pixbuf(sz * scale)
+	return gdk.CairoSurfaceCreateFromPixbuf(pixbuf, scale, nil)
 }

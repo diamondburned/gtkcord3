@@ -4,12 +4,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/arikawa/utils/wsutil"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/arikawa/v2/state"
+	"github.com/diamondburned/arikawa/v2/utils/wsutil"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/ningen"
+	"github.com/diamondburned/ningen/v2"
 	"github.com/pkg/errors"
 )
 

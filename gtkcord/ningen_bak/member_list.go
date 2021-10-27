@@ -3,10 +3,10 @@ package ningen
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/v2/handlerrepo"
 )
 
 type MemberListState struct {
@@ -29,7 +29,7 @@ type MemberList struct {
 	Items  []*gateway.GuildMemberListOpItem
 }
 
-func NewMemberListState(h handler.AddHandler) *MemberListState {
+func NewMemberListState(h handlerrepo.AddHandler) *MemberListState {
 	state := &MemberListState{
 		state: map[discord.Snowflake]*MemberList{},
 	}

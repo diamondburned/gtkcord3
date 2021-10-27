@@ -1,11 +1,11 @@
 package completer
 
 import (
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 func (c *State) completeEmojis(word string) {
@@ -13,10 +13,14 @@ func (c *State) completeEmojis(word string) {
 		return
 	}
 
-	guildID := c.container.GetGuildID()
-	guildEmojis, err := c.state.Emoji.Get(guildID)
+	guildID := c.container.GuildID()
+	if !guildID.IsValid() {
+		return
+	}
+
+	guildEmojis, err := c.state.EmojiState.Get(guildID)
 	if err != nil {
-		log.Errorln("Failed to get emojis:", err)
+		log.Errorln("failed to get emojis:", err)
 		return
 	}
 
@@ -49,16 +53,14 @@ func (c *State) completeEmojis(word string) {
 		return
 	}
 
-	semaphore.IdleMust(func() {
-		for _, guild := range filtered {
-			for _, e := range guild.Emojis {
-				b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	for _, guild := range filtered {
+		for _, e := range guild.Emojis {
+			b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 
-				b.Add(completerImage(md.EmojiURL(e.ID.String(), e.Animated)))
-				b.Add(completerLeftLabel(e.Name))
-				b.Add(completerRightLabel(guild.Name))
-				c.addCompletionEntry(b, e.String())
-			}
+			b.Add(completerImage(md.EmojiURL(e.ID.String(), e.Animated)))
+			b.Add(completerLeftLabel(e.Name))
+			b.Add(completerRightLabel(guild.Name))
+			c.addCompletionEntry(b, e.String())
 		}
-	})
+	}
 }

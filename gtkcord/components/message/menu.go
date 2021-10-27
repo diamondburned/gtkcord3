@@ -1,19 +1,21 @@
 package message
 
 import (
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
 )
 
-func (m *Messages) menuAddAdmin(msg *Message, menu gtkutils.Container) {
-	var canDelete = msg.AuthorID == m.c.Ready.User.ID
+func (m *Messages) menuAddAdmin(msg *Message, menuContainer gtk.Containerer) {
+	menu := menuContainer.BaseContainer()
+	me, _ := m.c.Me()
+
+	var canDelete = msg.AuthorID == me.ID
 	if !canDelete {
-		p, err := m.c.Permissions(m.GetChannelID(), m.c.Ready.User.ID)
+		p, err := m.c.Permissions(m.ChannelID(), me.ID)
 		if err != nil {
-			log.Errorln("Failed to get permissions:", err)
+			log.Errorln("failed to get permissions:", err)
 			return
 		}
 
@@ -21,11 +23,11 @@ func (m *Messages) menuAddAdmin(msg *Message, menu gtkutils.Container) {
 	}
 
 	if canDelete {
-		iDel, _ := gtk.MenuItemNewWithLabel("Delete Message")
+		iDel := gtk.NewMenuItemWithLabel("Delete Message")
 		iDel.Connect("activate", func() {
 			go func() {
-				if err := m.c.DeleteMessage(m.GetChannelID(), msg.ID); err != nil {
-					log.Errorln("Error deleting message:", err)
+				if err := m.c.DeleteMessage(m.ChannelID(), msg.ID); err != nil {
+					log.Errorln("error deleting message:", err)
 				}
 			}()
 		})
@@ -33,39 +35,37 @@ func (m *Messages) menuAddAdmin(msg *Message, menu gtkutils.Container) {
 		menu.Add(iDel)
 	}
 
-	if msg.AuthorID == m.c.Ready.User.ID {
-		iEdit, _ := gtk.MenuItemNewWithLabel("Edit Message")
+	if msg.AuthorID == me.ID {
+		iEdit := gtk.NewMenuItemWithLabel("Edit Message")
 		iEdit.Connect("activate", func() {
-			go func() {
-				if err := m.Input.editMessage(msg.ID); err != nil {
-					log.Errorln("Error editing message:", err)
-				}
-			}()
+			m.Input.editMessage(msg.ID)
 		})
 		iEdit.Show()
 		menu.Add(iEdit)
 	}
 }
 
-func (m *Messages) menuAddDebug(msg *Message, menu gtkutils.Container) {
-	cpmsgID, _ := gtk.MenuItemNewWithLabel("Copy Message ID")
+func (m *Messages) menuAddDebug(msg *Message, menuContainer gtk.Containerer) {
+	menu := menuContainer.BaseContainer()
+
+	cpmsgID := gtk.NewMenuItemWithLabel("Copy Message ID")
 	cpmsgID.Connect("activate", func() {
-		window.Window.Clipboard.SetText(msg.ID.String())
+		window.Window.Clipboard.SetText(msg.ID.String(), -1)
 	})
 	cpmsgID.Show()
 	menu.Add(cpmsgID)
 
-	cpchID, _ := gtk.MenuItemNewWithLabel("Copy Channel ID")
+	cpchID := gtk.NewMenuItemWithLabel("Copy Channel ID")
 	cpchID.Connect("activate", func() {
-		window.Window.Clipboard.SetText(m.GetChannelID().String())
+		window.Window.Clipboard.SetText(m.ChannelID().String(), -1)
 	})
 	cpchID.Show()
 	menu.Add(cpchID)
 
-	if m.GetGuildID().Valid() {
-		cpgID, _ := gtk.MenuItemNewWithLabel("Copy Guild ID")
+	if guildID := m.GuildID(); guildID.IsValid() {
+		cpgID := gtk.NewMenuItemWithLabel("Copy Guild ID")
 		cpgID.Connect("activate", func() {
-			window.Window.Clipboard.SetText(m.GetGuildID().String())
+			window.Window.Clipboard.SetText(guildID.String(), -1)
 		})
 		cpgID.Show()
 		menu.Add(cpgID)

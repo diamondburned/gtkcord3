@@ -1,16 +1,16 @@
 package channel
 
 import (
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/loadstatus"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
+	"github.com/diamondburned/ningen/v2/states/read"
+
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/pkg/errors"
-	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -20,10 +20,10 @@ const (
 )
 
 type Channels struct {
-	*gtk.ScrolledWindow
-	Main *gtk.Box
+	*loadstatus.Page
 
-	GuildID discord.Snowflake
+	Scroll *gtk.ScrolledWindow
+	Main   *gtk.Box
 
 	// Headers
 	BannerImage *gtk.Image
@@ -33,55 +33,57 @@ type Channels struct {
 	Channels []*Channel
 	Selected *Channel
 
-	busy  deadlock.RWMutex
 	state *ningen.State
 
 	OnSelect func(ch *Channel)
+	GuildID  discord.GuildID
 }
 
 func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels) {
-	semaphore.IdleMust(func() {
-		main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		main.Show()
+	main := gtk.NewBox(gtk.OrientationVertical, 0)
+	main.Show()
 
-		cs, _ := gtk.ScrolledWindowNew(nil, nil)
-		cs.Show()
-		cs.Add(main)
+	cs := gtk.NewScrolledWindow(nil, nil)
+	cs.Show()
+	cs.Add(main)
 
-		cl, _ := gtk.ListBoxNew()
-		cl.Show()
-		cl.SetVExpand(true)
-		cl.SetActivateOnSingleClick(true)
-		gtkutils.InjectCSSUnsafe(cl, "channels", "")
+	cl := gtk.NewListBox()
+	cl.Show()
+	cl.SetVExpand(true)
+	cl.SetActivateOnSingleClick(true)
+	gtkutils.InjectCSS(cl, "channels", "")
 
-		main.Add(cl)
+	main.Add(cl)
 
-		chs = &Channels{
-			ScrolledWindow: cs,
-			Main:           main,
-			ChList:         cl,
-			state:          state,
-			OnSelect:       onSelect,
+	page := loadstatus.NewPage()
+	page.SetChild(cs)
+
+	chs = &Channels{
+		Page:     page,
+		Scroll:   cs,
+		Main:     main,
+		ChList:   cl,
+		state:    state,
+		OnSelect: onSelect,
+	}
+
+	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
+		if chs.OnSelect == nil || len(chs.Channels) == 0 || r == nil {
+			return
 		}
 
-		cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-			if chs.OnSelect == nil || len(chs.Channels) == 0 || r == nil {
-				return
-			}
-
-			chs.Selected = chs.Channels[r.GetIndex()]
-			chs.OnSelect(chs.Selected)
-		})
+		chs.Selected = chs.Channels[r.Index()]
+		chs.OnSelect(chs.Selected)
 	})
 
-	state.Read.OnChange(chs.TraverseReadState)
+	state.ReadState.OnUpdate(func(rs *read.UpdateEvent) {
+		glib.IdleAdd(func() { chs.TraverseReadState(rs) })
+	})
+
 	return
 }
 
 func (chs *Channels) Cleanup() {
-	chs.busy.Lock()
-	defer chs.busy.Unlock()
-
 	if chs.Channels == nil {
 		return
 	}
@@ -93,57 +95,63 @@ func (chs *Channels) Cleanup() {
 
 	chs.Selected = nil
 	chs.Channels = nil
+	chs.GuildID = 0
 }
 
-func (chs *Channels) LoadGuild(guildID discord.Snowflake) error {
+func (chs *Channels) onError(err error) {
+	chs.Page.SetError("Error", err)
+}
+
+func (chs *Channels) LoadGuild(guildID discord.GuildID) { // async
+	chs.SetLoading()
 	chs.GuildID = guildID
 
-	channels, err := chs.state.Channels(chs.GuildID)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get guild channels")
-	}
-	channels = filterChannels(chs.state, channels)
-
-	chs.busy.Lock()
-	defer chs.busy.Unlock()
-
 	go func() {
+		onErr := func(err error, wrap string) {
+			glib.IdleAdd(func() { chs.onError(errors.Wrap(err, wrap)) })
+		}
+
+		channels, err := chs.state.Channels(guildID)
+		if err != nil {
+			onErr(err, "failed to get guild channels")
+			return
+		}
+		channels = filterChannels(chs.state, channels)
+
+		var bannerURL string
+
 		guild, err := chs.state.Guild(chs.GuildID)
 		if err == nil && guild.Banner != "" {
-			chs.UpdateBanner(guild.BannerURL())
+			bannerURL = guild.BannerURL()
 		}
+
+		glib.IdleAdd(func() {
+			chs.SetDone()
+			chs.Channels = transformChannels(chs.state, channels)
+
+			for _, ch := range chs.Channels {
+				chs.ChList.Insert(ch, -1)
+			}
+
+			if bannerURL != "" {
+				chs.UpdateBanner(guild.BannerURL())
+			}
+		})
 	}()
-
-	chs.Channels = transformChannels(chs.state, channels)
-
-	for _, ch := range chs.Channels {
-		chs.ChList.Insert(ch, -1)
-	}
-
-	return nil
 }
 
 func (chs *Channels) UpdateBanner(url string) {
 	if chs.BannerImage == nil {
-		semaphore.IdleMust(func() {
-			chs.BannerImage, _ = gtk.ImageNew()
-			chs.BannerImage.SetSizeRequest(ChannelsWidth, BannerHeight)
-			chs.Main.PackStart(chs.BannerImage, false, false, 0)
-		})
+		chs.BannerImage = gtk.NewImage()
+		chs.BannerImage.SetSizeRequest(ChannelsWidth, BannerHeight)
+		chs.Main.PackStart(chs.BannerImage, false, false, 0)
 	}
 
 	const w, h = ChannelsWidth, BannerHeight
-
-	if err := cache.SetImageScaled(url+"?size=512", chs.BannerImage, w, h); err != nil {
-		log.Errorln("Failed to get the pixbuf guild icon:", err)
-		return
-	}
+	cache.SetImageURLScaled(chs.BannerImage, url+"?size=512", w, h)
 }
 
-func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
-	chs.busy.RLock()
-	defer chs.busy.RUnlock()
-
+func (chs *Channels) FindByID(id discord.ChannelID) *Channel {
 	for _, ch := range chs.Channels {
 		if ch.ID == id {
 			return ch
@@ -153,9 +161,6 @@ func (chs *Channels) FindByID(id discord.Snowflake) *Channel {
 }
 
 func (chs *Channels) First() *Channel {
-	chs.busy.RLock()
-	defer chs.busy.RUnlock()
-
 	for _, ch := range chs.Channels {
 		if ch.Category {
 			continue
@@ -165,16 +170,13 @@ func (chs *Channels) First() *Channel {
 	return nil
 }
 
-func (chs *Channels) TraverseReadState(rs gateway.ReadState, unread bool) {
-	chs.busy.RLock()
-	defer chs.busy.RUnlock()
-
+func (chs *Channels) TraverseReadState(rs *read.UpdateEvent) {
 	for _, ch := range chs.Channels {
 		if ch.ID != rs.ChannelID {
 			continue
 		}
 
-		ch.setUnread(unread, rs.MentionCount > 0)
+		ch.setUnread(rs.Unread, rs.MentionCount > 0)
 		break
 	}
 }

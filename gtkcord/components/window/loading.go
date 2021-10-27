@@ -1,24 +1,28 @@
 package window
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
-	"github.com/gotk3/gotk3/gtk"
 )
 
-const LoadingTitle = "Connecting to Discord."
+const LoadingTitle = "Connecting to Discord — gtkcord3"
+
+var wasLoading bool
 
 // NowLoading fades the internal stack view to show a spinning circle.
 func NowLoading() {
 	// Use a spinner:
-	s, _ := animations.NewSpinner(75)
+	s := animations.NewSpinner(75)
+
+	wasLoading = true
 
 	// Use a custom header instead of the actual Header:
-	h, _ := gtk.HeaderBarNew()
+	h := gtk.NewHeaderBar()
 	h.SetTitle(LoadingTitle)
 	h.SetShowCloseButton(true)
 	h.ShowAll()
 
 	// Set the loading animation:
 	stackSet(Window.Main, "loading", s)
-	stackSet(Window.Header.Main, "loading", h)
+	Window.SetTitlebar(h)
 }

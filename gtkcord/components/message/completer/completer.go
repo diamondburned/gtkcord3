@@ -2,32 +2,19 @@ package completer
 
 import (
 	"strings"
-	"time"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/gtkcord3/internal/moreatomic"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
+	"github.com/diamondburned/ningen/v2"
 )
 
 const MaxCompletionEntries = 10
-
-var completionQueue chan func()
-
-func init() {
-	completionQueue = make(chan func(), 1)
-	go func() {
-		for fn := range completionQueue {
-			fn()
-		}
-	}()
-}
 
 type State struct {
 	*gtk.Revealer
@@ -36,6 +23,7 @@ type State struct {
 	ListBox *gtk.ListBox
 	Entries []*Entry
 
+	// state is offline
 	state *ningen.State
 
 	// RequestGuildMember func(prefix string)
@@ -50,8 +38,7 @@ type State struct {
 	start *gtk.TextIter
 	end   *gtk.TextIter
 
-	lastRequested time.Time
-	lastWord      moreatomic.String
+	lastWord string
 
 	channels []discord.Channel
 	members  []discord.Member
@@ -62,46 +49,44 @@ type State struct {
 type Entry struct {
 	*gtk.ListBoxRow
 
-	Child gtkutils.ExtendedWidget
+	Child gtk.Widgetter
 	Text  string
 }
 
 type MessageContainer interface {
-	GetChannelID() discord.Snowflake
-	GetGuildID() discord.Snowflake
-	GetRecentAuthors(limit int) []discord.Snowflake
+	ChannelID() discord.ChannelID
+	GuildID() discord.GuildID
+	RecentAuthors(limit int) []discord.UserID
 }
 
 func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *State {
-	revealer, _ := gtk.RevealerNew()
-	revealer.Show()
+	revealer := gtk.NewRevealer()
 	revealer.SetRevealChild(false)
-	revealer.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_NONE)
+	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideUp)
 
-	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
-	scroll.Show()
-	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-	scroll.SetProperty("propagate-natural-height", true)
-	scroll.SetProperty("min-content-height", 0)
-	scroll.SetProperty("max-content-height", 250) // arbitrary height
+	scroll := gtk.NewScrolledWindow(nil, nil)
+	scroll.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
+	scroll.SetPropagateNaturalHeight(true)
+	scroll.SetMinContentHeight(0)
+	scroll.SetMaxContentHeight(250) // arbitrary height
 	scroll.SetSizeRequest(-1, 250)
 
-	listbox, _ := gtk.ListBoxNew()
-	listbox.Show()
-	listbox.SetAdjustment(scroll.GetVAdjustment())
-	listbox.SetFocusVAdjustment(scroll.GetVAdjustment())
-	gtkutils.InjectCSSUnsafe(listbox, "completer", "")
+	listbox := gtk.NewListBox()
+	listbox.SetAdjustment(scroll.VAdjustment())
+	listbox.SetFocusVAdjustment(scroll.VAdjustment())
+	gtkutils.InjectCSS(listbox, "completer", "")
 
 	s := &State{
 		Revealer:  revealer,
 		Scroll:    scroll,
 		ListBox:   listbox,
-		state:     state,
+		state:     state.Offline(),
 		InputBuf:  textbuf,
 		container: msgC,
 	}
 	revealer.Add(scroll)
 	scroll.Add(listbox)
+	scroll.ShowAll()
 	listbox.Connect("row-activated", s.applyCompletion)
 
 	textbuf.Connect("changed", func() {
@@ -112,7 +97,7 @@ func New(state *ningen.State, textbuf *gtk.TextBuffer, msgC MessageContainer) *S
 	return s
 }
 
-func (c *State) KeyDown(state, key uint) bool {
+func (c *State) KeyDown(state gdk.ModifierType, key uint) bool {
 	// Check if the key pressed is a visible letter:
 	if key == gdk.KEY_space {
 		if !c.IsEmpty() {
@@ -160,12 +145,12 @@ func (c *State) Select(index int) {
 	c.ListBox.SelectRow(c.Entries[index].ListBoxRow)
 }
 
-func (c *State) GetIndex() int {
-	r := c.ListBox.GetSelectedRow()
+func (c *State) Index() int {
+	r := c.ListBox.SelectedRow()
 	i := 0
 
 	if r != nil {
-		i = r.GetIndex()
+		i = r.Index()
 	} else {
 		c.Select(i)
 	}
@@ -174,7 +159,7 @@ func (c *State) GetIndex() int {
 }
 
 func (c *State) Down() {
-	i := c.GetIndex()
+	i := c.Index()
 	i++
 	if i >= len(c.Entries) {
 		i = 0
@@ -183,7 +168,7 @@ func (c *State) Down() {
 }
 
 func (c *State) Up() {
-	i := c.GetIndex()
+	i := c.Index()
 	i--
 	if i < 0 {
 		i = len(c.Entries) - 1
@@ -193,45 +178,39 @@ func (c *State) Up() {
 
 func (c *State) getWord() string {
 	mark := c.InputBuf.GetInsert()
-	iter := c.InputBuf.GetIterAtMark(mark)
+	iter := c.InputBuf.IterAtMark(mark)
 
 	// Seek backwards for space or start-of-line:
-	_, start, ok := iter.BackwardSearch(" ", gtk.TEXT_SEARCH_TEXT_ONLY, nil)
+	_, start, ok := iter.BackwardSearch(" ", gtk.TextSearchTextOnly, nil)
 	if !ok {
-		start = c.InputBuf.GetStartIter()
+		start = c.InputBuf.StartIter()
 	}
 
 	// Seek forwards for space or end-of-line:
-	_, end, ok := iter.ForwardSearch(" ", gtk.TEXT_SEARCH_TEXT_ONLY, nil)
+	_, end, ok := iter.ForwardSearch(" ", gtk.TextSearchTextOnly, nil)
 	if !ok {
-		end = c.InputBuf.GetEndIter()
+		end = c.InputBuf.EndIter()
 	}
 
 	c.start = start
 	c.end = end
 
 	// Get word:
-	return start.GetText(end)
+	return start.Text(end)
 }
 
 func (c *State) run() {
 	word := c.getWord()
-	if word == c.lastWord.Get() {
+	if word == c.lastWord {
 		return
 	}
-	c.lastWord.Set(word)
 
-	select {
-	case completionQueue <- c.execute:
-	default:
-		<-completionQueue
-		completionQueue <- c.execute
-	}
+	c.lastWord = word
+	c.execute()
 }
 
 func (c *State) execute() {
-	var word = c.lastWord.Get()
-
+	word := c.lastWord
 	if word == "" {
 		// Clear the completion if there's no word.
 		c.ClearCompletion()
@@ -240,17 +219,13 @@ func (c *State) execute() {
 
 	if !c.IsEmpty() && len(c.Entries) > 0 {
 		// Clear completion without hiding:
-		semaphore.IdleMust(c.clearCompletion)
+		c.clearCompletion()
 	}
 
 	c.loadCompletion(word)
 
 	// Reveal (true) if c.Entries is not empty.
-	if len(c.Entries) > 0 {
-		semaphore.IdleMust(func() {
-			c.SetRevealChild(true)
-		})
-	}
+	c.SetRevealChild(len(c.Entries) > 0)
 }
 
 func (c *State) ClearCompletion() {
@@ -258,10 +233,8 @@ func (c *State) ClearCompletion() {
 		return
 	}
 
-	semaphore.IdleMust(func() {
-		c.clearCompletion()
-		c.SetRevealChild(false)
-	})
+	c.clearCompletion()
+	c.SetRevealChild(false)
 }
 
 func (c *State) clearCompletion() {
@@ -280,8 +253,8 @@ func (c *State) clearCompletion() {
 
 // Finalizing function
 func (c *State) applyCompletion() {
-	r := c.ListBox.GetSelectedRow()
-	i := r.GetIndex()
+	r := c.ListBox.SelectedRow()
+	i := r.Index()
 	if i < 0 || i >= len(c.Entries) {
 		log.Errorln("Index out of bounds:", i)
 		return
@@ -310,25 +283,26 @@ func (c *State) loadCompletion(word string) {
 	}
 }
 
-func completerImage(url string, pp ...cache.Processor) *gtk.Image {
-	i, _ := gtk.ImageNew()
+func completerImage(url string) *roundimage.Image {
+	i := roundimage.NewImage(0)
 	i.SetMarginEnd(10)
 	i.SetSizeRequest(24, 24)
-	gtkutils.ImageSetIcon(i, "dialog-question-symbolic", 24)
+	i.SetFromIconName("dialog-question-symbolic", 0)
+	i.SetPixelSize(24)
 
 	if url != "" {
-		go cache.AsyncFetch(url, i, 24, 24, pp...)
+		cache.SetImageURLScaled(i, url, 24, 24)
 	}
 
 	return i
 }
 
 func completerLeftLabel(text string) *gtk.Label {
-	l, _ := gtk.LabelNew(text)
+	l := gtk.NewLabel(text)
 	l.SetSingleLineMode(true)
 	l.SetLineWrap(false)
-	l.SetEllipsize(pango.ELLIPSIZE_END)
-	l.SetHAlign(gtk.ALIGN_START)
+	l.SetEllipsize(pango.EllipsizeEnd)
+	l.SetHAlign(gtk.AlignStart)
 
 	return l
 }
@@ -337,12 +311,12 @@ func completerRightLabel(text string) *gtk.Label {
 	l := completerLeftLabel(text)
 	l.SetOpacity(0.65)
 	l.SetHExpand(true)
-	l.SetHAlign(gtk.ALIGN_END)
+	l.SetHAlign(gtk.AlignEnd)
 
 	return l
 }
 
-func (c *State) addCompletionEntry(w gtkutils.ExtendedWidget, text string) bool {
+func (c *State) addCompletionEntry(w gtk.Widgetter, text string) bool {
 	if len(c.Entries) > MaxCompletionEntries {
 		return false
 	}
@@ -352,14 +326,12 @@ func (c *State) addCompletionEntry(w gtkutils.ExtendedWidget, text string) bool 
 		Text:  text,
 	}
 
-	if w, ok := w.(gtkutils.Marginator); ok {
-		w.SetMarginStart(20)
-		w.SetMarginEnd(20)
-	}
+	w.BaseWidget().SetMarginStart(20)
+	w.BaseWidget().SetMarginEnd(20)
 
-	entry.ListBoxRow, _ = gtk.ListBoxRowNew()
+	entry.ListBoxRow = gtk.NewListBoxRow()
 	entry.ListBoxRow.Add(w)
-	entry.ListBoxRow.SetFocusVAdjustment(c.Scroll.GetVAdjustment())
+	entry.ListBoxRow.SetFocusVAdjustment(c.Scroll.VAdjustment())
 
 	c.ListBox.Insert(entry, -1)
 	entry.ShowAll()

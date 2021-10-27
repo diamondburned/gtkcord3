@@ -1,48 +1,52 @@
 package gdbus
 
-// #include <glib-2.0/glib.h>
-// #include <gio/gio.h>
-import "C"
-
 import (
+	"context"
+	"errors"
 	"sync"
-	"unsafe"
 
-	"github.com/gotk3/gotk3/glib"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 )
 
+// Notifier wraps around a GIO DBus Connection and allows sending notifications
+// using the DBus method.
 type Notifier struct {
-	*Connection
+	*gio.DBusConnection
 
 	actionMu sync.Mutex
 	actions  map[uint32][]*Action
 }
 
-func NewNotifier(c *Connection) *Notifier {
+// NewNotifier creates a new notifier.
+func NewNotifier(c *gio.DBusConnection) *Notifier {
+	if c == nil {
+		return &Notifier{}
+	}
+
 	n := &Notifier{
-		Connection: c,
-		actions:    map[uint32][]*Action{},
+		DBusConnection: c,
+		actions:        map[uint32][]*Action{},
 	}
 
 	c.SignalSubscribe(
 		"", "org.freedesktop.Notifications",
 		"", "/org/freedesktop/Notifications", "",
-		DBUS_SIGNAL_FLAGS_NONE,
-		func(_ *Connection, _, _, _, signal string, _params *glib.Variant) {
+		gio.DBusSignalFlagsNone,
+		func(c *gio.DBusConnection, sender, object, iface, signal string, params *glib.Variant) {
 			if signal != "ActionInvoked" && signal != "NotificationClosed" {
 				return
 			}
 
-			var params = VariantTuple(_params, 2)
-			var id, _ = params[0].GetUint()
-
 			switch signal {
 			case "ActionInvoked":
-				n.onAction(uint32(id), params[1].GetString())
+				id := params.ChildValue(0).Uint32()
+				action := params.ChildValue(1).String()
+				n.onAction(id, action)
 			case "NotificationClosed":
-				reason, _ := params[1].GetUint()
-				n.onClose(uint32(id), uint32(reason))
+				id := params.ChildValue(0).Uint32()
+				reason := params.ChildValue(1).Uint32()
+				n.onClose(id, reason)
 			}
 		},
 	)
@@ -52,9 +56,8 @@ func NewNotifier(c *Connection) *Notifier {
 
 func (n *Notifier) onClose(id, reason uint32) {
 	n.actionMu.Lock()
-	defer n.actionMu.Unlock()
-
 	delete(n.actions, id)
+	n.actionMu.Unlock()
 }
 
 func (n *Notifier) onAction(id uint32, actionKey string) {
@@ -68,8 +71,7 @@ func (n *Notifier) onAction(id uint32, actionKey string) {
 
 	for _, action := range actions {
 		if action.ID == actionKey {
-			go action.Callback()
-			break
+			glib.IdleAdd(func() { action.Callback() })
 		}
 	}
 }
@@ -77,7 +79,7 @@ func (n *Notifier) onAction(id uint32, actionKey string) {
 type Action struct {
 	ID       string
 	Label    string
-	Callback func() // called in goroutine
+	Callback func() // called in main event loop
 }
 
 type Notification struct {
@@ -89,67 +91,55 @@ type Notification struct {
 	Expiry  int32
 }
 
+// Notify is blocking.
 func (c *Notifier) Notify(n Notification) (uint32, error) {
-	args := make([]*C.GVariant, 8) // num of structs
-	args[0] = C.g_variant_new_take_string(C.CString(n.AppName))
-	args[1] = C.g_variant_new_uint32(C.guint32(0))
-	args[2] = C.g_variant_new_take_string(C.CString(n.AppIcon))
-	args[3] = C.g_variant_new_take_string(C.CString(n.Title))
-	args[4] = C.g_variant_new_take_string(C.CString(n.Message))
+	if c.DBusConnection == nil {
+		return 0, errors.New("no dbus connection")
+	}
 
-	var firstAction **C.GVariant
+	args := make([]*glib.Variant, 8)
+	args[0] = glib.NewVariantString(n.AppName)
+	args[1] = glib.NewVariantUint32(0)
+	args[2] = glib.NewVariantString(n.AppIcon)
+	args[3] = glib.NewVariantString(n.Title)
+	args[4] = glib.NewVariantString(n.Message)
+
+	var firstAction []*glib.Variant
 
 	if len(n.Actions) > 0 {
-		var actions = make([]*C.GVariant, len(n.Actions)*2)
+		firstAction = make([]*glib.Variant, len(n.Actions)*2)
 
-		for i := 0; i < len(actions); i += 2 {
+		for i := 0; i < len(firstAction); i += 2 {
 			action := n.Actions[i/2]
 
-			k := C.g_variant_new_take_string(C.CString(action.ID))
-			v := C.g_variant_new_take_string(C.CString(action.Label))
-
-			actions[i], actions[i+1] = k, v
+			firstAction[i+0] = glib.NewVariantString(action.ID)
+			firstAction[i+1] = glib.NewVariantString(action.Label)
 		}
-
-		firstAction = &actions[0]
 	}
 
-	args[5] = C.g_variant_new_array(C.G_VARIANT_TYPE_STRING, firstAction, C.gsize(len(n.Actions)*2))
+	args[5] = glib.NewVariantArray(glib.NewVariantType("s"), firstAction)
+	args[6] = glib.NewVariantDict(nil).End()
+	args[7] = glib.NewVariantInt32(n.Expiry)
 
-	dict := C.g_variant_dict_new(nil)
-	defer C.g_variant_dict_unref(dict)
-	args[6] = C.g_variant_dict_end(dict)
+	argsTuple := glib.NewVariantTuple(args)
 
-	args[7] = C.g_variant_new_int32(C.gint32(n.Expiry))
-
-	var gerr *C.GError
-
-	v := C.g_dbus_connection_call_sync(
-		c.Native,
-		C.CString("org.freedesktop.Notifications"),
-		C.CString("/org/freedesktop/Notifications"),
-		C.CString("org.freedesktop.Notifications"),
-		C.CString("Notify"),
-		C.g_variant_new_tuple(&args[0], C.gsize(8)),
-		C.G_VARIANT_TYPE_ANY,
-		C.G_DBUS_CALL_FLAGS_NONE,
-		C.gint(-1),
-		nil,
-		&gerr,
+	v, err := c.CallSync(
+		context.Background(),
+		"org.freedesktop.Notifications",
+		"/org/freedesktop/Notifications",
+		"org.freedesktop.Notifications",
+		"Notify",
+		argsTuple,
+		glib.NewVariantType("*"), // any
+		gio.DBusCallFlagsNone,
+		5000,
 	)
-
-	if gerr != nil {
-		return 0, errors.New(errorMessage(gerr))
-	}
-
-	child := C.g_variant_get_child_value(v, 0)
-
-	u, err := glib.TakeVariant(unsafe.Pointer(child)).GetUint()
 	if err != nil {
-		return 0, errors.Wrap(err, "Failed to get ID")
+		return 0, err
 	}
 
-	id := uint32(u)
+	child := v.ChildValue(0)
+	id := child.Uint32()
 
 	c.actionMu.Lock()
 	c.actions[id] = n.Actions

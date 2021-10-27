@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+LOCAL=0
+
+# local
+init() {
+	# Pinned Nixpkgs means consistent outputs :)
+	# time go generate
+	:
+}
+
+# remote
+main() {
+	go build -v
+}
+
+SSH_ARGS=(-p 1337)
+SSH_ADDR="diamond@hanaharu"
+
+SYNC_FORTH=1
+SYNC_BACK=1
+
+NAMESPACE="gtkcord3"
+
+# Exit on fail.
+set -e
+
+__execute() {
+	main "$@"
+	exit $?
+}
+
+# If ran with --remote, then execute remote_main and bail.
+[[ $1 == "--remote" ]] && {
+	shift
+	__execute "$@"
+}
+
+init "$@"
+
+[[ $LOCAL == "1" ]] && __execute "$@"
+
+[[ $SYNC_FORTH == 1 ]] && rsync \
+	--info=progress2 -arz --delete -e "ssh ${SSH_ARGS[*]}" \
+	--include "remotebuild" --exclude ".git" \
+	. "$SSH_ADDR:/tmp/remotebuild-$NAMESPACE/"
+
+cat<<EOF | ssh -q "${SSH_ARGS[@]}" "$SSH_ADDR" |& tee /tmp/remotebuild_out
+	cd /tmp/remotebuild-$NAMESPACE/
+	nix-shell ./shell.nix --command './remotebuild --remote'
+EOF
+
+[[ $SYNC_BACK == 1 ]] && rsync \
+	--info=progress2 -arzu -e "ssh ${SSH_ARGS[*]}" \
+	--include "remotebuild" --exclude ".git" \
+ 	"$SSH_ADDR:/tmp/remotebuild-$NAMESPACE/." ./

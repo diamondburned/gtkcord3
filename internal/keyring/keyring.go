@@ -6,7 +6,7 @@ import (
 )
 
 func Get() string {
-	k, err := keyring.Get("gtkcord", "token")
+	k, err := keyring.Get("gtkcord3", "token")
 	if err != nil {
 		log.Errorln("[non-fatal] Failed to get Gtkcord token from keyring")
 	}
@@ -19,13 +19,13 @@ func Get() string {
 }
 
 func Set(token string) {
-	if err := keyring.Set("gtkcord", "token", token); err != nil {
-		log.Errorln("[non-fatal] Failed to set Gtkcord token to keyring")
+	if err := keyring.Set("gtkcord3", "token", token); err != nil {
+		log.Errorln("[non-fatal] failed to set Gtkcord token to keyring")
 	}
 }
 
 func Delete() {
-	if err := keyring.Delete("gtkcord", "token"); err != nil {
-		log.Errorln("[non-fatal] Failed to delete Gtkcord token from keyring")
+	if err := keyring.Delete("gtkcord3", "token"); err != nil {
+		log.Errorln("[non-fatal] failed to delete Gtkcord token from keyring")
 	}
 }

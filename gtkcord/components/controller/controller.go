@@ -2,7 +2,7 @@ package controller
 
 import (
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
 type Container struct {
@@ -22,7 +22,7 @@ type Controlled interface {
 }
 
 func New() *Container {
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.Show()
 	b.SetHAlign(gtk.ALIGN_END)
 
@@ -33,13 +33,13 @@ func New() *Container {
 }
 
 func (c *Container) Add(icon string, ctrl Controlled, active bool) *Button {
-	mb, _ := gtk.MenuButtonNew()
+	mb := gtk.NewMenuButton()
 	mb.Show()
-	mb.SetHAlign(gtk.ALIGN_CENTER)
+	mb.SetHAlign(gtk.AlignCenter)
 	mb.SetActive(active)
 	mb.SetSensitive(true)
 
-	i, err := gtk.ImageNewFromIconName(icon, gtk.ICON_SIZE_LARGE_TOOLBAR)
+	i, err := gtk.NewImageFromIconName(icon, gtk.ICON_SIZE_LARGE_TOOLBAR)
 	if err != nil {
 		log.Panicln("Failed to load icon:", err)
 	}

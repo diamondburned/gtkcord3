@@ -1,22 +1,6 @@
 package icons
 
-import (
-	"bytes"
-	"encoding/base64"
-	"image"
-	"image/png"
-	"io"
-	"strconv"
-	"sync"
-
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
-)
-
+/*
 var IconTheme *gtk.IconTheme
 var iconMap map[string]*gdk.Pixbuf
 var iconMu sync.Mutex
@@ -55,7 +39,7 @@ func GetIcon(icon string, size int) *gdk.Pixbuf {
 	return pb
 }
 
-func GetIconUnsafe(icon string, size int) *gdk.Pixbuf {
+func GetIconUnsafe!!ILLEGAL!!(icon string, size int) *gdk.Pixbuf {
 	var key = icon + "#" + strconv.Itoa(size)
 
 	if IconTheme == nil {
@@ -77,42 +61,32 @@ func GetIconUnsafe(icon string, size int) *gdk.Pixbuf {
 	return pb
 }
 
-func FromPNG(b64 string) image.Image {
-	b, err := base64.RawStdEncoding.DecodeString(b64)
-	if err != nil {
-		panic("Failed to decode image: " + err.Error())
-	}
-
-	i, err := png.Decode(bytes.NewReader(b))
-	if err != nil {
-		panic("Failed to decode image: " + err.Error())
-	}
-
-	return i
-}
-
 var pngEncoder = png.Encoder{
 	CompressionLevel: png.BestSpeed,
 }
 
-func Pixbuf(img image.Image) (*gdk.Pixbuf, error) {
-	var buf bytes.Buffer
-
-	if err := pngEncoder.Encode(&buf, img); err != nil {
-		return nil, errors.Wrap(err, "Failed to encode PNG")
+func Pixbuf(img image.Image) (*gdkpixbuf.Pixbuf, error) {
+	if rgba, ok := img.(*image.RGBA); ok {
+		return gdkpixbuf.NewPixbufFromBytes(
+			glib.NewBytesWithGo(rgba.Pix), gdkpixbuf.ColorspaceRGB, true, 8,
+			rgba.Rect.Dx(), rgba.Rect.Dy(), rgba.Stride,
+		), nil
 	}
 
-	l, err := gdk.PixbufLoaderNewWithType("png")
+	l, err := gdkpixbuf.NewPixbufLoaderWithType("png")
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create an icon pixbuf loader")
 	}
 
-	p, err := l.WriteAndReturnPixbuf(buf.Bytes())
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to set icon to pixbuf")
+	if err := pngEncoder.Encode(gioutil.PixbufLoaderWriter(l), img); err != nil {
+		return nil, errors.Wrap(err, "Failed to encode PNG")
 	}
 
-	return p, nil
+	if err := l.Close(); err != nil {
+		return nil, errors.Wrap(err, "failed to close")
+	}
+
+	return l.Pixbuf(), nil
 }
 
 func PixbufIcon(img image.Image, size int) (*gdk.Pixbuf, error) {
@@ -168,3 +142,4 @@ func SetImage(img image.Image, gtkimg *gtk.Image) error {
 
 	return nil
 }
+*/

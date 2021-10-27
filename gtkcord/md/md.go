@@ -2,12 +2,15 @@ package md
 
 import (
 	"bytes"
+	"sort"
+	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/state/store"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/diamondburned/ningen/md"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
+	"github.com/diamondburned/ningen/v2/md"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 )
@@ -20,22 +23,22 @@ var (
 	UserPressed    func(ev PressedEvent, user *discord.GuildUser)
 )
 
-func ParseMessageContent(dst *gtk.TextView, s state.Store, m *discord.Message) {
+func ParseMessageContent(dst *gtk.TextView, s *ningen.State, m *discord.Message) {
 	parseMessage([]byte(m.Content), dst, s, m, true)
 }
 
-func ParseWithMessage(content []byte, dst *gtk.TextView, s state.Store, m *discord.Message) {
+func ParseWithMessage(content []byte, dst *gtk.TextView, s *ningen.State, m *discord.Message) {
 	parseMessage(content, dst, s, m, false)
 }
 
-func parseMessage(b []byte, dst *gtk.TextView, s state.Store, m *discord.Message, msg bool) {
-	node := md.ParseWithMessage(b, s, m, msg)
+func parseMessage(b []byte, dst *gtk.TextView, s *ningen.State, m *discord.Message, msg bool) {
+	node := md.ParseWithMessage(b, s.Cabinet, m, msg)
 
 	r := NewRenderer(dst)
 	renderToBuf(NewRenderer(dst), b, node)
 
 	// Is the not message edited? (Or if we don't want a timestamp)
-	if !msg || !m.EditedTimestamp.Valid() {
+	if !msg || !m.EditedTimestamp.IsValid() {
 		return
 	}
 
@@ -51,13 +54,13 @@ func Parse(content []byte, dst *gtk.TextView, opts ...parser.ParseOption) {
 
 func renderToBuf(r *Renderer, src []byte, node ast.Node) {
 	// Wipe the buffer clean
-	r.Buffer.Delete(r.Buffer.GetStartIter(), r.Buffer.GetEndIter())
+	r.Buffer.SetText("")
 
 	r.Render(nil, src, node)
 
 	// Remove trailing space:
-	end := r.Buffer.GetEndIter()
-	back := r.Buffer.GetEndIter()
+	end := r.Buffer.EndIter()
+	back := r.Buffer.EndIter()
 	back.BackwardChar()
 
 	r.Buffer.Delete(back, end)
@@ -70,7 +73,7 @@ func ParseToMarkup(content []byte) []byte {
 	return bytes.TrimSpace(buf.Bytes())
 }
 
-func ParseToMarkupWithMessage(content []byte, s state.Store, m *discord.Message) []byte {
+func ParseToMarkupWithMessage(content []byte, s store.Cabinet, m *discord.Message) []byte {
 	node := md.ParseWithMessage(content, s, m, false)
 
 	var buf bytes.Buffer
@@ -79,7 +82,7 @@ func ParseToMarkupWithMessage(content []byte, s state.Store, m *discord.Message)
 	return bytes.TrimSpace(buf.Bytes())
 }
 
-func ParseToSimpleMarkupWithMessage(content []byte, s state.Store, m *discord.Message) []byte {
+func ParseToSimpleMarkupWithMessage(content []byte, s store.Cabinet, m *discord.Message) []byte {
 	node := md.ParseWithMessage(content, s, m, false)
 
 	var buf bytes.Buffer
@@ -88,26 +91,23 @@ func ParseToSimpleMarkupWithMessage(content []byte, s state.Store, m *discord.Me
 	return bytes.TrimSpace(buf.Bytes())
 }
 
-func getMessage(pc parser.Context) *discord.Message {
-	if v := pc.Get(messageCtx); v != nil {
-		return v.(*discord.Message)
-	}
-	return nil
-}
-func getSession(pc parser.Context) state.Store {
-	if v := pc.Get(sessionCtx); v != nil {
-		return v.(state.Store)
-	}
-	return nil
-}
-
 func WrapTag(tv *gtk.TextView, props map[string]interface{}) {
-	bf, _ := tv.GetBuffer()
+	bf := tv.Buffer()
 
-	var name string
+	names := make([]string, 0, len(props))
 	for key := range props {
-		name += key + " "
+		names = append(names, key)
+	}
+	sort.Strings(names)
+
+	tag := gtk.NewTextTag(strings.Join(names, " "))
+	for key, value := range props {
+		tag.SetObjectProperty(key, value)
 	}
 
-	bf.ApplyTag(bf.CreateTag(name, props), bf.GetStartIter(), bf.GetEndIter())
+	table := bf.TagTable()
+
+	if table.Add(tag) {
+		bf.ApplyTag(tag, bf.StartIter(), bf.EndIter())
+	}
 }

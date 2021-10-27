@@ -1,6 +1,6 @@
 package ningen
 
-import "github.com/diamondburned/arikawa/discord"
+import "github.com/diamondburned/arikawa/v2/discord"
 
 func EmojiString(e *discord.Emoji) string {
 	if e == nil {

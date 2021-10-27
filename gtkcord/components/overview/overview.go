@@ -1,51 +1,59 @@
 package overview
 
 import (
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/loadstatus"
+	"github.com/diamondburned/ningen/v2"
 )
 
 const CommonMargin = 15
 
 type Container struct {
 	*gtk.ScrolledWindow
-	Column *handy.Column
+	Column *handy.Clamp
 
 	Guild   *GuildInfo
 	Channel *ChannelInfo
 	Members *Members
 }
 
-func NewContainer(state *ningen.State, gID, chID discord.Snowflake) (*Container, error) {
-	guild, err := state.Store.Guild(gID)
+func overviewErrorPage(err error) gtk.Widgetter {
+	page := loadstatus.NewPage()
+	page.SetError("Guild Error", err)
+	return page
+}
+
+func NewContainer(state *ningen.State, gID discord.GuildID, chID discord.ChannelID) gtk.Widgetter {
+	state = state.Offline()
+
+	guild, err := state.Guild(gID)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get guild")
+		return overviewErrorPage(err)
 	}
 
-	ch, err := state.Store.Channel(chID)
+	ch, err := state.Channel(chID)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get channel")
+		return overviewErrorPage(err)
 	}
 
-	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
-	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+	scroll := gtk.NewScrolledWindow(nil, nil)
+	scroll.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
 	scroll.Show()
 
-	column := handy.ColumnNew()
+	column := handy.NewClamp()
+	column.SetMaximumSize(500) // hard codeeee
 	column.Show()
-	column.SetMaximumWidth(500) // hard codeeee
 	scroll.Add(column)
 
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.Show()
 	column.Add(b)
 
-	ginfo := NewGuildInfo(*guild)
-	cinfo := NewChannelInfo(*ch)
-	membs := NewMembers(state, *guild)
+	ginfo := NewGuildInfo(guild)
+	cinfo := NewChannelInfo(ch)
+	membs := NewMembers(state, gID, chID)
 
 	b.Add(ginfo)
 	b.Add(newSeparator())
@@ -59,11 +67,11 @@ func NewContainer(state *ningen.State, gID, chID discord.Snowflake) (*Container,
 		ginfo,
 		cinfo,
 		membs,
-	}, nil
+	}
 }
 
 func newSeparator() *gtk.Separator {
-	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	s := gtk.NewSeparator(gtk.OrientationHorizontal)
 	s.Show()
 	// s.SetMarginStart(CommonMargin)
 	// s.SetMarginEnd(CommonMargin)

@@ -3,76 +3,64 @@ package guild
 import (
 	"sort"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/ningen/v2"
+	"github.com/diamondburned/ningen/v2/states/read"
 )
 
 type Guilds struct {
-	gtkutils.ExtendedWidget
+	gtk.Widgetter
 
 	ListBox  *gtk.ListBox
 	DMButton *DMButton
 
-	Guilds   []gtkutils.ExtendedWidget
+	Guilds   []gtk.Widgetter
 	Current  *Guild
 	OnSelect func(g *Guild)
 
 	state *ningen.State
 }
 
-func NewGuilds(s *ningen.State) (g *Guilds, err error) {
-	semaphore.IdleMust(func() {
-		if len(s.Ready.Settings.GuildFolders) > 0 {
-			g, err = newGuildsFromFolders(s, s.Ready.Settings.GuildFolders)
-		} else {
-			g, err = newGuildsLegacy(s, s.Ready.Settings.GuildPositions)
-		}
-	})
-	return
+func NewGuilds(s *ningen.State) *Guilds {
+	settings := s.Ready().UserSettings
+
+	if len(settings.GuildFolders) > 0 {
+		return newGuildsFromFolders(s, settings.GuildFolders)
+	} else {
+		return newGuildsLegacy(s, settings.GuildPositions)
+	}
 }
 
-func newGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) (*Guilds, error) {
-	var rows = make([]gtkutils.ExtendedWidget, 0, len(folders))
-	var g = &Guilds{}
+func newGuildsFromFolders(s *ningen.State, folders []gateway.GuildFolder) *Guilds {
+	rows := make([]gtk.Widgetter, 0, len(folders))
+	g := &Guilds{}
 
 	for i := 0; i < len(folders); i++ {
 		f := folders[i]
 
 		if len(f.GuildIDs) == 1 {
-			r, err := newGuildRow(s, f.GuildIDs[0], nil, nil)
-			if err != nil {
-				return nil, errors.Wrap(err, "Failed to load guild "+f.GuildIDs[0].String())
-			}
-
+			r := newGuildRow(s, f.GuildIDs[0], nil)
 			rows = append(rows, r)
-
 		} else {
-			e, err := newGuildFolder(s, f, g.onFolderSelect)
-			if err != nil {
-				return nil, errors.Wrap(err, "Failed to create a new folder "+f.Name)
-			}
-
+			e := newGuildFolder(s, f, g.onFolderSelect)
 			rows = append(rows, e)
 		}
 	}
 
 	g.Guilds = rows
 	initGuilds(g, s)
-	return g, nil
+	return g
 }
 
-func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, error) {
-	guilds, err := s.Guilds()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get guilds")
-	}
+func newGuildsLegacy(s *ningen.State, positions []discord.GuildID) *Guilds {
+	// TODO: retry mechanism.
+	guilds, _ := s.Guilds()
 
-	var rows = make([]gtkutils.ExtendedWidget, 0, len(guilds))
+	rows := make([]gtk.Widgetter, 0, len(guilds))
 
 	sort.Slice(guilds, func(a, b int) bool {
 		var found = false
@@ -89,11 +77,7 @@ func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 	})
 
 	for _, g := range guilds {
-		r, err := newGuildRow(s, g.ID, &g, nil)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to load guild "+g.Name)
-		}
-
+		r := newGuildRow(s, g.ID, nil)
 		rows = append(rows, r)
 	}
 
@@ -101,38 +85,37 @@ func newGuildsLegacy(s *ningen.State, positions []discord.Snowflake) (*Guilds, e
 		Guilds: rows,
 	}
 	initGuilds(g, s)
-	return g, nil
+	return g
 }
 
 func initGuilds(g *Guilds, s *ningen.State) {
 	g.state = s
 
-	dm := NewPMButton(s)
+	g.ListBox = gtk.NewListBox()
+	g.ListBox.SetActivateOnSingleClick(true)
+	gtkutils.InjectCSS(g.ListBox, "guilds", "")
+	g.ListBox.Show()
 
-	gw, _ := gtk.ScrolledWindowNew(nil, nil)
+	gw := gtk.NewScrolledWindow(nil, nil)
+	gw.SetPolicy(gtk.PolicyNever, gtk.PolicyExternal) // external means hidden scroll
+	gw.Add(g.ListBox)
 	gw.Show()
-	gw.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL) // external means hidden scroll
-	g.ExtendedWidget = gw
-
-	l, _ := gtk.ListBoxNew()
-	l.Show()
-	l.SetActivateOnSingleClick(true)
-	gtkutils.InjectCSSUnsafe(l, "guilds", "")
-
-	gw.Add(l)
-	g.ListBox = l
+	g.Widgetter = gw
 
 	// Add the button to the second of the list:
-	g.DMButton = dm
-	l.Insert(dm, -1)
+	g.DMButton = NewPMButton(s)
+	g.ListBox.Insert(g.DMButton, -1)
 
 	// Add the rest:
-	for _, g := range g.Guilds {
-		l.Insert(g, -1)
-		g.ShowAll()
+	for _, guild := range g.Guilds {
+		g.ListBox.Insert(guild, -1)
 	}
-	l.Connect("row-activated", g.rowActivated)
-	s.Read.OnChange(g.TraverseReadState)
+
+	g.ListBox.ShowAll()
+	g.ListBox.Connect("row-activated", g.rowActivated)
+	s.ReadState.OnUpdate(func(rs *read.UpdateEvent) {
+		glib.IdleAdd(func() { g.TraverseReadState(rs) })
+	})
 }
 
 func (g *Guilds) rowActivated(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -153,7 +136,7 @@ func (g *Guilds) Select(r *gtk.ListBoxRow) {
 func (g *Guilds) preSelect(r *gtk.ListBoxRow) (guild *Guild, dm bool) {
 	var index = -1
 	if r != nil {
-		index = r.GetIndex()
+		index = r.Index()
 	}
 
 	switch {
@@ -166,7 +149,7 @@ func (g *Guilds) preSelect(r *gtk.ListBoxRow) (guild *Guild, dm bool) {
 		index--
 	}
 
-	var row = g.Guilds[index]
+	row := g.Guilds[index]
 
 	// Unselect all guild folders except the current one:
 	g.unselectAll(index)
@@ -211,7 +194,7 @@ func (guilds *Guilds) onSelect(g *Guild) {
 	guilds.OnSelect(g)
 }
 
-func (guilds *Guilds) FindByID(guildID discord.Snowflake) (*Guild, *GuildFolder) {
+func (guilds *Guilds) FindByID(guildID discord.GuildID) (*Guild, *GuildFolder) {
 	return guilds.Find(func(g *Guild) bool {
 		return g.ID == guildID
 	})
@@ -236,14 +219,14 @@ func (guilds *Guilds) Find(fn func(*Guild) bool) (*Guild, *GuildFolder) {
 	return nil, nil
 }
 
-func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
-	ch, err := guilds.state.Store.Channel(chrs.ChannelID)
+func (guilds *Guilds) TraverseReadState(rs *read.UpdateEvent) {
+	ch, err := guilds.state.Offline().Channel(rs.ChannelID)
 	if err != nil {
 		return
 	}
-	if !ch.GuildID.Valid() {
+	if !ch.GuildID.IsValid() {
 		// DM:
-		guilds.DMButton.setUnread(unread)
+		guilds.DMButton.setUnread(rs.Unread)
 		return
 	}
 
@@ -252,14 +235,12 @@ func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
 		return
 	}
 
-	pinged := chrs.MentionCount > 0
+	pinged := rs.MentionCount > 0
+	unread := rs.Unread
 
-	if guilds.state.Muted.Channel(ch.ID) {
+	if guilds.state.MutedState.Channel(ch.ID) {
 		unread = false
 	}
-
-	guild.busy.Lock()
-	defer guild.busy.Unlock()
 
 	// TODO: confirm that nothing breaks with this running prematurely.
 	if guild.muted {
@@ -284,6 +265,5 @@ func (guilds *Guilds) TraverseReadState(chrs gateway.ReadState, unread bool) {
 		}
 	}
 
-	// IdleMust so the mutex is affected.
-	semaphore.IdleMust(guild.setUnread, unread, pinged)
+	guild.setUnread(unread, pinged)
 }

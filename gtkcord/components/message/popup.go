@@ -1,11 +1,11 @@
 package message
 
 import (
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 func (m *Messages) injectPopup() {
@@ -16,18 +16,15 @@ func (m *Messages) injectPopup() {
 
 func (m *Messages) userMentionPressed(ev md.PressedEvent, user *discord.GuildUser) {
 	// Get the relative position to ev.TextView
-	var rect gdk.Rectangle
-	rect.SetX(int(ev.X()))
-	rect.SetY(int(ev.Y()))
+	rect := gdk.NewRectangle(int(ev.X()), int(ev.Y()), 0, 0)
 
 	// Make a new popover relatively to TextView
 	p := popup.NewPopover(ev.TextView)
-	p.SetPosition(gtk.POS_RIGHT)
-	p.SetPointingTo(rect)
+	p.SetPosition(gtk.PosRight)
+	p.SetPointingTo(&rect)
 
-	body := popup.NewStatefulPopupBody(m.c, user.ID, m.GetGuildID())
-	body.Prefetch = &user.User
-	body.ParentStyle, _ = p.GetStyleContext()
+	body := popup.NewStatefulPopupUser(m.c, user.User, m.GuildID())
+	body.ParentStyle = p.StyleContext()
 
 	p.SetChildren(body)
 	p.Popup()
@@ -40,22 +37,21 @@ func (m *Messages) onAvatarClick(msg *Message) {
 	}
 
 	p := popup.NewPopover(msg.avatar)
-	p.SetPosition(gtk.POS_RIGHT)
+	p.SetPosition(gtk.PosRight)
 
-	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GetGuildID())
-	body.ParentStyle, _ = p.GetStyleContext()
+	body := popup.NewStatefulPopupBody(m.c, msg.AuthorID, m.GuildID())
+	body.ParentStyle = p.StyleContext()
 
 	p.SetChildren(body)
 	p.Popup()
 }
 
 func (m *Messages) onRightClick(msg *Message, btn *gdk.EventButton) {
-	menu, _ := gtk.MenuNew()
+	menu := gtk.NewMenu()
 
 	m.menuAddAdmin(msg, menu)
 	m.menuAddDebug(msg, menu)
 
-	menu.Show()
-	menu.PopupAtPointer(btn.Event)
+	menu.PopupAtPointer(gdk.CopyEventer(btn))
 	menu.GrabFocus()
 }

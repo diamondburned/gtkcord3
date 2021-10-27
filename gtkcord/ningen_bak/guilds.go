@@ -3,8 +3,8 @@ package ningen
 import (
 	"time"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
@@ -42,7 +42,7 @@ func (n *State) SearchMember(guildID discord.Snowflake, prefix string) {
 
 	gd.lastRequested = time.Now().Add(time.Second)
 
-	go func() {
+	/* TODO: INSPECT ME */ go func() {
 		err := n.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
 			GuildID:   []discord.Snowflake{guildID},
 			Query:     prefix,
@@ -67,7 +67,7 @@ func (n *State) RequestMember(guildID, memID discord.Snowflake) {
 
 	gd.requestingMembers[memID] = struct{}{}
 
-	go func() {
+	/* TODO: INSPECT ME */ go func() {
 		err := n.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
 			GuildID:   []discord.Snowflake{guildID},
 			UserIDs:   []discord.Snowflake{memID},

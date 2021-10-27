@@ -3,11 +3,11 @@ package members
 import (
 	"fmt"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/user"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 const MemberAvatarSize = 32
@@ -21,15 +21,15 @@ type Section struct {
 }
 
 func NewSection(name string, count uint64) *Section {
-	r, _ := gtk.ListBoxRowNew()
+	r := gtk.NewListBoxRow()
 	r.Show()
 	r.SetSelectable(false)
 	r.SetActivatable(false)
-	gtkutils.InjectCSSUnsafe(r, "section", "")
+	gtkutils.InjectCSS(r, "section", "")
 
-	l, _ := gtk.LabelNew("")
+	l := gtk.NewLabel("")
 	l.Show()
-	l.SetHAlign(gtk.ALIGN_START)
+	l.SetHAlign(gtk.AlignStart)
 	gtkutils.Margin4(l, 16, 2, 8, 8)
 	r.Add(l)
 
@@ -37,7 +37,7 @@ func NewSection(name string, count uint64) *Section {
 		ListBoxRow: r,
 		Label:      l,
 	}
-	s.UpdateUnsafe(name, count)
+	s.Update(name, count)
 
 	return s
 }
@@ -46,7 +46,6 @@ func (s *Section) shouldUpdate(name string, count uint64) bool {
 	if (name != "" && s.Name == name) && (count > 0 && s.Count == count) {
 		return false
 	}
-
 	if name != "" {
 		s.Name = name
 	}
@@ -61,17 +60,10 @@ func (s *Section) Update(name string, count uint64) {
 		return
 	}
 
-	semaphore.IdleMust(s.Label.SetMarkup,
-		fmt.Sprintf(`<span size="smaller" weight="bold">%s—%d</span>`, s.Name, s.Count))
-}
-
-func (s *Section) UpdateUnsafe(name string, count uint64) {
-	if !s.shouldUpdate(name, count) {
-		return
-	}
-
-	s.Label.SetMarkup(
-		fmt.Sprintf(`<span size="smaller" weight="bold">%s—%d</span>`, s.Name, s.Count))
+	s.Label.SetMarkup(fmt.Sprintf(
+		`<span size="smaller" weight="bold">%s—%d</span>`,
+		s.Name, s.Count,
+	))
 }
 
 type Member struct {
@@ -79,14 +71,17 @@ type Member struct {
 	User *user.Container
 
 	// user
-	ID discord.Snowflake
+	ID discord.UserID
 }
 
-func NewMember(m discord.Member, p discord.Presence, guild discord.Guild) *Member {
+func NewMember(m discord.Member, p gateway.Presence, guild discord.Guild) *Member {
 	body := user.New()
 	body.UpdateMember(m, guild)
-	body.UpdateActivity(p.Game)
 	body.UpdateStatus(p.Status)
+
+	if len(p.Activities) > 0 {
+		body.UpdateActivity(&p.Activities[0])
+	}
 
 	if m.User.Avatar != "" {
 		body.UpdateAvatar(m.User.AvatarURL() + "?size=32")
@@ -101,8 +96,8 @@ func NewMemberUnavailable() *Member {
 	return newMember(body, 0)
 }
 
-func newMember(body *user.Container, uID discord.Snowflake) *Member {
-	r, _ := gtk.ListBoxRowNew()
+func newMember(body *user.Container, uID discord.UserID) *Member {
+	r := gtk.NewListBoxRow()
 	r.Show()
 	r.Add(body)
 

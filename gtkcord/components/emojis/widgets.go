@@ -1,9 +1,10 @@
 package emojis
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 type RevealerBox struct {
@@ -11,69 +12,63 @@ type RevealerBox struct {
 	Revealer *gtk.Revealer
 }
 
-func newRevealerBox(btn *gtk.Button, reveal gtk.IWidget, click func()) *RevealerBox {
-	r, _ := gtk.RevealerNew()
+func (r *RevealerBox) ConnectRevealChild(f func(revealed bool)) {
+	r.Revealer.Connect("notify::reveal-child", func() {
+		f(r.Revealer.RevealChild())
+	})
+}
+
+func newRevealerBox(btn *gtk.ToggleButton, reveal gtk.Widgetter) *RevealerBox {
+	r := gtk.NewRevealer()
 	r.Show()
 	r.SetRevealChild(false)
 	r.Add(reveal)
 
 	// Wrap both the widget child and the revealer
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.Show()
 	b.Add(btn)
 	b.Add(r)
 
-	btn.Connect("clicked", click)
+	btn.ConnectToggled(func() {
+		r.SetRevealChild(btn.Active())
+	})
 
 	return &RevealerBox{b, r}
 }
 
-func newHeader(name string, imgURL string) *gtk.Button {
-	i, _ := gtk.ImageNew()
-	i.Show()
-
+func newHeaderButton(name string, imgURL string) *gtk.ToggleButton {
+	i := roundimage.NewImage(0)
 	gtkutils.Margin(i, 4)
-	gtkutils.ImageSetIcon(i, "image-missing", Size)
 
-	l, _ := gtk.LabelNew(name)
-	l.Show()
+	l := gtk.NewLabel(name)
 	l.SetMarginStart(4)
-	l.SetHAlign(gtk.ALIGN_START)
+	l.SetHAlign(gtk.AlignStart)
 
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
-	box.Show()
+	box := gtk.NewBox(gtk.OrientationHorizontal, 4)
 	box.Add(i)
 	box.Add(l)
 
-	b, _ := gtk.ButtonNew()
-	b.Show()
-	b.SetRelief(gtk.RELIEF_NONE)
+	b := gtk.NewToggleButton()
+	b.SetRelief(gtk.ReliefNone)
 	b.Add(box)
+	b.ShowAll()
 
 	if imgURL == "" {
+		i.SetInitials(name)
 		return b
 	}
 
 	// ?size=64 is from the left-bar guilds icon.
-	cache.AsyncFetchUnsafe(imgURL+"?size=64", i, Size, Size, cache.Round)
+	cache.SetImageURLScaled(i, imgURL+"?size=64", Size, Size)
 
 	return b
 }
 
-// func disableFocusScroll(s *gtk.ScrolledWindow) {
-// 	// Make a custom viewport to prevent scroll to focus.
-// 	w, _ := s.GetChild()
-// 	c := &gtk.Container{Widget: *w}
-
-// 	adj, _ := gtk.AdjustmentNew(0, 0, 0, 0, 0, 0)
-// 	c.SetFocusHAdjustment(adj)
-// 	c.SetFocusVAdjustment(adj)
-// }
-
 func newStaticViewport() *gtk.Viewport {
-	adj, _ := gtk.AdjustmentNew(0, 0, 0, 0, 0, 0)
+	adj := gtk.NewAdjustment(0, 0, 0, 0, 0, 0)
 
-	v, _ := gtk.ViewportNew(nil, nil)
+	v := gtk.NewViewport(nil, nil)
 	v.SetFocusHAdjustment(adj)
 	v.SetFocusVAdjustment(adj)
 
@@ -81,13 +76,13 @@ func newStaticViewport() *gtk.Viewport {
 }
 
 func newFlowBox() *gtk.FlowBox {
-	f, _ := gtk.FlowBoxNew()
-	f.Show()
+	f := gtk.NewFlowBox()
 	f.SetHomogeneous(true)
-	f.SetSelectionMode(gtk.SELECTION_SINGLE)
+	f.SetSelectionMode(gtk.SelectionSingle)
 	f.SetActivateOnSingleClick(true)
 	f.SetMaxChildrenPerLine(10) // from Discord
 	f.SetMinChildrenPerLine(10) // from Discord Mobile
+	f.Show()
 
 	return f
 }

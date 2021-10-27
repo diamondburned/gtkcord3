@@ -5,19 +5,20 @@ import (
 	"html"
 	"time"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/extras"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message/reactions"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/ningen/v2"
+
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
 )
 
 type Message struct {
@@ -25,8 +26,8 @@ type Message struct {
 	style *gtk.StyleContext
 
 	Nonce    string
-	ID       discord.Snowflake
-	AuthorID discord.Snowflake
+	ID       discord.MessageID
+	AuthorID discord.UserID
 	Author   string
 	Webhook  bool
 
@@ -38,7 +39,7 @@ type Message struct {
 
 	// Left side, nil everything if compact mode
 	avatarEv *gtk.EventBox
-	avatar   *gtk.Image
+	avatar   *roundimage.Image
 
 	// Right container:
 	right *gtk.Box
@@ -54,7 +55,9 @@ type Message struct {
 	textView    *gtk.TextView
 	content     *gtk.TextBuffer
 	reactions   *reactions.Container
-	extras      []gtk.IWidget // embeds, images, etc
+	extras      []gtk.Widgetter // embeds, images, etc
+
+	errorLabel *gtk.Label
 
 	Condensed      bool
 	CondenseOffset time.Duration
@@ -65,20 +68,14 @@ type Message struct {
 	busy int32
 }
 
-func newMessage(s *ningen.State, m *discord.Message) *Message {
-	return semaphore.IdleMust(newMessageUnsafe, s, m).(*Message)
-}
-
-func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
-	// defer log.Benchmark("newMessage")()
-
-	message := newMessageCustomUnsafe(m)
+func NewMessage(s *ningen.State, m *discord.Message) *Message {
+	message := NewMessageCustom(m)
 	message.reactions.SetState(s)
 
 	// Message without a valid ID is probably a sending message. Either way,
 	// it's unavailable.
-	if !m.ID.Valid() {
-		message.setAvailableUnsafe(false)
+	if !m.ID.IsValid() {
+		message.setAvailable(false)
 	}
 
 	var messageText string
@@ -109,172 +106,152 @@ func newMessageUnsafe(s *ningen.State, m *discord.Message) *Message {
 	}
 
 	if messageText == "" {
-		message.UpdateContentUnsafe(s, m)
+		message.UpdateContent(s, m)
 	} else {
-		message.customContentUnsafe(`<i>` + messageText + `</i>`)
-		message.setAvailableUnsafe(false)
+		message.customContent(`<i>` + messageText + `</i>`)
+		message.setAvailable(false)
 	}
 
 	return message
 }
 
-func newMessageCustom(m *discord.Message) (message *Message) {
-	return semaphore.IdleMust(newMessageCustomUnsafe, m).(*Message)
-}
+func NewMessageCustom(message *discord.Message) *Message {
+	m := Message{
+		Nonce:     message.Nonce,
+		ID:        message.ID,
+		AuthorID:  message.Author.ID,
+		Author:    message.Author.Username,
+		Webhook:   message.WebhookID.IsValid(),
+		Timestamp: message.Timestamp.Time().Local(),
+		Edited:    message.EditedTimestamp.Time().Local(),
 
-func newMessageCustomUnsafe(m *discord.Message) (message *Message) {
-	// icon := icons.GetIconUnsafe("user-info", variables.AvatarSize)
-
-	var (
-		row, _ = gtk.ListBoxRowNew()
-
-		avatar, _   = gtk.ImageNew()
-		avatarEv, _ = gtk.EventBoxNew()
-
-		// event box to wrap around main
-		mainEv, _ = gtk.EventBoxNew()
-		main, _   = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-
-		right, _       = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		rightTop, _    = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		rightBottom, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-
-		author, _    = gtk.LabelNew("???")
-		timestamp, _ = gtk.LabelNew("")
-
-		txtRv, _ = gtk.RevealerNew()
-		msgTv, _ = gtk.TextViewNew()
-		msgTb, _ = msgTv.GetBuffer()
-	)
-
-	gtkutils.ImageSetIcon(avatar, "user-info", variables.AvatarSize)
-
-	style, _ := main.GetStyleContext()
-	style.AddClass("message")
-
-	message = &Message{
-		Nonce:     m.Nonce,
-		ID:        m.ID,
-		AuthorID:  m.Author.ID,
-		Author:    m.Author.Username,
-		Webhook:   m.WebhookID.Valid(),
-		Timestamp: m.Timestamp.Time().Local(),
-		Edited:    m.EditedTimestamp.Time().Local(),
-
-		ListBoxRow: row,
-		style:      style,
+		ListBoxRow: gtk.NewListBoxRow(),
 		Condensed:  false,
 
-		main:        main,
-		avatarEv:    avatarEv,
-		avatar:      avatar,
-		right:       right,
-		rightTop:    rightTop,
-		author:      author,
-		timestamp:   timestamp,
-		rightBottom: rightBottom,
-		textReveal:  txtRv,
-		textView:    msgTv,
-		content:     msgTb,
+		main:        gtk.NewBox(gtk.OrientationHorizontal, 0),
+		avatarEv:    gtk.NewEventBox(),
+		avatar:      roundimage.NewImage(0),
+		right:       gtk.NewBox(gtk.OrientationVertical, 0),
+		rightTop:    gtk.NewBox(gtk.OrientationHorizontal, 0),
+		rightBottom: gtk.NewBox(gtk.OrientationVertical, 0),
+		author:      gtk.NewLabel("???"),
+		timestamp:   gtk.NewLabel("since the dawn of time"),
+		textReveal:  gtk.NewRevealer(),
+		textView:    gtk.NewTextView(),
+		errorLabel:  gtk.NewLabel(""),
 	}
 
-	// Wrap main around an event box
-	mainEv.Add(message.main)
-	message.ListBoxRow.Add(mainEv)
+	m.content = m.textView.Buffer()
 
-	message.main.SetHExpand(true)
+	m.style = m.main.StyleContext()
+	m.style.AddClass("message")
+
+	m.avatar.SetFromIconName("user-info", 0)
+	m.avatar.SetPixelSize(variables.AvatarSize)
+
+	m.main.SetHExpand(true)
+
+	// Wrap main around an event box
+	mainEv := gtk.NewEventBox()
+	mainEv.Add(m.main)
+	m.ListBoxRow.Add(mainEv)
 
 	// On message (which is in event box) right click:
-	mainEv.Connect("button-press-event", func(_ *gtk.EventBox, ev *gdk.Event) bool {
-		btn := gdk.EventButtonNewFromEvent(ev)
+	mainEv.Connect("button-press-event", func(ev *gdk.Event) bool {
+		btn := ev.AsButton()
 		if btn.Button() != gdk.BUTTON_SECONDARY {
 			return false
 		}
 
-		message.OnRightClick(message, btn)
+		m.OnRightClick(&m, btn)
 		return true
 	})
 
-	gtkutils.InjectCSSUnsafe(message.avatar, "avatar", "")
+	gtkutils.InjectCSS(m.avatar, "avatar", "")
 
-	message.rightBottom.SetHExpand(true)
-	message.rightBottom.SetMarginBottom(5)
-	message.rightBottom.SetMarginEnd(variables.AvatarPadding)
+	m.rightBottom.SetHExpand(true)
+	m.rightBottom.SetMarginBottom(5)
+	m.rightBottom.SetMarginEnd(variables.AvatarPadding)
 	// message.rightBottom.Connect("size-allocate", func() {
 	// 	// Hack to force Gtk to recalculate size on changes
 	// 	message.rightBottom.SetVExpand(true)
 	// 	message.rightBottom.SetVExpand(false)
 	// })
 
-	message.avatarEv.SetMarginTop(6)
-	message.avatarEv.SetMarginStart(variables.AvatarPadding - 2)
-	message.avatarEv.SetMarginEnd(variables.AvatarPadding)
-	message.avatarEv.SetEvents(int(gdk.BUTTON_PRESS_MASK))
-	message.avatarEv.Add(message.avatar)
-	message.avatarEv.Connect("button_press_event", func(_ *gtk.EventBox, ev *gdk.Event) {
-		btn := gdk.EventButtonNewFromEvent(ev)
+	m.avatarEv.SetMarginTop(6)
+	m.avatarEv.SetMarginStart(variables.AvatarPadding - 2)
+	m.avatarEv.SetMarginEnd(variables.AvatarPadding)
+	m.avatarEv.AddEvents(int(gdk.ButtonPressMask))
+	m.avatarEv.Add(m.avatar)
+	m.avatarEv.Connect("button_press_event", func(ev *gdk.Event) {
+		btn := ev.AsButton()
 		if btn.Button() != gdk.BUTTON_PRIMARY {
 			return
 		}
 
-		message.OnUserClick(message)
+		m.OnUserClick(&m)
 	})
 
-	message.avatar.SetSizeRequest(variables.AvatarSize, variables.AvatarSize)
-	message.avatar.SetVAlign(gtk.ALIGN_START)
+	m.avatar.SetSizeRequest(variables.AvatarSize, variables.AvatarSize)
+	m.avatar.SetVAlign(gtk.AlignStart)
 
-	message.author.SetMarkup(
-		`<span weight="bold">` + html.EscapeString(m.Author.Username) + `</span>`)
-	message.author.SetTooltipText(m.Author.Username)
-	message.author.SetSingleLineMode(true)
-	message.author.SetLineWrap(false)
-	message.author.SetEllipsize(pango.ELLIPSIZE_END)
-	message.author.SetXAlign(0.0)
+	m.author.SetMarkup(
+		`<span weight="bold">` + html.EscapeString(message.Author.Username) + `</span>`)
+	m.author.SetTooltipText(message.Author.Username)
+	m.author.SetSingleLineMode(true)
+	m.author.SetLineWrap(false)
+	m.author.SetEllipsize(pango.EllipsizeEnd)
+	m.author.SetXAlign(0.0)
 
-	message.rightTop.Add(message.author)
-	gtkutils.InjectCSSUnsafe(message.rightTop, "content", "")
+	m.rightTop.Add(m.author)
+	gtkutils.InjectCSS(m.rightTop, "content", "")
 
 	timestampSize := variables.AvatarSize - 2
-	message.timestamp.SetSizeRequest(timestampSize, -1)
-	message.timestamp.SetOpacity(0.5)
-	message.timestamp.SetYAlign(0.0)
-	message.timestamp.SetSingleLineMode(true)
-	message.timestamp.SetMarginTop(2)
-	message.timestamp.SetMarginStart(variables.AvatarPadding)
-	message.timestamp.SetMarginEnd(variables.AvatarPadding)
-	message.timestamp.SetTooltipText(m.Timestamp.Format(time.Stamp))
-	gtkutils.InjectCSSUnsafe(message.timestamp, "timestamp", "")
+	m.timestamp.SetSizeRequest(timestampSize, -1)
+	m.timestamp.SetOpacity(0.5)
+	m.timestamp.SetYAlign(0.0)
+	m.timestamp.SetSingleLineMode(true)
+	m.timestamp.SetMarginTop(2)
+	m.timestamp.SetMarginStart(variables.AvatarPadding)
+	m.timestamp.SetMarginEnd(variables.AvatarPadding)
+	m.timestamp.SetTooltipText(m.Timestamp.Format(time.Stamp))
+	gtkutils.InjectCSS(m.timestamp, "timestamp", "")
 
-	message.right.Add(message.rightTop)
-	message.right.SetHExpand(true)
+	m.right.Add(m.rightTop)
+	m.right.SetHExpand(true)
+	m.right.SetMarginTop(6)
 
-	message.right.SetMarginTop(6)
+	m.right.Add(m.errorLabel)
+	m.errorLabel.Hide()
+	m.errorLabel.ConnectShow(func() {
+		m.errorLabel.SetVisible(m.errorLabel.Label() != "")
+	})
 
-	msgTv.SetWrapMode(gtk.WRAP_WORD_CHAR)
-	msgTv.SetHAlign(gtk.ALIGN_FILL)
-	msgTv.SetCursorVisible(false)
-	msgTv.SetEditable(false)
-	msgTv.SetCanFocus(false)
+	m.textView.SetWrapMode(gtk.WrapWordChar)
+	m.textView.SetHAlign(gtk.AlignFill)
+	m.textView.SetCursorVisible(false)
+	m.textView.SetEditable(false)
+	m.textView.SetCanFocus(false)
 
 	// Add the message view into the revealer
-	txtRv.Add(msgTv)
-	txtRv.SetRevealChild(false)
+	m.textReveal.Add(m.textView)
+	m.textReveal.SetRevealChild(false)
 
-	message.rightBottom.Add(txtRv)
+	m.rightBottom.Add(m.textReveal)
 
 	// Add a placeholder for reactions
-	message.reactions = reactions.NewContainer(m)
-	message.rightBottom.Add(message.reactions)
+	m.reactions = reactions.NewContainer(message)
+	m.rightBottom.Add(m.reactions)
 
-	message.setCondensed()
-	return
+	m.setCondensed()
+	return &m
 }
 
-func (m *Message) getAvailableUnsafe() bool {
-	return m.rightBottom.GetOpacity() > 0.9
+func (m *Message) getAvailable() bool {
+	return m.rightBottom.Opacity() > 0.9
 }
 
-func (m *Message) setAvailableUnsafe(available bool) {
+func (m *Message) setAvailable(available bool) {
 	if available {
 		m.rightBottom.SetOpacity(1.0)
 	} else {
@@ -291,7 +268,25 @@ func (m *Message) setOffset(last *Message) {
 	m.CondenseOffset = offs
 }
 
-func (m *Message) SetCondensedUnsafe(condensed bool) {
+// ShowError shows an error on a message.
+func (m *Message) ShowError(err error) {
+	if err == nil {
+		m.errorLabel.SetText("")
+		m.errorLabel.Hide()
+		return
+	}
+
+	m.errorLabel.SetMarkup(fmt.Sprintf(
+		`<span color="red"><b>Error:</b> %s</span>`,
+		html.EscapeString(err.Error()),
+	))
+	m.errorLabel.Show()
+}
+
+// HideError hides a message's error, if any.
+func (m *Message) HideError() { m.ShowError(nil) }
+
+func (m *Message) SetCondensed(condensed bool) {
 	if m.Condensed == condensed {
 		return
 	}
@@ -332,18 +327,14 @@ func (m *Message) setCondensed() {
 	m.main.Add(m.right)
 }
 
-func (m *Message) UpdateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
-	semaphore.IdleMust(m.updateAuthor, s, gID, u)
-}
-
-func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord.User) {
+func (m *Message) UpdateAuthor(s *ningen.State, gID discord.GuildID, u discord.User) {
 	// Webhooks don't have users.
-	if gID.Valid() && !m.Webhook {
-		n, err := s.Store.Member(gID, m.AuthorID)
+	if gID.IsValid() && !m.Webhook {
+		n, err := s.Cabinet.Member(gID, m.AuthorID)
 		if err != nil {
-			go s.RequestMember(gID, m.AuthorID)
+			s.MemberState.RequestMember(gID, m.AuthorID)
 		} else {
-			m.updateMember(s, gID, *n)
+			m.UpdateMember(s, gID, *n)
 			return
 		}
 	}
@@ -352,11 +343,7 @@ func (m *Message) updateAuthor(s *ningen.State, gID discord.Snowflake, u discord
 	m.author.SetMarkup(`<span weight="bold">` + html.EscapeString(u.Username) + `</span>`)
 }
 
-func (m *Message) UpdateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
-	semaphore.IdleMust(m.updateMember, s, gID, n)
-}
-
-func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord.Member) {
+func (m *Message) UpdateMember(s *ningen.State, gID discord.GuildID, n discord.Member) {
 	var name = html.EscapeString(n.User.Username)
 	if n.Nick != "" {
 		name = html.EscapeString(n.Nick)
@@ -364,8 +351,8 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 
 	m.author.SetTooltipMarkup(name)
 
-	if gID.Valid() {
-		if g, err := s.Store.Guild(gID); err == nil {
+	if gID.IsValid() {
+		if g, err := s.Cabinet.Guild(gID); err == nil {
 			if color := discord.MemberColor(*g, n); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
@@ -377,27 +364,25 @@ func (m *Message) updateMember(s *ningen.State, gID discord.Snowflake, n discord
 }
 
 func (m *Message) UpdateAvatar(url string) {
-	cache.AsyncFetchUnsafe(url+"?size=64", m.avatar, variables.AvatarSize, variables.AvatarSize, cache.Round)
+	cache.SetImageURLScaled(m.avatar, url+"?size=64", variables.AvatarSize, variables.AvatarSize)
 }
 
-func (m *Message) customContentUnsafe(s string) {
-	m.content.Delete(m.content.GetStartIter(), m.content.GetEndIter())
-	m.content.InsertMarkup(m.content.GetEndIter(), s)
+func (m *Message) customContent(s string) {
+	m.content.SetText("")
+	m.content.InsertMarkup(m.content.EndIter(), s)
 	m.textReveal.SetRevealChild(true)
 }
 
 func (m *Message) UpdateContent(s *ningen.State, update *discord.Message) {
-	semaphore.IdleMust(m.UpdateContentUnsafe, s, update)
-}
-
-func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) {
 	if update.Content != "" {
-		md.ParseMessageContent(m.textView, s.Store, update)
+		md.ParseMessageContent(m.textView, s, update)
 		m.textReveal.SetRevealChild(true)
 	}
 
+	me, _ := s.Me()
+
 	for _, mention := range update.Mentions {
-		if mention.ID == s.Ready.User.ID {
+		if mention.ID == me.ID {
 			m.style.AddClass("mentioned")
 			return
 		}
@@ -405,20 +390,14 @@ func (m *Message) UpdateContentUnsafe(s *ningen.State, update *discord.Message) 
 }
 
 func (m *Message) UpdateExtras(s *ningen.State, update *discord.Message) {
-	semaphore.IdleMust(func() {
-		m.updateExtras(s, update)
-	})
-}
-
-func (m *Message) updateExtras(s *ningen.State, update *discord.Message) {
 	for _, extra := range m.extras {
 		m.rightBottom.Remove(extra)
 	}
 
 	// set to nil so the old slice can be GC'd
 	m.extras = nil
-	m.extras = append(m.extras, extras.NewEmbedUnsafe(s, update)...)
-	m.extras = append(m.extras, extras.NewAttachmentUnsafe(update)...)
+	m.extras = append(m.extras, extras.NewEmbed(s, update)...)
+	m.extras = append(m.extras, extras.NewAttachment(update)...)
 
 	for _, extra := range m.extras {
 		m.rightBottom.Add(extra)

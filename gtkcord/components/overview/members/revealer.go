@@ -9,15 +9,15 @@ package members
 // }
 
 // func NewRevealer(c *Container) *Revealer {
-// 	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+// 	s := gtk.NewSeparator(gtk.OrientationVertical)
 // 	s.Show()
 
-// 	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+// 	b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 // 	b.Show()
 // 	b.Add(s)
 // 	b.Add(c)
 
-// 	r, _ := gtk.RevealerNew()
+// 	r := gtk.NewRevealer()
 // 	r.Add(b)
 // 	r.Show()
 // 	r.SetTransitionDuration(50)
@@ -54,7 +54,7 @@ package members
 // }
 
 // func (r *Revealer) LoadGuild(id discord.Snowflake) error {
-// 	semaphore.IdleMust(func() {
+// 	BAD_SEMAPHORE_CALL(func() {
 // 		r.button.Show()
 // 		r.button.SetActive(r.lastRev)
 // 		r.SetRevealChild(r.lastRev)

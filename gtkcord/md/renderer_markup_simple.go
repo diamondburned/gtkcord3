@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/diamondburned/ningen/md"
+	"github.com/diamondburned/ningen/v2/md"
 	"github.com/yuin/goldmark/ast"
 )
 

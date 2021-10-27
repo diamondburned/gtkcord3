@@ -3,47 +3,47 @@ package members
 import (
 	"sort"
 	"strings"
-	"sync"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type Container struct {
 	*gtk.ListBox
-	Rows []gtkutils.ExtendedWidget
+	Rows []gtk.Widgetter
 
-	GuildID discord.Snowflake
-
-	mutex sync.Mutex
 	state *ningen.State
+
+	guildID   discord.GuildID
+	channelID discord.ChannelID
 }
 
-// thread-safe
 func New(s *ningen.State) (m *Container) {
-	list, _ := gtk.ListBoxNew()
+	list := gtk.NewListBox()
 	list.Show()
-	gtkutils.InjectCSSUnsafe(list, "members", "")
+	gtkutils.InjectCSS(list, "members", "")
 
 	m = &Container{
 		ListBox: list,
 		state:   s,
-		Rows:    []gtkutils.ExtendedWidget{},
+		Rows:    []gtk.Widgetter{},
 	}
-	s.MemberList.OnOP = m.handle
-	s.MemberList.OnSync = m.handleSync
 
-	// unreference these things
-	// list.Connect("destroy", m.cleanup)
+	gtkutils.OnMap(m, func() func() {
+		return s.AddHandler(func(ev *gateway.GuildMemberListUpdate) {
+			glib.IdleAdd(func() { m.onSync(ev) })
+		})
+	})
 
-	list.SetSelectionMode(gtk.SELECTION_NONE)
-	list.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-		i := r.GetIndex()
+	list.SetSelectionMode(gtk.SelectionNone)
+	list.Connect("row-activated", func(r *gtk.ListBoxRow) {
+		i := r.Index()
 		w := m.Rows[i]
 
 		rw, ok := w.(*Member)
@@ -52,10 +52,10 @@ func New(s *ningen.State) (m *Container) {
 		}
 
 		p := popup.NewPopover(r)
-		p.SetPosition(gtk.POS_BOTTOM)
+		p.SetPosition(gtk.PosBottom)
 
-		body := popup.NewStatefulPopupBody(m.state, rw.ID, m.GuildID)
-		body.ParentStyle, _ = p.GetStyleContext()
+		body := popup.NewStatefulPopupBody(m.state, rw.ID, m.guildID)
+		body.ParentStyle = p.StyleContext()
 
 		p.SetChildren(body)
 		p.Popup()
@@ -64,39 +64,16 @@ func New(s *ningen.State) (m *Container) {
 	return
 }
 
-func (m *Container) handleSync(ml *ningen.MemberList, guildID discord.Snowflake) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if m.GuildID != guildID {
-		return
-	}
-
-	guild, err := m.state.Store.Guild(guildID)
-	if err != nil {
-		log.Errorln("Failed to get guild:", err)
+func (m *Container) onSync(ev *gateway.GuildMemberListUpdate) {
+	if m.guildID != ev.GuildID {
 		return
 	}
 
 	m.cleanup()
-	m.reset(ml, *guild)
-}
-
-func (m *Container) handle(
-	ml *ningen.MemberList, guildID discord.Snowflake, op gateway.GuildMemberListOp) {
-
-	if m.GuildID != guildID {
-		return
-	}
-
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.reload()
 }
 
 func (m *Container) cleanup() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	for i, r := range m.Rows {
 		m.ListBox.Remove(r)
 		m.Rows[i] = nil
@@ -105,54 +82,56 @@ func (m *Container) cleanup() {
 }
 
 // LoadGuild is thread-safe.
-func (m *Container) LoadGuild(guild discord.Guild) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	m.GuildID = guild.ID
-
-	// Borrow MemberList's mutex
-	ml := m.state.MemberList.GetMemberList(guild.ID)
-	if ml == nil {
-		return
-	}
-	unlock := ml.Acquire()
-	defer unlock()
-
-	m.reset(ml, guild)
+func (m *Container) Load(guildID discord.GuildID, chID discord.ChannelID) {
+	m.guildID = guildID
+	m.channelID = chID
+	m.reload()
 }
 
-func (m *Container) reset(ml *ningen.MemberList, guild discord.Guild) {
-	for i, it := range ml.Items {
-		var item gtkutils.ExtendedWidget
-
-		switch {
-		case it == nil, it.Group == nil && it.Member == nil:
-			item = NewMemberUnavailable()
-			log.Errorln("it == nil at index", i)
-
-		case it.Group != nil:
-			var name string
-
-			if id, err := discord.ParseSnowflake(it.Group.ID); err == nil {
-				r, err := m.state.Store.Role(m.GuildID, id)
-				if err == nil {
-					name = r.Name
-				}
-			}
-			if name == "" {
-				name = strings.Title(it.Group.ID)
-			}
-
-			item = NewSection(name, it.Group.Count)
-
-		case it.Member != nil:
-			item = NewMember(it.Member.Member, it.Member.Presence, guild)
-		}
-
-		m.Rows = append(m.Rows, item)
-		m.ListBox.Insert(item, -1)
+func (m *Container) reload() {
+	l, err := m.state.MemberState.GetMemberList(m.guildID, m.channelID)
+	if err != nil {
+		m.state.MemberState.RequestMemberList(m.guildID, m.channelID, 0)
+		return
 	}
+
+	guild, err := m.state.Offline().Guild(m.guildID)
+	if err != nil {
+		return
+	}
+
+	l.ViewItems(func(items []gateway.GuildMemberListOpItem) {
+		for i, it := range items {
+			var item gtk.Widgetter
+
+			switch {
+			case it.Group == nil && it.Member == nil:
+				item = NewMemberUnavailable()
+				log.Errorln("it == nil at index", i)
+
+			case it.Group != nil:
+				var name string
+
+				if id, err := discord.ParseSnowflake(it.Group.ID); err == nil {
+					r, err := m.state.Cabinet.Role(m.guildID, discord.RoleID(id))
+					if err == nil {
+						name = r.Name
+					}
+				}
+				if name == "" {
+					name = strings.Title(it.Group.ID)
+				}
+
+				item = NewSection(name, it.Group.Count)
+
+			case it.Member != nil:
+				item = NewMember(it.Member.Member, it.Member.Presence, *guild)
+			}
+
+			m.Rows = append(m.Rows, item)
+			m.ListBox.Insert(item, -1)
+		}
+	})
 }
 
 // func (m *Container) getHoistRoles() ([]discord.Role, error) {
@@ -241,8 +220,8 @@ func SortRoles(roles []discord.Role) {
 	})
 }
 
-func MapRoles(roles []discord.Role) map[discord.Snowflake]*discord.Role {
-	var mapped = make(map[discord.Snowflake]*discord.Role, len(roles))
+func MapRoles(roles []discord.Role) map[discord.RoleID]*discord.Role {
+	mapped := make(map[discord.RoleID]*discord.Role, len(roles))
 	for i, r := range roles {
 		mapped[r.ID] = &roles[i]
 	}

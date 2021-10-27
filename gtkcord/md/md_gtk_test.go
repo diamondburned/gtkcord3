@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
 const _md = `Discord sucks.
@@ -38,7 +38,7 @@ dasdas: https://www.youtube.com/watch?v=W5eCr-_rl9I`
 func TestGtk(t *testing.T) {
 	gtk.Init(nil)
 
-	win, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+	win, err := gtk.NewWindow(gtk.WINDOW_TOPLEVEL)
 	if err != nil {
 		log.Fatalln("Unable to create window:", err)
 	}
@@ -47,7 +47,7 @@ func TestGtk(t *testing.T) {
 		gtk.MainQuit()
 	})
 
-	tv, _ := gtk.TextViewNew()
+	tv := gtk.NewTextView()
 	tv.SetHExpand(true)
 	tv.SetVExpand(true)
 	tv.SetEditable(false)
@@ -67,7 +67,7 @@ func TestGtk(t *testing.T) {
 
 	// log.Println(err, buf.String())
 
-	s, _ := gtk.ScrolledWindowNew(nil, nil)
+	s := gtk.NewScrolledWindow(nil, nil)
 	s.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 	s.Add(tv)
 

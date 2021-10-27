@@ -5,15 +5,16 @@ import (
 	"html"
 	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/ningen/v2"
+
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 )
 
 const (
@@ -32,15 +33,15 @@ type Popover struct {
 	Style    *gtk.StyleContext
 	oldClass string
 
-	Children gtkutils.WidgetDestroyer
+	Children gtk.Widgetter
 }
 
-func NewPopover(relative gtk.IWidget) *Popover {
-	p, _ := gtk.PopoverNew(relative)
+func NewPopover(relative gtk.Widgetter) *Popover {
+	p := gtk.NewPopover(relative)
 	p.SetSizeRequest(PopupWidth, -1)
-	style, _ := p.GetStyleContext()
+	style := p.StyleContext()
 
-	gtkutils.InjectCSSUnsafe(p, "user-info", "")
+	gtkutils.InjectCSS(p, "user-info", "")
 
 	popover := &Popover{
 		Popover: p,
@@ -54,14 +55,14 @@ func NewPopover(relative gtk.IWidget) *Popover {
 			return
 		}
 
-		popover.Children.Destroy()
+		popover.Children.BaseWidget().Destroy()
 		popover.Children = nil
 	})
 
 	return popover
 }
 
-func (p *Popover) SetChildren(children gtkutils.WidgetDestroyer) {
+func (p *Popover) SetChildren(children gtk.Widgetter) {
 	if p.Children != nil {
 		p.Popover.Remove(p.Children)
 	}
@@ -69,9 +70,10 @@ func (p *Popover) SetChildren(children gtkutils.WidgetDestroyer) {
 	p.Popover.Add(children)
 }
 
-type PopoverCreator = func(p *gtk.Popover) gtkutils.WidgetDestroyer
+// PopoverCreator describes a popover creator function.
+type PopoverCreator = func(p *gtk.Popover) gtk.Widgetter
 
-func NewDynamicPopover(relative gtkutils.WidgetConnector, create PopoverCreator) *Popover {
+func NewDynamicPopover(relative gtk.Widgetter, create PopoverCreator) *Popover {
 	p := NewPopover(relative)
 	relative.Connect("clicked", func() {
 		if w := create(p.Popover); w != nil {
@@ -91,19 +93,15 @@ func NewDynamicPopover(relative gtkutils.WidgetConnector, create PopoverCreator)
 
 func NewModelButton(markup string) *gtk.ModelButton {
 	// Create the button
-	btn, _ := gtk.ModelButtonNew()
+	btn := gtk.NewModelButton()
 	btn.SetLabel(markup)
 
 	// Set the label
-	c, err := btn.GetChild()
-	if err != nil {
-		log.Errorln("Failed to get child of ModelButton")
-		return btn
+	l, ok := btn.Child().(*gtk.Label)
+	if ok {
+		l.SetUseMarkup(true)
+		l.SetHAlign(gtk.AlignStart)
 	}
-
-	l := &gtk.Label{Widget: *c.ToWidget()}
-	l.SetUseMarkup(true)
-	l.SetHAlign(gtk.ALIGN_START)
 
 	btn.ShowAll()
 	return btn
@@ -128,7 +126,7 @@ type UserPopupBody struct {
 	*gtk.Grid
 	GridMax int
 
-	Avatar      *gtk.Image
+	Avatar      *roundimage.Image
 	AvatarStyle *gtk.StyleContext // .avatar
 	// check window/css.go header for status_* colors
 	lastAvatarClass string
@@ -139,12 +137,12 @@ type UserPopupBody struct {
 }
 
 // not thread safe
-func NewUserPopup(relative gtk.IWidget) *UserPopup {
+func NewUserPopup(relative gtk.Widgetter) *UserPopup {
 	return NewUserPopupCustom(relative, NewUserPopupBody())
 }
 
 // not thread safe
-func NewUserPopupCustom(relative gtk.IWidget, body *UserPopupBody) *UserPopup {
+func NewUserPopupCustom(relative gtk.Widgetter, body *UserPopupBody) *UserPopup {
 	p := NewPopover(relative)
 	p.SetChildren(body)
 
@@ -183,33 +181,34 @@ func (b *UserPopup) UpdateActivity(a *discord.Activity) {
 }
 
 func NewUserPopupBody() *UserPopupBody {
-	main, _ := gtk.GridNew()
+	main := gtk.NewGrid()
 	main.Show()
-	gtkutils.InjectCSSUnsafe(main, "popup-grid", "")
+	gtkutils.InjectCSS(main, "popup-grid", "")
 
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.SetSizeRequest(PopupWidth, -1)
 	b.SetMarginTop(10)
 	b.SetMarginBottom(10)
 
-	gtkutils.InjectCSSUnsafe(b, "popup-user", "")
+	gtkutils.InjectCSS(b, "popup-user", "")
 	main.Attach(b, 0, 0, 1, 1)
 
-	iAvatar, _ := gtk.ImageNewFromIconName("user-info", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	iAvatar.SetHAlign(gtk.ALIGN_CENTER)
+	iAvatar := roundimage.NewImage(0)
+	iAvatar.SetFromIconName("user-info", int(gtk.IconSizeLargeToolbar))
+	iAvatar.SetHAlign(gtk.AlignCenter)
 	iAvatar.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
 	iAvatar.SetMarginTop(10)
 	iAvatar.SetMarginBottom(7)
 	b.Add(iAvatar)
 
-	sAvatar, _ := iAvatar.GetStyleContext()
+	sAvatar := iAvatar.StyleContext()
 	sAvatar.AddClass("avatar")
 	sAvatar.AddClass("status")
 
-	l, _ := gtk.LabelNew("?")
+	l := gtk.NewLabel("?")
 	l.SetMarginEnd(7)
-	l.SetEllipsize(pango.ELLIPSIZE_END)
-	l.SetJustify(gtk.JUSTIFY_CENTER)
+	l.SetEllipsize(pango.EllipsizeEnd)
+	l.SetJustify(gtk.JustifyCenter)
 	b.Add(l)
 
 	return &UserPopupBody{
@@ -228,7 +227,7 @@ func formatUser(u discord.User) string {
 }
 
 // row > 0
-func (b *UserPopupBody) Attach(w gtk.IWidget, row int) {
+func (b *UserPopupBody) Attach(w gtk.Widgetter, row int) {
 	if row > b.GridMax {
 		b.GridMax = row
 	}
@@ -236,7 +235,7 @@ func (b *UserPopupBody) Attach(w gtk.IWidget, row int) {
 }
 
 func (b *UserPopupBody) setAvatarClass(class string) {
-	gtkutils.DiffClassUnsafe(&b.lastAvatarClass, class, b.AvatarStyle)
+	gtkutils.DiffClass(&b.lastAvatarClass, class, b.AvatarStyle)
 }
 
 func (b *UserPopupBody) Update(u discord.User) {
@@ -245,7 +244,7 @@ func (b *UserPopupBody) Update(u discord.User) {
 	}
 
 	if u.Avatar != "" {
-		go b.updateAvatar(u.AvatarURL())
+		b.updateAvatar(u.AvatarURL())
 	}
 }
 
@@ -265,17 +264,12 @@ func (b *UserPopupBody) UpdateMemberPart(nick string, u discord.User) {
 	b.Username.SetMarkup(body)
 
 	if u.Avatar != "" {
-		go b.updateAvatar(u.AvatarURL())
+		b.updateAvatar(u.AvatarURL())
 	}
 }
 
 func (b *UserPopupBody) updateAvatar(url string) {
-	err := cache.SetImageScaled(
-		url+"?size=128", b.Avatar, PopupAvatarSize, PopupAvatarSize, cache.Round)
-	if err != nil {
-		log.Errorln("Failed to get the pixbuf avatar icon:", err)
-		return
-	}
+	cache.SetImageURLScaled(b.Avatar, url+"?size=128", PopupAvatarSize, PopupAvatarSize)
 }
 
 func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
@@ -283,7 +277,6 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 		if b.Activity != nil {
 			b.Grid.Remove(b.Activity)
 			b.Activity = nil
-			// b.setClass("")
 		}
 		return
 	}
@@ -293,7 +286,7 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 		b.Attach(b.Activity, 1)
 	}
 
-	b.Activity.UpdateUnsafe(*a)
+	b.Activity.Update(*a)
 
 	switch a.Type {
 	case discord.GameActivity, discord.ListeningActivity, discord.StreamingActivity:
@@ -303,21 +296,21 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 	b.Grid.ShowAll()
 }
 
-func (b *UserPopupBody) UpdateStatus(status discord.Status) {
+func (b *UserPopupBody) UpdateStatus(status gateway.Status) {
 	switch status {
-	case discord.OnlineStatus:
+	case gateway.OnlineStatus:
 		b.Avatar.SetTooltipText("Online")
 		b.setAvatarClass("online")
-	case discord.DoNotDisturbStatus:
+	case gateway.DoNotDisturbStatus:
 		b.Avatar.SetTooltipText("Busy")
 		b.setAvatarClass("busy")
-	case discord.IdleStatus:
+	case gateway.IdleStatus:
 		b.Avatar.SetTooltipText("Idle")
 		b.setAvatarClass("idle")
-	case discord.InvisibleStatus, discord.OfflineStatus:
+	case gateway.InvisibleStatus, gateway.OfflineStatus:
 		b.Avatar.SetTooltipText("Offline")
 		b.setAvatarClass("offline")
-	case discord.UnknownStatus:
+	case gateway.UnknownStatus:
 		b.setAvatarClass("unknown")
 	}
 }
@@ -330,131 +323,92 @@ type UserPopupRoles struct {
 	Main  *gtk.FlowBox
 	Roles []UserPopupRole
 }
+
 type UserPopupRole struct {
 	*gtk.FlowBoxChild
 	Main *gtk.Label
 }
 
-// thread-safe
-func NewUserPopupRoles(s *ningen.State,
-	guild discord.Snowflake, ids []discord.Snowflake) (*UserPopupRoles, error) {
+func NewUserPopupRoles(s *ningen.State, guildID discord.GuildID, uID discord.UserID) *UserPopupRoles {
+	s = s.Offline()
 
-	// TODO: optimize this
+	roleLabel := gtk.NewLabel("Roles")
+	roleLabel.SetMarginTop(SectionPadding)
+	roleLabel.SetMarginBottom(0)
+	roleLabel.SetMarginLeft(SectionPadding)
+	roleLabel.SetMarginRight(SectionPadding)
+	roleLabel.SetHAlign(gtk.AlignStart)
 
-	b := semaphore.IdleMust(gtk.BoxNew, gtk.ORIENTATION_VERTICAL, 0).(*gtk.Box)
-	l := semaphore.IdleMust(gtk.LabelNew, "Roles").(*gtk.Label)
-	semaphore.IdleMust(gtkutils.Margin4, l, SectionPadding, 0, SectionPadding, SectionPadding)
-	semaphore.IdleMust(l.SetHAlign, gtk.ALIGN_START)
-	semaphore.IdleMust(b.Add, l)
+	box := gtk.NewBox(gtk.OrientationVertical, 0)
+	box.Add(roleLabel)
 
 	popup := &UserPopupRoles{
-		Box:    b,
-		Header: l,
+		Box:    box,
+		Header: roleLabel,
 	}
 
-	if len(ids) == 0 {
-		semaphore.IdleMust(l.SetLabel, "No Roles")
-		semaphore.IdleMust(l.SetMarginBottom, SectionPadding)
-		return popup, nil
+	// TODO: optimize this
+	member, _ := s.Member(guildID, uID)
+	if member == nil {
+		roleLabel.SetLabel("Unknown member")
+		roleLabel.SetMarginBottom(SectionPadding)
+		return popup
 	}
 
-	fb := semaphore.IdleMust(gtk.FlowBoxNew).(*gtk.FlowBox)
-	semaphore.IdleMust(gtkutils.Margin, fb, SectionPadding)
-	semaphore.IdleMust(fb.SetSelectionMode, gtk.SELECTION_NONE)
-	semaphore.IdleMust(fb.SetHAlign, gtk.ALIGN_FILL)
-	semaphore.IdleMust(fb.SetVAlign, gtk.ALIGN_START)
-	semaphore.IdleMust(b.Add, fb)
+	if len(member.RoleIDs) == 0 {
+		roleLabel.SetLabel("No Roles")
+		roleLabel.SetMarginBottom(SectionPadding)
+		return popup
+	}
+
+	fb := gtk.NewFlowBox()
+	fb.SetSelectionMode(gtk.SelectionNone)
+	fb.SetHAlign(gtk.AlignFill)
+	fb.SetHAlign(gtk.AlignStart)
+	gtkutils.Margin(fb, SectionPadding)
+
+	box.Add(fb)
 
 	popup.Main = fb
+	popup.Roles = make([]UserPopupRole, 0, len(member.RoleIDs))
 
-	var roles = make([]UserPopupRole, 0, len(ids))
-	popup.Roles = roles
-
-	for _, id := range ids {
-		r, err := s.Role(guild, id)
+	for _, id := range member.RoleIDs {
+		r, err := s.Role(guildID, id)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to get role")
+			log.Errorln("failed to get role for popup:", err)
+			continue
 		}
 
-		var color = r.Color
+		color := r.Color
 		if color == 0 {
 			color = 0x555555
 		}
 
-		var hex = fmt.Sprintf("#%06X", color)
+		hex := fmt.Sprintf("#%06X", color)
 
-		semaphore.IdleMust(func() {
-			l, _ := gtk.LabelNew("")
-			l.SetTooltipText(r.Name)
-			l.SetLabel(" " + r.Name + " ")
-			l.SetSingleLineMode(true)
-			l.SetEllipsize(pango.ELLIPSIZE_END)
-			l.SetMaxWidthChars(20)
+		l := gtk.NewLabel("")
+		l.SetTooltipText(r.Name)
+		l.SetLabel(" " + r.Name + " ")
+		l.SetSingleLineMode(true)
+		l.SetEllipsize(pango.EllipsizeEnd)
+		l.SetMaxWidthChars(20)
 
-			gtkutils.InjectCSSUnsafe(l, "", `
-				label {
-					border: 1px solid `+hex+`;
-					border-left-width: 5px;
-				}
-			`)
+		gtkutils.InjectCSS(l, "", `
+			label {
+				border: 1px solid `+hex+`;
+				border-left-width: 5px;
+			}
+		`)
 
-			c, _ := gtk.FlowBoxChildNew()
-			c.Add(l)
-			fb.Insert(c, -1)
+		c := gtk.NewFlowBoxChild()
+		c.Add(l)
+		fb.Insert(c, -1)
 
-			roles = append(roles, UserPopupRole{
-				FlowBoxChild: c,
-				Main:         l,
-			})
+		popup.Roles = append(popup.Roles, UserPopupRole{
+			FlowBoxChild: c,
+			Main:         l,
 		})
 	}
 
-	return popup, nil
+	return popup
 }
-
-// func SpawnUserPopup(s *ningen.State, guildID, userID discord.Snowflake) *gtk.Popover {
-// 	popup := NewUserPopup(nil)
-
-// 	go func() {
-// 		u, err := s.User(userID)
-// 		if err != nil {
-// 			log.Errorln("Failed to get user:", err)
-// 			return
-// 		}
-
-// 		p, err := s.Presence(guildID, u.ID)
-// 		if err == nil {
-// 			popup.UpdateStatus(p.Status)
-// 			popup.UpdateActivity(p.Game)
-// 		}
-
-// 		if !guildID.Valid() {
-// 			popup.Update(*u)
-// 			return
-// 		}
-
-// 		// fetch above presence if error not nil
-// 		if err != nil {
-// 			s.RequestMember(guildID, userID)
-// 		}
-
-// 		m, err := s.Member(guildID, u.ID)
-// 		if err != nil {
-// 			popup.Update(*u)
-// 			return
-// 		}
-
-// 		popup.UpdateMember(*m)
-
-// 		r, err := NewUserPopupRoles(s, guildID, m.RoleIDs)
-// 		if err != nil {
-// 			log.Errorln("Failed to get roles:", err)
-// 			return
-// 		}
-
-// 		semaphore.IdleMust(popup.Attach, r, 2)
-// 		semaphore.IdleMust(popup.Grid.ShowAll)
-// 	}()
-
-// 	return popup.Popover.Popover
-// }

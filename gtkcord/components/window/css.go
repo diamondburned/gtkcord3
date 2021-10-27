@@ -1,16 +1,14 @@
 package window
 
 import (
-	"bytes"
-
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/markbates/pkger"
 )
 
 var (
-	CustomCSS string // raw CSS, once
-	FileCSS   string // path
+	ApplicationCSS string
+	CustomCSS      string // raw CSS, once
+	FileCSS        string // path
 )
 
 // I don't like this:
@@ -19,25 +17,23 @@ var (
 func initCSS() {
 	s := Window.Screen
 
-	CSS := string(mustReadCSS())
-
-	stock, _ := gtk.CssProviderNew()
-	if err := stock.LoadFromData(CSS); err != nil {
-		log.Fatalln("Failed to parse stock CSS:", err)
+	stock := gtk.NewCSSProvider()
+	if err := stock.LoadFromData(ApplicationCSS); err != nil {
+		log.Fatalln("failed to parse stock CSS:", err)
 	}
 
-	gtk.AddProviderForScreen(
+	gtk.StyleContextAddProviderForScreen(
 		s, stock,
 		uint(gtk.STYLE_PROVIDER_PRIORITY_APPLICATION),
 	)
 
 	// Add env var CSS:
-	env, _ := gtk.CssProviderNew()
+	env := gtk.NewCSSProvider()
 	if err := env.LoadFromData(CustomCSS); err != nil {
-		log.Errorln("Failed to parse env var custom CSS:", err)
+		log.Errorln("failed to parse env var custom CSS:", err)
 	}
 
-	gtk.AddProviderForScreen(
+	gtk.StyleContextAddProviderForScreen(
 		s, env,
 		uint(gtk.STYLE_PROVIDER_PRIORITY_USER),
 	)
@@ -48,38 +44,23 @@ func ReloadCSS() {
 
 	// Replace file CSS:
 	if Window.fileCSS != nil {
-		gtk.RemoveProviderForScreen(s, Window.fileCSS)
+		gtk.StyleContextRemoveProviderForScreen(s, Window.fileCSS)
 	}
 
-	file, _ := gtk.CssProviderNew()
+	if FileCSS == "" {
+		return
+	}
+
+	file := gtk.NewCSSProvider()
 	if err := file.LoadFromPath(FileCSS); err != nil {
-		log.Errorln("Failed to parse file in "+FileCSS+":", err)
+		log.Errorf("failed to parse file in %q: %v", FileCSS, err)
 		return
 	}
 
 	Window.fileCSS = file
 
-	gtk.AddProviderForScreen(
+	gtk.StyleContextAddProviderForScreen(
 		s, file,
 		uint(gtk.STYLE_PROVIDER_PRIORITY_USER),
 	)
-}
-
-func mustReadCSS() []byte {
-	f, err := pkger.Open("/gtkcord/style.css")
-	if err != nil {
-		log.Panicln("Failed to open file:", err)
-	}
-	s, err := f.Stat()
-	if err != nil {
-		log.Panicln("Failed to stat file:", err)
-	}
-	var buf bytes.Buffer
-	buf.Grow(int(s.Size()))
-
-	if _, err := buf.ReadFrom(f); err != nil {
-		log.Panicln("Failed to read file:", err)
-	}
-
-	return buf.Bytes()
 }

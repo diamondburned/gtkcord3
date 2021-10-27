@@ -1,14 +1,14 @@
 package popup
 
 import (
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/ningen/handler"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
+	"github.com/diamondburned/ningen/v2/handlerrepo"
 )
 
 type StatefulPopupBody struct {
@@ -19,145 +19,183 @@ type StatefulPopupBody struct {
 	ParentStyle *gtk.StyleContext
 	parentClass string
 
-	User  discord.Snowflake
-	Guild discord.Snowflake
+	UserID  discord.UserID
+	GuildID discord.GuildID
 
 	Prefetch *discord.User
 
 	stateHandlers interface {
-		handler.AddHandler
-		handler.Unbinder
+		handlerrepo.AddHandler
+		handlerrepo.Unbinder
 	}
+
+	bound bool
 }
 
-func NewStatefulPopupBody(s *ningen.State, user, guild discord.Snowflake) *StatefulPopupBody {
+func NewStatefulPopupBody(s *ningen.State, user discord.UserID, guild discord.GuildID) *StatefulPopupBody {
 	return statefulPopupUser(&StatefulPopupBody{
-		state: s,
-		User:  user,
-		Guild: guild,
+		state:   s,
+		UserID:  user,
+		GuildID: guild,
 	})
 }
 
-func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.Snowflake) *StatefulPopupBody {
+func NewStatefulPopupUser(s *ningen.State, user discord.User, guild discord.GuildID) *StatefulPopupBody {
 	return statefulPopupUser(&StatefulPopupBody{
 		state:    s,
-		User:     user.ID,
-		Guild:    guild,
+		UserID:   user.ID,
+		GuildID:  guild,
 		Prefetch: &user,
 	})
 }
 
 func statefulPopupUser(body *StatefulPopupBody) *StatefulPopupBody {
-	body.stateHandlers = handler.NewRepository(body.state)
+	body.stateHandlers = handlerrepo.NewRepository(body.state)
 	body.UserPopupBody = NewUserPopupBody()
-	go body.initialize()
+	body.initialize()
 	return body
 }
 
 // must be thread-safe, function is running in a goroutine
 func (s *StatefulPopupBody) initialize() {
-	if !s.User.Valid() {
+	if !s.UserID.IsValid() {
 		return
 	}
 
-	if s.Prefetch == nil {
-		u, err := s.state.User(s.User)
-		if err != nil {
-			log.Errorln("Failed to get user:", err)
-			return
-		}
+	if s.Prefetch == nil && !s.GuildID.IsValid() {
+		go func() {
+			u, err := s.state.User(s.UserID)
+			if err != nil {
+				log.Errorln("Failed to get user:", err)
+				return
+			}
 
-		s.Prefetch = u
+			glib.IdleAdd(func() {
+				s.Prefetch = u
+				s.initialize()
+			})
+		}()
+		return
 	}
 
-	// Update user first:
-	s.idlemust(func() {
+	s.ConnectMap(func() { s.injectHandlers() })
+
+	// Updating the user is optional, since the member state can have people
+	// too. This is only needed for DM channels.
+	if s.Prefetch != nil {
 		s.UserPopupBody.Update(*s.Prefetch)
-		s.UserPopupBody.Grid.ShowAll()
-	})
-
-	p, err := s.state.Presence(s.Guild, s.Prefetch.ID)
-	if err != nil {
-		p, err = s.state.Presence(0, s.Prefetch.ID)
 	}
 
-	if err == nil {
-		s.idlemust(func() {
-			s.UserPopupBody.UpdateStatus(p.Status)
-			s.UpdateActivity(p.Game)
-		})
+	s.asyncUpdatePresence(false)
+
+	if s.GuildID.IsValid() {
+		s.asyncUpdateMember(false)
+		s.UserPopupBody.Attach(NewUserPopupRoles(s.state, s.GuildID, s.UserID), 2)
 	}
 
-	s.injectHandlers()
-
-	// fetch above presence if error not nil
-	if err != nil {
-		s.state.RequestMember(s.Guild, s.Prefetch.ID)
-	}
-
-	// Permit fetching member through the API.
-	m, err := s.state.Member(s.Guild, s.Prefetch.ID)
-	if err != nil {
-		// If no member:
-		return
-	}
-
-	s.idlemust(func() {
-		s.UserPopupBody.UpdateMember(*m)
-		s.UserPopupBody.Grid.ShowAll()
-	})
-
-	r, err := NewUserPopupRoles(s.state, s.Guild, m.RoleIDs)
-	if err != nil {
-		log.Errorln("Failed to get roles:", err)
-		return
-	}
-
-	s.idlemust(func() {
-		s.UserPopupBody.Attach(r, 2)
-		s.UserPopupBody.Grid.ShowAll()
-	})
+	s.UserPopupBody.Grid.ShowAll()
 }
 
 func (s *StatefulPopupBody) injectHandlers() {
-	if s.Guild.Valid() {
-		s.stateHandlers.AddHandler(func(g *gateway.PresenceUpdateEvent) {
-			if s.Guild.Valid() && g.User.ID == s.User {
-				s.idlemust(func() {
-					s.UserPopupBody.UpdateMemberPart(g.Nick, g.User)
-					s.UserPopupBody.UpdateStatus(g.Status)
-					s.UpdateActivity(g.Game)
-				})
-			}
-			// TODO: roles
-		})
-		s.stateHandlers.AddHandler(func(g *gateway.GuildMembersChunkEvent) {
-			if g.GuildID != s.Guild {
-				return
-			}
-			for _, m := range g.Members {
-				if m.User.ID == s.User {
-					s.idlemust(func() {
-						s.UserPopupBody.UpdateMember(m)
-					})
+	if s.bound {
+		return
+	}
+	s.bound = true
+	var handlers []func()
+
+	if s.GuildID.IsValid() {
+		handlers = append(handlers,
+			s.stateHandlers.AddHandler(func(g *gateway.PresenceUpdateEvent) {
+				if s.GuildID.IsValid() && g.User.ID == s.UserID {
+					s.asyncUpdatePresence(true)
 				}
-			}
-		})
+			}),
+			s.stateHandlers.AddHandler(func(m *gateway.GuildMemberUpdateEvent) {
+				if m.GuildID == s.GuildID && m.User.ID == s.UserID {
+					s.asyncUpdateMember(true)
+				}
+			}),
+			s.stateHandlers.AddHandler(func(g *gateway.GuildMembersChunkEvent) {
+				if g.GuildID == s.GuildID {
+					// Not too expensive, hopefully.
+					s.asyncUpdateMember(true)
+				}
+			}),
+		)
 	}
 
 	// only add this event if the user is yourself
-	if s.User == s.state.Ready.User.ID {
-		s.stateHandlers.AddHandler(func(g *gateway.SessionsReplaceEvent) {
-			p, err := s.state.Presence(s.Guild, s.User)
-			if err != nil {
-				return
-			}
+	me, _ := s.state.Me()
+	if s.UserID == me.ID {
+		handlers = append(handlers,
+			s.stateHandlers.AddHandler(func(g *gateway.SessionsReplaceEvent) {
+				s.asyncUpdatePresence(true)
+			}),
+		)
+	}
 
-			s.idlemust(func() {
-				s.UserPopupBody.UpdateStatus(p.Status)
-				s.UpdateActivity(p.Game)
-			})
-		})
+	s.ConnectUnmap(func() {
+		s.bound = false
+		for _, f := range handlers {
+			f()
+		}
+	})
+}
+
+func (s *StatefulPopupBody) asyncUpdatePresence(thread bool) {
+	p, _ := s.state.Presence(s.GuildID, s.UserID)
+	if p == nil {
+		return
+	}
+
+	var activity *discord.Activity
+	if len(p.Activities) > 0 {
+		activity = &p.Activities[0]
+	}
+
+	f := func() {
+		s.UserPopupBody.UpdateStatus(p.Status)
+		s.UpdateActivity(activity)
+	}
+
+	if thread {
+		glib.IdleAdd(f)
+	} else {
+		f()
+	}
+}
+
+func (s *StatefulPopupBody) asyncUpdateMember(thread bool) {
+	var member *discord.Member
+	var err error
+
+	if !thread {
+		member, err = s.state.Offline().Member(s.GuildID, s.UserID)
+	} else {
+		member, err = s.state.Member(s.GuildID, s.UserID)
+	}
+
+	if err != nil {
+		if !thread {
+			// Force an API query if not possible.
+			go s.asyncUpdateMember(true)
+		}
+		return
+	}
+
+	f := func() {
+		if s.Prefetch == nil {
+			s.Prefetch = &member.User
+		}
+
+		s.UserPopupBody.UpdateMember(*member)
+		s.UserPopupBody.Grid.ShowAll()
+	}
+
+	if !thread {
+		f()
+	} else {
+		glib.IdleAdd(f)
 	}
 }
 
@@ -192,15 +230,7 @@ func (s *StatefulPopupBody) Destroy() {
 	s.UserPopupBody.Destroy()
 }
 
-func (s *StatefulPopupBody) idlemust(fn func()) {
-	semaphore.IdleMust(func() {
-		if !s.stop {
-			fn()
-		}
-	})
-}
-
 // thread-safe
 func (s *StatefulPopupBody) setParentClass(class string) {
-	gtkutils.DiffClassUnsafe(&s.parentClass, class, s.ParentStyle)
+	gtkutils.DiffClass(&s.parentClass, class, s.ParentStyle)
 }

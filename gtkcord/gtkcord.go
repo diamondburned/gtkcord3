@@ -3,39 +3,44 @@ package gtkcord
 import (
 	"math/rand"
 	"net/http"
-	"sync"
 	"time"
 
-	"github.com/diamondburned/arikawa/api"
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	_ "embed"
+
+	"github.com/diamondburned/arikawa/v2/api"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/greet"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/hamburger"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/header"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/login"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/message"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/ningen/v2"
+
 	"github.com/diamondburned/gtkcord3/internal/keyring"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/gtkcord3/internal/moreatomic"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
 )
+
+//go:embed style.css
+var styleCSS string
+
+func init() {
+	window.ApplicationCSS = styleCSS
+}
 
 var HTTPClient = http.Client{
 	Timeout: 10 * time.Second,
 }
-
-// var App *application
 
 func discordSettings() {
 	discord.DefaultEmbedColor = 0x808080
@@ -45,7 +50,7 @@ func discordSettings() {
 		"Chrome/79.0.3945.130 " +
 		"Safari/537.36"
 
-	gateway.Identity = gateway.IdentifyProperties{
+	gateway.DefaultIdentity = gateway.IdentifyProperties{
 		OS: "linux",
 	}
 }
@@ -83,7 +88,7 @@ type Application struct {
 
 	// Left Grid
 	LeftGrid *gtk.Grid
-	leftCols map[int]gtk.IWidget
+	leftCols [maxLeftGridColumn]gtk.Widgetter
 	// <item>     <item>
 	// | Guilds   | Channels
 
@@ -94,12 +99,8 @@ type Application struct {
 	Channels *channel.Channels
 	Messages *message.Messages
 
-	// GuildID -> ChannelID; if GuildID == 0 then DM
-	LastAccess map[discord.Snowflake]discord.Snowflake
-	lastAccMut sync.Mutex
-
-	busy moreatomic.BusyMutex
-	// done chan int // exit code
+	// if GuildID == 0 then DM
+	lastAccess map[discord.GuildID]discord.ChannelID
 }
 
 // New is not thread-safe.
@@ -127,7 +128,7 @@ func (a *Application) Close() {
 
 func (a *Application) Activate() {
 	// Register the dbus connection:
-	conn := gdbus.FromApplication(&a.Application.Application)
+	conn := a.DBusConnection()
 	a.Notifier = gdbus.NewNotifier(conn)
 	a.MPRIS = gdbus.NewMPRISWatcher(conn) // notify.go
 
@@ -137,11 +138,10 @@ func (a *Application) Activate() {
 	}
 	a.Window = window.Window
 
-	a.leftCols = map[int]gtk.IWidget{}
-	a.LastAccess = map[discord.Snowflake]discord.Snowflake{}
+	a.lastAccess = map[discord.GuildID]discord.ChannelID{}
 
 	// Set the window specs:
-	window.Resize(1200, 900)
+	window.Resize(1000, 800)
 	window.SetTitle("gtkcord")
 
 	// Create the preferences/settings window, which applies settings as a side
@@ -151,28 +151,22 @@ func (a *Application) Activate() {
 
 func (a *Application) init() {
 	// Pre-make the leaflet but don't use it:
-	l := handy.LeafletNew()
+	l := handy.NewLeaflet()
 	l.SetModeTransitionDuration(150)
-	l.SetTransitionType(handy.LEAFLET_TRANSITION_TYPE_SLIDE)
+	l.SetTransitionType(handy.LeafletTransitionTypeSlide)
 	l.SetInterpolateSize(true)
 	l.SetCanSwipeBack(true)
-	l.Show()
+	l.Container.Show()
 	a.Main = l
 
-	var _folded bool
-
-	l.Connect("size-allocate", func() {
+	l.Connect("notify::folded", func() {
 		// If we're not ready:
 		if a.State == nil {
 			return
 		}
 
 		// Avoid repeating:
-		folded := l.GetFold() == handy.FOLD_FOLDED
-		if _folded == folded {
-			return
-		}
-		_folded = folded
+		folded := l.Folded()
 
 		// Fold the header too:
 		a.Header.Fold(folded)
@@ -183,15 +177,14 @@ func (a *Application) init() {
 	})
 
 	// Create a new Header:
-	h, _ := header.NewHeader()
-	a.Header = h
+	a.Header = header.NewHeader()
+}
+
+func (a *Application) displayMain() {
+	window.Display(&a.Main.Container)
 }
 
 func (a *Application) Ready(s *ningen.State) error {
-	// Acquire the mutex:
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
 	a.State = s
 
 	// When the websocket closes, the screen must be changed to a busy one. The
@@ -204,39 +197,44 @@ func (a *Application) Ready(s *ningen.State) error {
 
 		// Run this asynchronously. This guarantees that the UI thread would
 		// never be hardlocked.
-		semaphore.Async(window.NowLoading)
+		glib.IdleAdd(func() { window.NowLoading() })
 	}
 
+	// Show the main screen once everything is resumed. See above NowLoading
+	// call.
+	s.AddHandler(func(c *ningen.Connected) {
+		glib.IdleAdd(func() { a.displayMain() })
+	})
+
 	// Store the token:
-	keyring.Set(s.Token)
+	go func() {
+		keyring.Set(s.Token)
+	}()
 
 	// Set gateway error functions to our own:
 	s.Gateway.ErrorLog = func(err error) {
 		log.Errorln(err)
 	}
 
-	semaphore.IdleMust(func() {
-		// Make the main widgets:
-		a.init()
-		window.HeaderDisplay(a.Header) // restore header post login.
-		window.Resize(1200, 900)
-	})
+	// Make the main widgets:
+	a.init()
+	window.SetHeader(a.Header.HeaderBar) // restore header post login.
+	window.Resize(1200, 900)
 
-	switch s.Ready.Settings.Theme {
-	case "dark":
-		semaphore.IdleMust(window.PreferDarkTheme, true)
-	case "light":
+	if ready := s.Ready(); ready.UserSettings != nil {
+		switch ready.UserSettings.Theme {
+		case "dark":
+			window.PreferDarkTheme(true)
+		case "light":
+			window.PreferDarkTheme(false)
+		}
 	}
 
 	// Bind the hamburger:
 	hamburger.BindToButton(a.Header.Hamburger.Button, hamburger.Opts{
-		State: s,
-		Settings: func() {
-			a.Settings.Show()
-		},
-		LogOut: func() {
-			go a.LogOut()
-		},
+		State:    s,
+		Settings: a.Settings.Show,
+		LogOut:   a.LogOut,
 	})
 
 	// Bind stuff
@@ -245,48 +243,35 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Guilds
 
-	g, err := guild.NewGuilds(s)
-	if err != nil {
-		return errors.Wrap(err, "Failed to make guilds")
-	}
-	g.OnSelect = func(g *guild.Guild) {
+	a.Guilds = guild.NewGuilds(s)
+	a.Guilds.OnSelect = func(g *guild.Guild) {
 		a.SwitchGuild(g)
 		a.SwitchLastChannel(g)
 	}
-	g.DMButton.OnClick = func() {
+	a.Guilds.DMButton.OnClick = func() {
 		a.SwitchDM()
 		a.SwitchLastChannel(nil)
 	}
 
-	// Channels and DMs
-
-	c := channel.NewChannels(s, func(ch *channel.Channel) {
+	a.Channels = channel.NewChannels(s, func(ch *channel.Channel) {
 		a.SwitchChannel(ch)
 		a.FocusMessages()
 	})
 
-	p := channel.NewPrivateChannels(s, func(ch *channel.PrivateChannel) {
+	a.Privates = channel.NewPrivateChannels(s, func(ch *channel.PrivateChannel) {
 		a.SwitchChannel(ch)
 		a.FocusMessages()
 	})
 
-	// Messages
-
-	m, err := message.NewMessages(s, message.Opts{
+	a.Messages = message.NewMessages(s, message.Opts{
 		InputZeroWidth: a.Settings.General.Behavior.ZeroWidth,
 		InputOnTyping:  a.Settings.General.Behavior.OnTyping,
 		MessageWidth:   a.Settings.General.Customization.MessageWidth,
 	})
-	if err != nil {
-		return errors.Wrap(err, "Failed to make messages")
-	}
 
-	// Binds
-
-	a.Guilds = g
-	a.Channels = c
-	a.Privates = p
-	a.Messages = m
+	greeter := greet.NewGreeter()
+	greeter.SetSurface(logo.Surface(greet.IconSize, 2))
+	a.Messages.SetPlaceholder(greeter)
 
 	// Bind OnClick to trigger below callback:
 	a.Header.Back.OnClick = func() {
@@ -294,11 +279,11 @@ func (a *Application) Ready(s *ningen.State) error {
 	}
 
 	// Bind the channel menu button:
-	a.Header.ChMenuBtn.SetSpawner(func(p *gtk.Popover) gtkutils.WidgetDestroyer {
-		guID := a.Messages.GetGuildID()
-		chID := a.Messages.GetChannelID()
+	a.Header.ChMenuBtn.SetSpawner(func(p *gtk.Popover) gtk.Widgetter {
+		guID := a.Messages.GuildID()
+		chID := a.Messages.ChannelID()
 
-		if !chID.Valid() || !guID.Valid() {
+		if !chID.IsValid() || !guID.IsValid() {
 			// guarded, shouldn't happen.
 			return nil
 		}
@@ -306,73 +291,77 @@ func (a *Application) Ready(s *ningen.State) error {
 		return header.NewChMenuBody(p, s, guID, chID)
 	})
 
-	semaphore.IdleMust(func() {
-		// Bind to set-focus-child so swiping left works too.
-		a.Main.Connect("set-focus-child", func(_ *glib.Object, w *gtk.Widget) {
-			if w == nil {
-				return
+	// // Bind to set-focus-child so swiping left works too.
+	// a.Main.Connect("set-focus-child", func(w gtk.Widgetter) {
+	// 	if w == nil {
+	// 		return
+	// 	}
+	// 	switch w.BaseWidget().Name() {
+	// 	case "left":
+	// 		a.Main.SetVisibleChild(a.LeftGrid)
+	// 		a.Header.Body.SetVisibleChild(a.Header.LeftSide)
+	// 	case "right":
+	// 		a.Main.SetVisibleChild(a.Right)
+	// 		a.Header.Body.SetVisibleChild(a.Header.RightSide)
+	// 	}
+	// })
+
+	// Set widths:
+	a.Channels.SetSizeRequest(ChannelWidth, -1)
+	a.Privates.SetSizeRequest(ChannelWidth, -1)
+
+	// Guilds and Channels grid:
+	a.LeftGrid = gtk.NewGrid()
+	a.LeftGrid.SetHAlign(gtk.AlignStart)
+	a.LeftGrid.SetName("left")
+	a.LeftGrid.SetOrientation(gtk.OrientationHorizontal)
+	a.LeftGrid.SetRowHomogeneous(true)
+	a.LeftGrid.Show()
+
+	leftGroup := gtk.NewSizeGroup(gtk.SizeGroupHorizontal)
+	leftGroup.AddWidget(a.LeftGrid)
+	leftGroup.AddWidget(a.Header.LeftSide)
+
+	// Add the guilds and the separator right and left of channels:
+	a.setLeftGridCol(a.Guilds, guildsColumn)
+	a.setLeftGridCol(newSeparator(), separatorColumn1)
+	a.setLeftGridCol(newSeparator(), separatorColumn2)
+
+	// Set the left grid to the main leaflet:
+	a.Main.Add(a.LeftGrid)
+
+	// Make left grid the default view:
+	a.Main.SetVisibleChild(a.LeftGrid)
+
+	// Message widget container, which will hold *Messages:
+	a.Right = singlebox.NewBox(gtk.OrientationHorizontal, 0)
+	a.Right.SetName("right")
+	a.Right.SetHExpand(true)
+	a.Right.SetVExpand(true)
+	a.Right.Show()
+
+	rightGroup := gtk.NewSizeGroup(gtk.SizeGroupHorizontal)
+	rightGroup.AddWidget(a.Right)
+	rightGroup.AddWidget(a.Header.RightSide)
+
+	// Set the message container to the main container:
+	a.Main.Add(a.Right)
+
+	// Display the grid and header
+	a.displayMain()
+	window.Show()
+
+	// Make a Quick switcher
+	quickswitcher.Bind(quickswitcher.Spawner{
+		State: s,
+		OnGuild: func(id discord.GuildID) {
+			if g, _ := a.Guilds.FindByID(id); g != nil {
+				g.Activate()
 			}
-
-			switch name, _ := w.GetName(); name {
-			case "left":
-				a.Main.SetVisibleChild(a.LeftGrid)
-				a.Header.SetVisibleChild(a.Header.LeftSide)
-			case "right":
-				a.Main.SetVisibleChild(a.Right)
-				a.Header.SetVisibleChild(a.Header.RightSide)
-			}
-		})
-
-		// Set widths:
-		a.Channels.SetSizeRequest(ChannelWidth, -1)
-		a.Privates.SetSizeRequest(ChannelWidth, -1)
-
-		// Guilds and Channels grid:
-		g1, _ := gtk.GridNew()
-		g1.Show()
-		g1.SetName("left")
-		g1.SetOrientation(gtk.ORIENTATION_HORIZONTAL)
-		g1.SetRowHomogeneous(true)
-		a.LeftGrid = g1
-
-		// Add the guilds and the separator right and left of channels:
-		a.setLeftGridCol(a.Guilds, 0)
-		a.setLeftGridCol(newSeparator(), 1)
-		a.setLeftGridCol(newSeparator(), 3)
-
-		// Set the left grid to the main leaflet:
-		a.Main.Add(g1)
-
-		// Make left grid the default view:
-		a.Main.SetVisibleChild(g1)
-
-		// Message widget container, which will hold *Messages:
-		c, _ := singlebox.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		c.Show()
-		c.SetName("right")
-		c.SetHExpand(true)
-		c.SetVExpand(true)
-
-		// Set the message container to the main container:
-		a.Right = c
-		a.Main.Add(c)
-
-		// Display the grid and header
-		window.Display(a.Main)
-		window.Show()
-
-		// Make a Quick switcher
-		quickswitcher.Bind(quickswitcher.Spawner{
-			State: s,
-			OnGuild: func(id discord.Snowflake) {
-				if g, _ := a.Guilds.FindByID(id); g != nil {
-					g.Activate()
-				}
-			},
-			OnChannel: func(ch, guild discord.Snowflake) {
-				a.SwitchToID(ch, guild)
-			},
-		})
+		},
+		OnChannel: func(chID discord.ChannelID, gID discord.GuildID) {
+			a.SwitchToID(chID, gID)
+		},
 	})
 
 	// Finally, mark plugins as ready:
@@ -382,63 +371,74 @@ func (a *Application) Ready(s *ningen.State) error {
 }
 
 func (a *Application) LogOut() {
-	a.busy.Lock()
-	defer a.busy.Unlock()
-
 	// Disable the entire application:
-	semaphore.IdleMust(window.Window.SetSensitive, false)
-	defer semaphore.IdleMust(window.Window.SetSensitive, true) // restore last
+	window.Window.SetSensitive(false)
 
-	// First we need to close the session:
-	if err := a.State.Close(); err != nil {
-		log.Errorln("Failed to close:", err)
-	}
+	state := a.State
 	a.State = nil
 
-	// Then we delete the keyrings:
-	keyring.Delete()
+	go func() {
+		// First we need to close the session:
+		if err := state.CloseGracefully(); err != nil {
+			log.Errorln("failed to close gracefully:", err)
+		}
 
-	// Then we call the login dialog and exit without waiting:
-	semaphore.Async(func() {
-		l := login.NewLogin(func(s *ningen.State) {
-			if err := a.Ready(s); err != nil {
-				log.Fatalln("Failed to re-login:", err)
-			}
+		// Then we delete the keyrings:
+		keyring.Delete()
+
+		// Then we call the login dialog and exit without waiting:
+		glib.IdleAdd(func() {
+			window.Window.SetSensitive(true)
+			a.ShowLogin("")
 		})
-
-		l.Run()
-	})
+	}()
 }
 
-func (a *Application) lastAccess(guild, ch discord.Snowflake) discord.Snowflake {
-	a.lastAccMut.Lock()
-	defer a.lastAccMut.Unlock()
-
-	if !ch.Valid() {
-		if id, ok := a.LastAccess[guild]; ok {
-			return id
+// ShowLogin shows the login screen.
+func (a *Application) ShowLogin(lastToken string) {
+	l := login.NewLogin(func(s *ningen.State) {
+		if err := a.Ready(s); err != nil {
+			log.Fatalln("failed to login:", err)
 		}
-		return 0
-	}
+		a.Connect("shutdown", func() {
+			log.Infoln("app shutting down")
+			s.Close()
+		})
+	})
+	l.LastToken = lastToken
+	l.Run()
+}
 
-	a.LastAccess[guild] = ch
-	return ch
+// LastAccessed gets the last accessed channel of a guild, or if the guild ID is
+// 0, then of all direct messaging channels.
+func (a *Application) LastAccessed(guildID discord.GuildID) discord.ChannelID {
+	return a.lastAccess[guildID]
+}
+
+func (a *Application) setLastAccess(guildID discord.GuildID, chID discord.ChannelID) {
+	a.lastAccess[guildID] = chID
 }
 
 func newSeparator() *gtk.Separator {
-	s, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	s := gtk.NewSeparator(gtk.OrientationVertical)
 	s.Show()
 	return s
 }
 
-func (a *Application) setLeftGridCol(w gtk.IWidget, n int) {
-	setGridCol(a.LeftGrid, a.leftCols, w, n)
-}
+type leftGridColPosition uint8
 
-func setGridCol(grid *gtk.Grid, gridStore map[int]gtk.IWidget, w gtk.IWidget, n int) {
-	if w, ok := gridStore[n]; ok {
-		grid.Remove(w)
+const (
+	guildsColumn leftGridColPosition = iota
+	separatorColumn1
+	channelsColumn
+	separatorColumn2
+	maxLeftGridColumn
+)
+
+func (a *Application) setLeftGridCol(w gtk.Widgetter, n leftGridColPosition) {
+	if w := a.leftCols[n]; w != nil {
+		a.LeftGrid.Remove(w)
 	}
-	gridStore[n] = w
-	grid.Attach(w, n, 0, 1, 1)
+	a.leftCols[n] = w
+	a.LeftGrid.Attach(w, int(n), 0, 1, 1)
 }

@@ -1,10 +1,10 @@
 package overview
 
 import (
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/overview/members"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type Members struct {
@@ -14,18 +14,18 @@ type Members struct {
 	Members *members.Container
 }
 
-func NewMembers(s *ningen.State, g discord.Guild) *Members {
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+func NewMembers(s *ningen.State, g discord.GuildID, ch discord.ChannelID) *Members {
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.Show()
 
-	h, _ := gtk.LabelNew(`<span weight="bold">Members</span>`)
+	h := gtk.NewLabel(`<span weight="bold">Members</span>`)
 	h.Show()
 	h.SetUseMarkup(true)
 	h.SetMarginTop(CommonMargin)
 	h.SetMarginBottom(8)
 
 	m := members.New(s)
-	m.LoadGuild(g)
+	m.Load(g, ch)
 	m.SetMarginStart(CommonMargin)
 	m.SetMarginEnd(CommonMargin)
 

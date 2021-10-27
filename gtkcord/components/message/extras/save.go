@@ -8,18 +8,18 @@ import (
 	"path"
 	"strings"
 
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
 	"github.com/pkg/errors"
 )
 
-func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidget {
+func NewAnyAttachment(name, url string, size uint64) gtk.Widgetter {
 	var icon string
 
 	switch MIME := mime.TypeByExtension(path.Ext(url)); {
@@ -33,43 +33,42 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 		icon = "text-x-generic-symbolic"
 	}
 
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	box.Show()
-	box.SetHAlign(gtk.ALIGN_START)
+	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	box.SetHAlign(gtk.AlignStart)
 	box.SetSizeRequest(clampWidth(400), -1)
+	box.Show()
 
-	img, _ := gtk.ImageNew()
-	img.Show()
-	img.SetHAlign(gtk.ALIGN_CENTER)
+	img := gtk.NewImageFromIconName(icon, 0)
+	img.SetPixelSize(40)
+	img.SetHAlign(gtk.AlignCenter)
 	gtkutils.Margin2(img, 4, 0)
-	gtkutils.ImageSetIcon(img, icon, 40)
+	img.Show()
 
-	labels, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	labels := gtk.NewBox(gtk.OrientationVertical, 0)
 	labels.Show()
-	labels.SetVAlign(gtk.ALIGN_CENTER)
+	labels.SetVAlign(gtk.AlignCenter)
 	labels.SetHExpand(true)
 
 	headerText := `<a href="` + url + `">` + html.EscapeString(name) + `</a>`
-	header, _ := gtk.LabelNew(headerText)
-	header.Show()
+	header := gtk.NewLabel(headerText)
 	header.SetUseMarkup(true)
-	header.SetHAlign(gtk.ALIGN_START)
+	header.SetHAlign(gtk.AlignStart)
 	header.SetSingleLineMode(true)
-	header.SetEllipsize(pango.ELLIPSIZE_END)
+	header.SetEllipsize(pango.EllipsizeEnd)
+	header.Show()
 
 	subText := `<span size="smaller">` + humanize.Size(size) + `</span>`
-	sub, _ := gtk.LabelNew(subText)
-	sub.Show()
-	sub.SetEllipsize(pango.ELLIPSIZE_END)
-	sub.SetHAlign(gtk.ALIGN_START)
+	sub := gtk.NewLabel(subText)
+	sub.SetEllipsize(pango.EllipsizeEnd)
+	sub.SetHAlign(gtk.AlignStart)
 	sub.SetUseMarkup(true)
+	sub.Show()
 
 	// TODO: progress bar for download button
-	dl, _ := gtk.ButtonNewFromIconName("folder-download-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	dl.Show()
+	dl := gtk.NewButtonFromIconName("folder-download-symbolic", int(gtk.IconSizeLargeToolbar))
 	dl.SetSizeRequest(35, 35)
-	dl.SetVAlign(gtk.ALIGN_CENTER)
-	dl.SetRelief(gtk.RELIEF_NONE)
+	dl.SetVAlign(gtk.AlignCenter)
+	dl.SetRelief(gtk.ReliefNone)
 	dl.Connect("clicked", NewSaver(name, func(filename string) {
 		// Reset the label (if failed).
 		sub.SetMarkup(subText)
@@ -78,15 +77,14 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 		dl.SetSensitive(false)
 
 		startDownload(url, filename, func(err error) {
-			semaphore.Async(dl.SetSensitive, true)
-			if err == nil {
-				return
+			dl.SetSensitive(false)
+			if err != nil {
+				sub.SetMarkup(`<span color="red">` + "Error: " + err.Error() + `</span>`)
+				log.Errorln("failed to download:", err)
 			}
-
-			log.Errorln("Failed to download:", err)
-			semaphore.Async(sub.SetMarkup, `<span color="red">`+"Error: "+err.Error()+`</span>`)
 		})
 	}))
+	dl.Show()
 
 	labels.Add(header)
 	labels.Add(sub)
@@ -95,15 +93,19 @@ func NewAnyAttachmentUnsafe(name, url string, size uint64) gtkutils.ExtendedWidg
 	box.PackStart(labels, true, true, 0)
 	box.PackStart(dl, false, false, 3)
 
-	gtkutils.InjectCSSUnsafe(box, "attachment", `
+	gtkutils.InjectCSS(box, "attachment", `
 		.attachment { background-color: @darker; }
 	`)
 
 	return box
 }
 
-func startDownload(url, dest string, done func(error)) {
+func startDownload(url, dest string, doneFunc func(error)) {
 	go func() {
+		done := func(err error) {
+			glib.IdleAdd(func() { doneFunc(err) })
+		}
+
 		f, err := os.Create(dest)
 		if err != nil {
 			done(errors.Wrap(err, "Failed to create file"))
@@ -141,11 +143,11 @@ func startDownload(url, dest string, done func(error)) {
 // }
 
 // func NewProgressDownloader(w io.Writer, s uint64) *ProgressDownloader {
-// 	r, _ := gtk.RevealerNew()
+// 	r := gtk.NewRevealer()
 // 	r.SetHExpand(true)
 // 	r.Show()
 
-// 	p, _ := gtk.ProgressBarNew()
+// 	p := gtk.NewProgressBar()
 // 	p.Show()
 
 // 	r.SetRevealChild(false)
@@ -174,36 +176,31 @@ func startDownload(url, dest string, done func(error)) {
 // }
 
 // func NewDownloadButton(url string) *gtk.Revealer {
-// 	r, _ := gtk.RevealerNew()
+// 	r := gtk.NewRevealer()
 // 	r.Show()
 
-// 	p, _ := gtk.ProgressBarNew()
+// 	p := gtk.NewProgressBar()
 // }
 
 func NewSaver(filename string, onSave func(string)) func() {
 	return func() {
 		// Prompt the user
-		d, err := gtk.FileChooserDialogNewWith1Button(
-			"Save As", window.Window, gtk.FILE_CHOOSER_ACTION_SAVE,
-			"Save", gtk.RESPONSE_ACCEPT,
+		d := gtk.NewFileChooserNative(
+			"Save As", &window.Window.Window, gtk.FileChooserActionSave, "", "",
 		)
-		if err != nil {
-			log.Panicln("Failed to open download dialog:", err)
-		}
-
 		d.SetFilename(filename)
 
-		if resp := d.Run(); resp != gtk.RESPONSE_ACCEPT {
+		if resp := d.Run(); gtk.ResponseType(resp) != gtk.ResponseAccept {
 			return
 		}
 
-		onSave(d.GetFilename())
+		onSave(d.Filename())
 	}
 }
 
 // func DownloadTo(url string, onDone func()) {
 // 	// Prompt the user
-// 	d, err := gtk.FileChooserDialogNewWith1Button(
+// 	d, err := gtk.NewFileChooserDialogWith1Button(
 // 		"Save As", window.Window, gtk.FILE_CHOOSER_ACTION_SAVE,
 // 		"Save", gtk.RESPONSE_ACCEPT,
 // 	)

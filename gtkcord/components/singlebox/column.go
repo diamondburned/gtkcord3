@@ -1,17 +1,13 @@
 package singlebox
 
-import (
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/gtk"
-)
-
+/*
 type Column struct {
 	*handy.Column
-	Children gtk.IWidget
+	Children gtk.Widgetter
 }
 
 func ColumnNew() *Column {
-	return WrapColumn(handy.ColumnNew())
+	return WrapColumn(handy.NewColumn())
 }
 
 func WrapColumn(col *handy.Column) *Column {
@@ -24,7 +20,7 @@ func (c *Column) Clear() {
 	c.Add(nil)
 }
 
-func (c *Column) Add(w gtk.IWidget) {
+func (c *Column) Add(w gtk.Widgetter) {
 	if c.Children != nil {
 		c.Column.Remove(c.Children)
 	}
@@ -37,3 +33,4 @@ func (c *Column) Add(w gtk.IWidget) {
 
 	c.Column.Add(w)
 }
+*/

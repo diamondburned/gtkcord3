@@ -1,10 +1,8 @@
 package header
 
 import (
-	"log"
-
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/variables"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 type Back struct {
@@ -15,25 +13,22 @@ type Back struct {
 }
 
 func NewBack() *Back {
-	r, _ := gtk.RevealerNew()
-	r.Show()
+	r := gtk.NewRevealer()
 	r.SetRevealChild(false)
-	r.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
+	r.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
 	r.SetTransitionDuration(150)
 	r.SetMarginStart(variables.AvatarPadding)
 	r.SetMarginEnd(variables.AvatarPadding)
+	r.Show()
 
-	mb, _ := gtk.MenuButtonNew()
+	mb := gtk.NewMenuButton()
 	mb.SetSensitive(true)
-	mb.SetHAlign(gtk.ALIGN_CENTER)
+	mb.SetHAlign(gtk.AlignCenter)
 	mb.Show()
 	mb.SetSizeRequest(variables.AvatarSize, -1)
 	r.Add(mb)
 
-	i, err := gtk.ImageNewFromIconName("go-previous-symbolic", gtk.ICON_SIZE_LARGE_TOOLBAR)
-	if err != nil {
-		log.Fatalln("Failed to load icon:", err)
-	}
+	i := gtk.NewImageFromIconName("go-previous-symbolic", int(gtk.IconSizeLargeToolbar))
 	i.Show()
 	mb.Add(i)
 

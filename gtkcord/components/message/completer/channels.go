@@ -3,20 +3,19 @@ package completer
 import (
 	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
 func (c *State) completeChannels(word string) {
-	guildID := c.container.GetGuildID()
-	if !guildID.Valid() {
+	guildID := c.container.GuildID()
+	if !guildID.IsValid() {
 		return
 	}
 
-	chs, err := c.state.Store.Channels(guildID)
+	chs, err := c.state.Channels(guildID)
 	if err != nil {
-		log.Errorln("Failed to get channels:", err)
+		log.Errorln("failed to get channels:", err)
 		return
 	}
 
@@ -38,10 +37,8 @@ func (c *State) completeChannels(word string) {
 		return
 	}
 
-	semaphore.IdleMust(func() {
-		for _, ch := range c.channels {
-			l := completerLeftLabel("#" + ch.Name)
-			c.addCompletionEntry(l, "<#"+ch.ID.String()+">")
-		}
-	})
+	for _, ch := range c.channels {
+		l := completerLeftLabel("#" + ch.Name)
+		c.addCompletionEntry(l, "<#"+ch.ID.String()+">")
+	}
 }

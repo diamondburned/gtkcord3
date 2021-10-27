@@ -1,47 +1,37 @@
 package animations
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
 )
 
 const SadFaceSize = 72
 
-func NewSadFace() (gtk.IWidget, error) {
-	i, err := gtk.ImageNew()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create a new gtk.Image")
-	}
-	gtkutils.ImageSetIcon(i, "face-sad-symbolic", SadFaceSize)
+func NewSadFace() gtk.Widgetter {
+	i := gtk.NewImage()
+	i.SetFromIconName("face-sad-symbolic", 0)
+	i.SetPixelSize(SadFaceSize)
 	i.SetHExpand(true)
-	i.SetVAlign(gtk.ALIGN_CENTER)
-	i.SetHAlign(gtk.ALIGN_CENTER)
-	i.ShowAll()
+	i.SetVAlign(gtk.AlignCenter)
+	i.SetHAlign(gtk.AlignCenter)
+	i.Show()
 
-	gtkutils.InjectCSSUnsafe(i, "", `
+	gtkutils.InjectCSS(i, "", `
 		image { opacity: 0.5; }
 	`)
 
-	return i, nil
+	return i
 }
 
-func NewSizedSadFace() (gtkutils.WidgetSizeRequester, error) {
-	b, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		return nil, err
-	}
-	b.SetHExpand(true)
-	b.SetVAlign(gtk.ALIGN_CENTER)
-	b.SetVAlign(gtk.ALIGN_CENTER)
+func NewSizedSadFace() gtk.Widgetter {
+	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	box.SetHExpand(true)
+	box.SetVAlign(gtk.AlignCenter)
+	box.SetVAlign(gtk.AlignCenter)
 
-	i, err := NewSadFace()
-	if err != nil {
-		return nil, err
-	}
+	img := NewSadFace()
+	box.Add(img)
+	box.Show()
 
-	b.Add(i)
-	b.ShowAll()
-
-	return b, nil
+	return box
 }

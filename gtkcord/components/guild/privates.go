@@ -1,10 +1,12 @@
 package guild
 
 import (
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type DMButton struct {
@@ -18,20 +20,21 @@ type DMButton struct {
 
 // thread-safe
 func NewPMButton(s *ningen.State) (dm *DMButton) {
-	r, _ := gtk.ListBoxRowNew()
-	r.Show()
-	r.SetHAlign(gtk.ALIGN_FILL)
-	r.SetVAlign(gtk.ALIGN_CENTER)
+	r := gtk.NewListBoxRow()
+	r.SetHAlign(gtk.AlignFill)
+	r.SetVAlign(gtk.AlignCenter)
 	r.SetActivatable(true)
-	gtkutils.InjectCSSUnsafe(r, "dmbutton", "")
+	r.Show()
+	gtkutils.InjectCSS(r, "dmbutton", "")
 
-	i, _ := gtk.ImageNew()
+	i := gtk.NewImageFromIconName("system-users-symbolic", 0)
+	i.SetPixelSize(IconSize / 3 * 2)
+	i.SetHAlign(gtk.AlignCenter)
+	i.SetVAlign(gtk.AlignCenter)
 	i.Show()
-	i.SetHAlign(gtk.ALIGN_CENTER)
-	i.SetVAlign(gtk.ALIGN_CENTER)
-	gtkutils.ImageSetIcon(i, "system-users-symbolic", IconSize/3*2)
 
-	marginate(r, i)
+	// hax
+	marginate(r, &roundimage.Image{Image: *i})
 
 	ov := NewUnreadStrip(i)
 	r.Add(ov)
@@ -45,7 +48,7 @@ func NewPMButton(s *ningen.State) (dm *DMButton) {
 	BindName(r, ov, &name)
 
 	// Initialize the read state.
-	go dm.resetRead(s)
+	dm.resetRead(s)
 
 	return
 }
@@ -63,23 +66,25 @@ func (dm *DMButton) inactive() {
 }
 
 func (dm *DMButton) resetRead(s *ningen.State) {
-	// Find and detect any unread channels:
-	chs, err := s.PrivateChannels()
-	if err != nil {
-		log.Errorln("Failed to get private channels for DMButton:", err)
-		return
-	}
-
-	for _, ch := range chs {
-		rs := s.Read.FindLast(ch.ID)
-		if rs == nil {
-			continue
+	go func() {
+		// Find and detect any unread channels:
+		chs, err := s.PrivateChannels()
+		if err != nil {
+			log.Errorln("failed to get private channels for DMButton:", err)
+			return
 		}
 
-		// Snowflakes have timestamps, which allow us to do this:
-		if ch.LastMessageID.Time().After(rs.LastMessageID.Time()) {
-			dm.setUnread(true)
-			break
+		for _, ch := range chs {
+			rs := s.ReadState.FindLast(ch.ID)
+			if rs == nil {
+				continue
+			}
+
+			// Snowflakes have timestamps, which allow us to do this:
+			if ch.LastMessageID.Time().After(rs.LastMessageID.Time()) {
+				glib.IdleAdd(func() { dm.setUnread(true) })
+				break
+			}
 		}
-	}
+	}()
 }

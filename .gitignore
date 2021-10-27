@@ -1,4 +1,5 @@
 result/
 gtkcord3
+.envrc
 *.so
 *.dll

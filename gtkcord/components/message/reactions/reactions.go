@@ -3,38 +3,39 @@ package reactions
 import (
 	"strconv"
 
-	"github.com/diamondburned/arikawa/api"
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
+	"github.com/diamondburned/ningen/v2"
+
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 const EmojiSize = 22
 
 type Container struct {
 	*gtk.FlowBox
-	Reactions map[api.EmojiAPI]*Reaction
-
-	MessageID discord.Snowflake
-	ChannelID discord.Snowflake
+	Reactions map[discord.APIEmoji]*Reaction
 
 	state *ningen.State
+
+	// constants
+	MessageID discord.MessageID
+	ChannelID discord.ChannelID
 }
 
 func NewContainer(m *discord.Message) *Container {
-	f, _ := gtk.FlowBoxNew()
+	f := gtk.NewFlowBox()
 
-	gtkutils.InjectCSSUnsafe(f, "reactions", "")
+	gtkutils.InjectCSS(f, "reactions", "")
 
 	container := &Container{
 		FlowBox:   f,
-		Reactions: map[api.EmojiAPI]*Reaction{},
+		Reactions: map[discord.APIEmoji]*Reaction{},
 		MessageID: m.ID,
 		ChannelID: m.ChannelID,
 	}
@@ -46,7 +47,7 @@ func NewContainer(m *discord.Message) *Container {
 	// Setting properties after adding may help?
 	f.SetColumnSpacing(0) // buttons already have margins
 	f.SetRowSpacing(0)
-	f.SetHAlign(gtk.ALIGN_START)
+	f.SetHAlign(gtk.AlignStart)
 	f.SetMaxChildrenPerLine(22)
 	f.SetHomogeneous(true)
 	f.Show()
@@ -56,13 +57,6 @@ func NewContainer(m *discord.Message) *Container {
 
 func (c *Container) SetState(s *ningen.State) {
 	c.state = s
-}
-
-func (c *Container) Search(chID, msgID discord.Snowflake, emoji api.EmojiAPI) *Reaction {
-	if r, ok := c.Reactions[emoji]; ok {
-		return r
-	}
-	return nil
 }
 
 func (c *Container) addReaction(reaction discord.Reaction) {
@@ -79,20 +73,30 @@ func (c *Container) addReaction(reaction discord.Reaction) {
 }
 
 func (c *Container) ReactAdd(r *gateway.MessageReactionAddEvent) {
-	c.reactSomething(r.ChannelID, r.MessageID, r.Emoji, 0)
+	if r.MessageID != r.MessageID || r.ChannelID != c.ChannelID {
+		return
+	}
+	glib.IdleAdd(func() {
+		c.reactSomething(r.Emoji, reactAdd)
+	})
 }
 
 func (c *Container) ReactRemove(r *gateway.MessageReactionRemoveEvent) {
-	c.reactSomething(r.ChannelID, r.MessageID, r.Emoji, 1)
+	if r.MessageID != r.MessageID || r.ChannelID != c.ChannelID {
+		return
+	}
+	glib.IdleAdd(func() {
+		c.reactSomething(r.Emoji, reactRemove)
+	})
 }
 
 // RemoveAll removes everything.
 func (c *Container) RemoveAll() {
-	semaphore.Async(c.removeAll, (*discord.Emoji)(nil))
+	c.removeAll(nil)
 }
 
 func (c *Container) RemoveEmoji(emoji discord.Emoji) {
-	semaphore.Async(c.removeAll, &emoji)
+	c.removeAll(&emoji)
 }
 
 func (c *Container) removeAll(emoji *discord.Emoji) {
@@ -110,14 +114,20 @@ func (c *Container) removeAll(emoji *discord.Emoji) {
 	}
 }
 
-// add or remove? dunno, but this is short code, i like. 0: add, 1: remove.
-func (c *Container) reactSomething(ch, msg discord.Snowflake, emoji discord.Emoji, code int) {
-	if c.ChannelID != ch || c.MessageID != msg || c.state == nil {
+type reactOp uint8
+
+const (
+	reactAdd reactOp = iota
+	reactRemove
+)
+
+func (c *Container) reactSomething(emoji discord.Emoji, op reactOp) {
+	if c.state == nil {
 		return
 	}
 
 	// Reaction found. Do the unoptimized thing.
-	m, err := c.state.Store.Message(ch, msg)
+	m, err := c.state.Offline().Message(c.ChannelID, c.MessageID)
 	if err != nil {
 		log.Errorln("react: message store get failed:", err)
 		return
@@ -133,36 +143,34 @@ func (c *Container) reactSomething(ch, msg discord.Snowflake, emoji discord.Emoj
 		}
 	}
 
-	semaphore.Async(func() {
-		if r := c.Search(ch, msg, emoji.APIString()); r != nil {
-			// Reaction found, remove.
-			r.update(target)
+	r, ok := c.Reactions[emoji.APIString()]
+	if ok {
+		r.update(target)
+		return
+	}
+
+	switch op {
+	case reactAdd:
+		if target == nil {
+			log.Errorln("Can't find reaction:", emoji)
 			return
 		}
+		// Reaction not found, add it into the message.
+		c.addReaction(*target)
 
-		switch code {
-		case 0:
-			if target == nil {
-				log.Errorln("Can't find reaction:", emoji)
-				return
-			}
-			// Reaction not found, add it into the message.
-			c.addReaction(*target)
-
-		case 1:
-			// can't do anything.
-		}
-	})
+	case reactRemove:
+		// can't do anything.
+	}
 }
 
 func (c *Container) clicked(r *Reaction) {
-	if r.Button.GetActive() {
+	if r.Button.Active() {
 		// Only increment the counter by the event. If react() fails, it
 		// will deactivate the button.
-		go c.react(r)
+		c.react(r)
 	} else {
 		// Same as above, but decrement.
-		go c.unreact(r)
+		c.unreact(r)
 	}
 }
 
@@ -171,13 +179,14 @@ func (c *Container) react(r *Reaction) {
 		return
 	}
 
-	if err := c.state.React(c.ChannelID, c.MessageID, r.String); err == nil {
-		// Worked.
-		return
-	}
+	go func() {
+		if err := c.state.React(c.ChannelID, c.MessageID, r.String); err == nil {
+			return
+		}
 
-	// Unactivate the button, because there won't be an event.
-	semaphore.Async(r.Button.SetActive, false)
+		// Unactivate the button, because there won't be an event.
+		glib.IdleAdd(func() { r.Button.SetActive(false) })
+	}()
 }
 
 func (c *Container) unreact(r *Reaction) {
@@ -185,60 +194,61 @@ func (c *Container) unreact(r *Reaction) {
 		return
 	}
 
-	if err := c.state.Unreact(c.ChannelID, c.MessageID, r.String); err == nil {
-		// Worked.
-		return
-	}
+	go func() {
+		if err := c.state.Unreact(c.ChannelID, c.MessageID, r.String); err == nil {
+			return
+		}
 
-	// Unactivate the button, because there won't be an event.
-	semaphore.Async(r.Button.SetActive, true)
+		// Unactivate the button, because there won't be an event.
+		glib.IdleAdd(func() { r.Button.SetActive(true) })
+	}()
 }
 
 type Reaction struct {
 	*gtk.FlowBoxChild
 	Button *gtk.ToggleButton
-	Emoji  gtk.IWidget // *gtk.Image or *gtk.Label
+	Emoji  gtk.Widgetter // *gtk.Image or *gtk.Label
 
-	String api.EmojiAPI
+	String discord.APIEmoji
 }
 
 func newReaction(emoji discord.Emoji, count int, me bool) *Reaction {
-	f, _ := gtk.FlowBoxChildNew()
+	f := gtk.NewFlowBoxChild()
 	f.Show()
 
-	b, _ := gtk.ToggleButtonNew()
-	b.SetRelief(gtk.RELIEF_NONE)
+	b := gtk.NewToggleButton()
+	b.SetRelief(gtk.ReliefNone)
 	b.SetActive(me)
 	b.SetAlwaysShowImage(true)
-	b.SetImagePosition(gtk.POS_LEFT)
+	b.SetImagePosition(gtk.PosLeft)
 	b.SetLabel(strconv.Itoa(count))
 	b.Show()
 
 	f.Add(b)
-	gtkutils.InjectCSSUnsafe(b, "reaction", "")
+	gtkutils.InjectCSS(b, "reaction", "")
 
 	reaction := &Reaction{FlowBoxChild: f, Button: b, String: emoji.APIString()}
 
 	// If the emoji is a custom one:
-	if emoji.ID.Valid() {
+	if emoji.ID.IsValid() {
 		url := md.EmojiURL(emoji.ID.String(), emoji.Animated)
 
-		i, _ := gtk.ImageNew()
+		i := gtk.NewImage()
 		i.SetSizeRequest(EmojiSize, EmojiSize)
-		i.SetVAlign(gtk.ALIGN_CENTER)
-		i.SetHAlign(gtk.ALIGN_CENTER)
+		i.SetVAlign(gtk.AlignCenter)
+		i.SetHAlign(gtk.AlignCenter)
 		i.SetMarginEnd(2)
 		i.Show()
-		cache.AsyncFetchUnsafe(url, i, EmojiSize, EmojiSize)
+		cache.SetImageURLScaled(i, url, EmojiSize, EmojiSize)
 
 		reaction.Emoji = i
 		b.SetImage(i)
 
 	} else {
-		l, _ := gtk.LabelNew(emoji.Name)
+		l := gtk.NewLabel(emoji.Name)
 		l.SetSizeRequest(EmojiSize, EmojiSize)
-		l.SetVAlign(gtk.ALIGN_CENTER)
-		l.SetHAlign(gtk.ALIGN_CENTER)
+		l.SetVAlign(gtk.AlignCenter)
+		l.SetHAlign(gtk.AlignCenter)
 		l.SetMarginEnd(2)
 		l.Show()
 
@@ -247,9 +257,9 @@ func newReaction(emoji discord.Emoji, count int, me bool) *Reaction {
 	}
 
 	// Set "padding"
-	if c, _ := b.GetChild(); c != nil {
-		c.(gtkutils.SizeRequester).SetSizeRequest(EmojiSize+9, -1)
-		gtkutils.Margin2(c.(gtkutils.Marginator), 2, 5)
+	if c := b.Child(); c != nil {
+		c.BaseWidget().SetSizeRequest(EmojiSize+9, -1)
+		gtkutils.Margin2(c, 2, 5)
 	}
 
 	return reaction
@@ -265,7 +275,7 @@ func (r *Reaction) update(reaction *discord.Reaction) {
 	r.Button.SetLabel(strconv.Itoa(reaction.Count))
 
 	// Prevent flickering.
-	if r.Button.GetActive() != reaction.Me {
+	if r.Button.Active() != reaction.Me {
 		r.Button.SetActive(reaction.Me)
 	}
 }

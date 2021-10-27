@@ -3,11 +3,9 @@ package md
 import (
 	"io"
 
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/ningen/md"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2/md"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 )
@@ -32,12 +30,13 @@ type Renderer struct {
 	View   *gtk.TextView
 	Buffer *gtk.TextBuffer
 
+	end  *gtk.TextIter
 	tags TagState
 }
 
 func NewRenderer(tv *gtk.TextView) *Renderer {
-	buf, _ := tv.GetBuffer()
-	tags, _ := buf.GetTagTable()
+	buf := tv.Buffer()
+	tags := buf.TagTable()
 
 	return &Renderer{
 		View:   tv,
@@ -49,7 +48,7 @@ func NewRenderer(tv *gtk.TextView) *Renderer {
 }
 
 func (r *Renderer) Render(_ io.Writer, source []byte, n ast.Node) error {
-	r.Buffer.Delete(r.Buffer.GetStartIter(), r.Buffer.GetEndIter())
+	r.Buffer.SetText("")
 
 	ast.Walk(n, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		return r.renderNode(source, n, enter)
@@ -161,37 +160,53 @@ func (r *Renderer) renderNode(source []byte, n ast.Node, enter bool) (ast.WalkSt
 	return ast.WalkContinue, nil
 }
 
+func (r *Renderer) endIter() *gtk.TextIter {
+	if r.end == nil {
+		r.end = r.Buffer.EndIter()
+	}
+	return r.end
+}
+
 func (r *Renderer) insertWithTag(content []byte, tag *gtk.TextTag) {
 	if tag == nil {
 		tag = r.tags.tag
 	}
 
-	r.Buffer.InsertWithTag(r.Buffer.GetEndIter(), string(content), tag)
+	end := r.endIter()
+
+	var startIx int
+	if tag != nil {
+		startIx = end.Offset()
+	}
+
+	r.Buffer.Insert(end, string(content))
+
+	if tag != nil {
+		r.Buffer.ApplyTag(tag, r.Buffer.IterAtOffset(startIx), end)
+	}
 }
 
 func (r *Renderer) insertEmoji(e *md.Emoji) {
 	// TODO
-	var sz = InlineEmojiSize
+	sz := InlineEmojiSize
 	if e.Large {
 		sz = LargeEmojiSize
 	}
 
-	anchor := r.Buffer.CreateChildAnchor(r.Buffer.GetEndIter())
+	anchor := r.Buffer.CreateChildAnchor(r.endIter())
 
-	img, _ := gtk.ImageNew()
-	img.Show()
+	img := gtk.NewImage()
 	img.SetTooltipText(e.Name)
-	img.SetSizeRequest(sz, 10) // 10 is the minimum height
-	img.SetProperty("yalign", 1.0)
-	gtkutils.ImageSetIcon(img, "image-missing", sz)
+	img.SetSizeRequest(sz, 10)           // 10 is the minimum height
+	img.SetObjectProperty("yalign", 1.0) // ???
+	img.SetFromIconName("image-missing", 0)
+	img.SetPixelSize(sz)
+	img.Show()
 
 	r.View.AddChildAtAnchor(img, anchor)
+	// Ensure the end iterator is updated.
+	r.end.ForwardToEnd()
 
 	url := e.EmojiURL()
-
-	go func() {
-		if err := cache.SetImageScaled(url, img, sz, sz); err != nil {
-			log.Errorln("Markdown: Failed to GET "+url+":", err)
-		}
-	}()
+	cache.SetImageURLScaled(img, url, sz, sz)
 }

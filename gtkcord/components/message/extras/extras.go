@@ -4,26 +4,26 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/gtkcord/variables"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
 )
 
 const EmbedMainCSS = ".embed { border-left: 4px solid #%06X; }"
 
-func NewAttachmentUnsafe(msg *discord.Message) []gtk.IWidget {
+var attachmentFormats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+func NewAttachment(msg *discord.Message) []gtk.Widgetter {
 	// Discord's supported formats
-	var formats = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
-	var widgets = make([]gtk.IWidget, 0, len(msg.Attachments))
+	widgets := make([]gtk.Widgetter, 0, len(msg.Attachments))
 
 	for _, att := range msg.Attachments {
-		if att.Width == 0 || att.Height == 0 || !validExt(att.Proxy, formats) {
-			widgets = append(widgets, NewAnyAttachmentUnsafe(att.Filename, att.URL, att.Size))
+		if att.Width == 0 || att.Height == 0 || !validExt(att.Proxy, attachmentFormats) {
+			widgets = append(widgets, NewAnyAttachment(att.Filename, att.URL, att.Size))
 			continue
 		}
 
@@ -33,7 +33,7 @@ func NewAttachmentUnsafe(msg *discord.Message) []gtk.IWidget {
 		)
 		proxyURL := sizeToURL(att.Proxy, w, h)
 
-		img := newExtraImageUnsafe(proxyURL, att.URL, w, h)
+		img := newExtraImage(proxyURL, att.URL, w, h)
 		img.SetMarginStart(0)
 
 		widgets = append(widgets, img)
@@ -42,15 +42,15 @@ func NewAttachmentUnsafe(msg *discord.Message) []gtk.IWidget {
 	return widgets
 }
 
-func NewEmbedUnsafe(s *ningen.State, msg *discord.Message) []gtk.IWidget {
+func NewEmbed(s *ningen.State, msg *discord.Message) []gtk.Widgetter {
 	if len(msg.Embeds) == 0 {
 		return nil
 	}
 
-	var embeds = make([]gtk.IWidget, 0, len(msg.Embeds))
+	embeds := make([]gtk.Widgetter, 0, len(msg.Embeds))
 
 	for _, embed := range msg.Embeds {
-		w := newEmbedUnsafe(s, msg, embed)
+		w := newEmbed(s, msg, embed)
 		if w == nil {
 			continue
 		}
@@ -61,12 +61,12 @@ func NewEmbedUnsafe(s *ningen.State, msg *discord.Message) []gtk.IWidget {
 	return embeds
 }
 
-func newEmbedUnsafe(s *ningen.State, msg *discord.Message, embed discord.Embed) gtk.IWidget {
+func newEmbed(s *ningen.State, msg *discord.Message, embed discord.Embed) gtk.Widgetter {
 	switch embed.Type {
 	case discord.NormalEmbed, discord.LinkEmbed, discord.ArticleEmbed:
-		return newNormalEmbedUnsafe(s, msg, embed)
+		return newNormalEmbed(s, msg, embed)
 	case discord.ImageEmbed:
-		return newImageEmbedUnsafe(embed)
+		return newImageEmbed(embed)
 	case discord.VideoEmbed:
 		// I'm tired and lazy.
 		if embed.Thumbnail != nil && embed.Image == nil {
@@ -80,14 +80,14 @@ func newEmbedUnsafe(s *ningen.State, msg *discord.Message, embed discord.Embed) 
 			embed.Thumbnail = nil
 		}
 
-		return newNormalEmbedUnsafe(s, msg, embed)
+		return newNormalEmbed(s, msg, embed)
 	}
 
-	spew.Dump(embed)
+	// spew.Dump(embed)
 	return nil
 }
 
-func newImageEmbedUnsafe(embed discord.Embed) gtkutils.ExtendedWidget {
+func newImageEmbed(embed discord.Embed) gtk.Widgetter {
 	if embed.Thumbnail == nil {
 		return nil
 	}
@@ -96,21 +96,21 @@ func newImageEmbedUnsafe(embed discord.Embed) gtkutils.ExtendedWidget {
 	w, h = maxSize(w, h, variables.EmbedMaxWidth, variables.EmbedImgHeight)
 	link := sizeToURL(embed.Thumbnail.Proxy, w, h)
 
-	img := newExtraImageUnsafe(link, embed.Thumbnail.URL, w, h)
+	img := newExtraImage(link, embed.Thumbnail.URL, w, h)
 	img.SetMarginStart(0)
 	return img
 }
 
-func newExtraImageUnsafe(proxy, url string, w, h int, pp ...cache.Processor) *gtk.EventBox {
-	img, _ := gtk.ImageNew()
+func newExtraImage(proxy, url string, w, h int) *gtk.EventBox {
+	img := gtk.NewImage()
 	img.Show()
-	img.SetVAlign(gtk.ALIGN_START)
-	img.SetHAlign(gtk.ALIGN_START)
+	img.SetVAlign(gtk.AlignStart)
+	img.SetHAlign(gtk.AlignStart)
 
-	evb, _ := gtk.EventBoxNew()
+	evb := gtk.NewEventBox()
 	evb.Show()
 	evb.Add(img)
-	evb.SetHAlign(gtk.ALIGN_START)
+	evb.SetHAlign(gtk.AlignStart)
 	evb.Connect("button-release-event", func(_ *gtk.EventBox, ev *gdk.Event) {
 		if !gtkutils.EventIsLeftClick(ev) {
 			return
@@ -119,11 +119,12 @@ func newExtraImageUnsafe(proxy, url string, w, h int, pp ...cache.Processor) *gt
 	})
 	embedSetMargin(evb)
 
-	cache.AsyncFetchUnsafe(proxy, img, w, h, pp...)
+	cache.SetImageStreamed(img, proxy, w, h)
 	return evb
 }
 
-func embedSetMargin(w gtkutils.Marginator) {
+func embedSetMargin(widget gtk.Widgetter) {
+	w := widget.BaseWidget()
 	w.SetMarginStart(variables.EmbedMargin)
 	w.SetMarginEnd(variables.EmbedMargin)
 	w.SetMarginBottom(variables.EmbedMargin / 2)

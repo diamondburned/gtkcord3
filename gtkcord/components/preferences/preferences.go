@@ -3,35 +3,34 @@ package preferences
 import (
 	"strconv"
 
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
 )
 
-func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
-	r := handy.ActionRowNew()
+func Row(title, subtitle string, w gtk.Widgetter) *handy.ActionRow {
+	r := handy.NewActionRow()
 	r.SetTitle(title)
 	r.SetSubtitle(subtitle)
 	r.Show()
 
 	// Set the proper orientation:
-	if w, err := r.GetChild(); err == nil {
-		w.(gtkutils.Object).SetProperty("orientation", gtk.ORIENTATION_HORIZONTAL)
-		// Set all labels to have markup:
-		gtkutils.TraverseWidget(r, func(w *gtk.Widget) {
-			// Labels have use-markup
-			if !gtkutils.HasProperty(w, "use-markup") {
-				return
-			}
 
-			label := &gtk.Label{Widget: *w}
-			label.SetLineWrapMode(pango.WRAP_WORD_CHAR)
-			label.SetEllipsize(pango.ELLIPSIZE_NONE)
-			label.SetUseMarkup(true)
-		})
+	if child, ok := r.Child().(gtk.Containerer); ok {
+		child.SetObjectProperty("orientation", gtk.OrientationHorizontal)
 	}
+
+	// Set all labels to have markup:
+	gtkutils.TraverseWidget(r, func(w gtk.Widgetter) {
+		label, ok := w.(*gtk.Label)
+		if ok {
+			label.SetLineWrapMode(pango.WrapWordChar)
+			label.SetEllipsize(pango.EllipsizeNone)
+			label.SetUseMarkup(true)
+		}
+	})
 
 	if w == nil {
 		return r
@@ -40,25 +39,20 @@ func Row(title, subtitle string, w gtk.IWidget) *handy.ActionRow {
 	r.Add(w)
 
 	// Properly align the children:
-	if a, ok := w.(interface{ SetVAlign(gtk.Align) }); ok {
-		a.SetVAlign(gtk.ALIGN_CENTER)
-	}
-	if m, ok := w.(gtkutils.Marginator); ok {
-		m.SetMarginEnd(12)
-	}
+	base := w.BaseWidget()
+	base.SetVAlign(gtk.AlignCenter)
+	base.SetMarginEnd(12)
 
 	return r
 }
 
 // Permit only CSS files by MIME type.
 func CSSFilter() *gtk.FileFilter {
-	cssFilter, _ := gtk.FileFilterNew()
+	cssFilter := gtk.NewFileFilter()
 	cssFilter.SetName("CSS Files")
-	cssFilter.AddMimeType("text/css")
+	cssFilter.AddMIMEType("text/css")
 	return cssFilter
 }
-
-// func FileChooser()
 
 func BindSwitch(s *gtk.Switch, b *bool, updaters ...func()) {
 	s.SetActive(*b)
@@ -75,7 +69,7 @@ func BindFileChooser(fsb *gtk.FileChooserButton, s *string, updaters ...func()) 
 	update(updaters)
 
 	fsb.Connect("file-set", func() {
-		*s = fsb.GetFilename()
+		*s = fsb.Filename()
 		update(updaters)
 	})
 }
@@ -86,39 +80,28 @@ func BindEntry(e *gtk.Entry, s *string, updaters ...func()) {
 	update(updaters)
 
 	e.Connect("changed", func() {
-		t, err := e.GetText()
-		if err != nil {
-			log.Errorln("Failed to get entry text:", err)
-			return
-		}
-
-		*s = t
+		*s = e.Text()
 		update(updaters)
 	})
 }
 
 func BindNumberEntry(e *gtk.Entry, input *int, updaters ...func()) {
 	e.SetHExpand(true)
-	e.SetInputPurpose(gtk.INPUT_PURPOSE_NUMBER)
+	e.SetInputPurpose(gtk.InputPurposeNumber)
 	e.SetText(strconv.Itoa(*input))
 	update(updaters)
 
 	e.Connect("changed", func() {
-		t, err := e.GetText()
+		text := e.Text()
+		log.Println("Input:", text)
+
+		i, err := strconv.Atoi(text)
 		if err != nil {
-			log.Errorln("Failed to get entry text:", err)
+			EntryError(e, err)
 			return
 		}
 
-		log.Println("Input:", t)
-
-		i, err := strconv.Atoi(t)
 		EntryError(e, err)
-
-		if err != nil {
-			return
-		}
-
 		*input = i
 		update(updaters)
 	})
@@ -126,10 +109,10 @@ func BindNumberEntry(e *gtk.Entry, input *int, updaters ...func()) {
 
 func EntryError(entry *gtk.Entry, err error) {
 	if err != nil {
-		entry.SetIconFromIconName(gtk.ENTRY_ICON_SECONDARY, "dialog-error")
-		entry.SetIconTooltipText(gtk.ENTRY_ICON_SECONDARY, err.Error())
+		entry.SetIconFromIconName(gtk.EntryIconSecondary, "dialog-error")
+		entry.SetIconTooltipText(gtk.EntryIconSecondary, err.Error())
 	} else {
-		entry.RemoveIcon(gtk.ENTRY_ICON_SECONDARY)
+		entry.SetIconFromIconName(gtk.EntryIconSecondary, "")
 	}
 }
 

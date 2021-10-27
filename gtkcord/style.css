@@ -13,6 +13,7 @@ button.flat {
 	padding: 8px;
 }
 
+/*
 .status {
 	background-color: white;
 	border: 2px solid #FFFFFF;
@@ -26,6 +27,7 @@ button.flat {
 .popup-user .status {
 	border-width: 4px;
 }
+*/
 
 .status.online {
 	border-color: #43B581;
@@ -114,8 +116,15 @@ textview, textview > text {
 }
 */
 
-.guilds > *, .guild-folder button, .guild-folder button stack {
+.guilds > *,
+.guild-folder button,
+.guild-folder button stack {
 	border-radius: 16px;
+}
+
+.guilds > *,
+.guilds > *:hover {
+	background: none;
 }
 
 .guild-folder list {
@@ -126,15 +135,15 @@ textview, textview > text {
 	background-color: transparent;
 }
 
-.guild image {
-	padding-top: 3px;
-	padding-bottom: 6px;
+@define-color folder_bg_color mix(@theme_bg_color, @theme_fg_color, .15);
+
+.guild-folder .guild .child-box {
+	padding: 4px 0;
+	background-color: @folder_bg_color;
 }
-.guild-folder .guild image {
-	background-color: @theme_base_color;
-}
-.guild-folder .guild:last-child image {
+.guild-folder .guild:last-child .child-box {
 	padding-bottom: 0;
+	margin-bottom: 4px;
 	border-radius: 0 0 99px 99px;
 }
 
@@ -146,7 +155,7 @@ textview, textview > text {
  * out, we could put another color on top using stack. The border-radius is to
  * trim the bottom two radius out. */
 .guild-folder stack:not(.collapsed) {
-	background-color: @theme_base_color;
+	background-color: @folder_bg_color;
 	border-radius: 16px 16px 0 0;
 }
 

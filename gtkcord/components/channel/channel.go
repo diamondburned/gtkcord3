@@ -4,24 +4,24 @@ import (
 	"html"
 	"strings"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type Channel struct {
-	gtkutils.ExtendedWidget
+	gtk.Widgetter
 
 	Row   *gtk.ListBoxRow
 	Style *gtk.StyleContext
 
 	Label *gtk.Label
 
-	ID       discord.Snowflake
-	Guild    discord.Snowflake
+	ID       discord.ChannelID
+	Guild    discord.GuildID
 	Name     string
 	Topic    string
 	Category bool
@@ -37,13 +37,13 @@ func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {
 		return
 	}
 
-	if s.Muted.Channel(ch.ID) {
+	if s.MutedState.Channel(ch.ID) {
 		w.stateClass = "muted"
 		w.Style.AddClass("muted")
 		return
 	}
 
-	if rs := s.Read.FindLast(ch.ID); rs != nil {
+	if rs := s.ReadState.FindLast(ch.ID); rs != nil {
 		w.unread = ch.LastMessageID != rs.LastMessageID
 		pinged := w.unread && rs.MentionCount > 0
 
@@ -81,27 +81,27 @@ func newChannel(ch *discord.Channel) *Channel {
 func newCategory(ch *discord.Channel) (chw *Channel) {
 	name := `<span font_size="smaller">` + html.EscapeString(strings.ToUpper(ch.Name)) + "</span>"
 
-	l, _ := gtk.LabelNew(name)
+	l := gtk.NewLabel(name)
 	l.Show()
 	l.SetUseMarkup(true)
 	l.SetXAlign(0.0)
 	l.SetMarginStart(8)
 	l.SetMarginTop(8)
-	l.SetEllipsize(pango.ELLIPSIZE_END)
+	l.SetEllipsize(pango.EllipsizeEnd)
 	l.SetSingleLineMode(true)
 	l.SetMaxWidthChars(40)
 
-	r, _ := gtk.ListBoxRowNew()
+	r := gtk.NewListBoxRow()
 	r.Show()
 	r.SetSelectable(false)
 	r.SetSensitive(false)
 	r.Add(l)
 
-	s, _ := r.GetStyleContext()
+	s := r.StyleContext()
 	s.AddClass("category")
 
 	chw = &Channel{
-		ExtendedWidget: r,
+		Widgetter: r,
 
 		Row:      r,
 		Style:    s,
@@ -119,37 +119,37 @@ func newCategory(ch *discord.Channel) (chw *Channel) {
 func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	name := `<span weight="bold">` + html.EscapeString(ch.Name) + `</span>`
 
-	hash, _ := gtk.LabelNew(`<span size="x-large" weight="bold">#</span>`)
+	hash := gtk.NewLabel(`<span size="x-large" weight="bold">#</span>`)
 	hash.Show()
 	hash.SetUseMarkup(true)
-	hash.SetVAlign(gtk.ALIGN_CENTER)
-	hash.SetHAlign(gtk.ALIGN_START)
+	hash.SetVAlign(gtk.AlignCenter)
+	hash.SetHAlign(gtk.AlignStart)
 	hash.SetMarginStart(8)
 	hash.SetMarginEnd(8)
 
-	l, _ := gtk.LabelNew(name)
+	l := gtk.NewLabel(name)
 	l.Show()
-	l.SetVAlign(gtk.ALIGN_CENTER)
-	l.SetHAlign(gtk.ALIGN_START)
-	l.SetEllipsize(pango.ELLIPSIZE_END)
+	l.SetVAlign(gtk.AlignCenter)
+	l.SetHAlign(gtk.AlignStart)
+	l.SetEllipsize(pango.EllipsizeEnd)
 	l.SetUseMarkup(true)
 
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	b.Show()
-	b.SetHAlign(gtk.ALIGN_START)
+	b.SetHAlign(gtk.AlignStart)
 	b.Add(hash)
 	b.Add(l)
 
-	r, _ := gtk.ListBoxRowNew()
+	r := gtk.NewListBoxRow()
 	r.SetSizeRequest(-1, 16)
 	r.Show()
 	r.Add(b)
 
-	s, _ := r.GetStyleContext()
+	s := r.StyleContext()
 	s.AddClass("channel")
 
 	chw = &Channel{
-		ExtendedWidget: r,
+		Widgetter: r,
 
 		Row:      r,
 		Style:    s,
@@ -164,11 +164,11 @@ func newChannelRow(ch *discord.Channel) (chw *Channel) {
 	return chw
 }
 
-func (ch *Channel) ChannelID() discord.Snowflake {
+func (ch *Channel) ChannelID() discord.ChannelID {
 	return ch.ID
 }
 
-func (ch *Channel) GuildID() discord.Snowflake {
+func (ch *Channel) GuildID() discord.GuildID {
 	return ch.Guild
 }
 

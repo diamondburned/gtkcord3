@@ -2,16 +2,14 @@ package emojis
 
 import (
 	"context"
-	"time"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/core/glib"
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/gtkcord3/internal/moreatomic"
-	"github.com/diamondburned/ningen/states/emoji"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2/md"
+	"github.com/diamondburned/ningen/v2/states/emoji"
 )
 
 // MainPage contains sections, which has all emojis.
@@ -30,162 +28,182 @@ type MainPage struct {
 
 func newMainPage(p *Picker, click func(string)) MainPage {
 	page := MainPage{click: click, picker: p}
-	page.ScrolledWindow, _ = gtk.ScrolledWindowNew(nil, nil)
-	page.Main, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	page.ScrolledWindow = gtk.NewScrolledWindow(nil, nil)
+	page.Main = gtk.NewBox(gtk.OrientationVertical, 0)
 
-	page.ScrolledWindow.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_EXTERNAL)
-	page.ScrolledWindow.SetProperty("propagate-natural-height", true)
-	page.ScrolledWindow.SetProperty("min-content-height", 400)
-	page.ScrolledWindow.SetProperty("max-content-height", 400)
+	page.ScrolledWindow.SetPolicy(gtk.PolicyNever, gtk.PolicyExternal)
+	page.ScrolledWindow.SetPropagateNaturalHeight(true)
+	page.ScrolledWindow.SetMinContentHeight(400)
+	page.ScrolledWindow.SetMaxContentHeight(400)
 	page.ScrolledWindow.Add(page.Main)
 
-	page.vadj = page.ScrolledWindow.GetVAdjustment()
-	page.hadj = page.ScrolledWindow.GetHAdjustment()
+	page.vadj = page.ScrolledWindow.VAdjustment()
+	page.hadj = page.ScrolledWindow.HAdjustment()
 
 	return page
 }
 
-func (page *MainPage) init(guildEmojis []emoji.Guild) {
-	page.Sections = make([]*Section, 0, len(guildEmojis))
+func (p *MainPage) init(guildEmojis []emoji.Guild) {
+	p.Sections = make([]*Section, 0, len(guildEmojis))
 
 	// Adding 100 guilds right now, since it's not that expensive.
 	for i, group := range guildEmojis {
-		s := Section{
-			Emojis: guildEmojis[i].Emojis,
-		}
+		i := i
 
-		// Copy the integer to use with the click callback.
-		guildN := i
-
-		header := newHeader(group.Name, group.IconURL())
-
-		s.Body = newFlowBox()
-		s.RevealerBox = newRevealerBox(header, s.Body, func() {
-			page.reveal(guildN)
-		})
-		s.stopped.Set(true)
+		s := newSection(group)
+		s.hide = p.picker.Popover.Popdown
+		s.clicked = p.click
+		s.ConnectRevealChild(func(bool) { p.unrevealOthers(i) })
 
 		// Bind the revealer to the scrolled window so that expands can focus.
-		s.Revealer.SetFocusHAdjustment(page.hadj)
-		s.Revealer.SetFocusVAdjustment(page.vadj)
+		s.Revealer.SetFocusHAdjustment(p.hadj)
+		s.Revealer.SetFocusVAdjustment(p.vadj)
 
 		// Add the placeholder first.
-		page.Main.Add(s)
-		page.Sections = append(page.Sections, &s)
+		p.Main.Add(s)
+		p.Sections = append(p.Sections, s)
 	}
 
-	// Load the first page.
-	page.reveal(0)
+	p.ShowAll()
 }
 
-func (p *MainPage) reveal(i int) {
-	var revealed bool
-
-	for j, section := range p.Sections {
-		if j == i {
-			revealed = section.Revealer.GetRevealChild()
-
-			// If the current section is not opened, then actually try and
-			// uncollapse others, then load it.
-			if !revealed {
-				continue
-			}
-		}
-
-		if !section.stopped.Get() {
-			section.stopped.Set(true)
+func (p *MainPage) unrevealOthers(ix int) {
+	for i, section := range p.Sections {
+		if i != ix {
 			section.Revealer.SetRevealChild(false)
 		}
 	}
-
-	// Exit, we don't want to re-open the collapsed revealer.
-	if revealed {
-		return
-	}
-
-	section := p.Sections[i]
-	section.load(p.click, p.picker.Popover.Hide)
-	section.Revealer.SetRevealChild(true)
 }
 
 type Section struct {
 	*RevealerBox
-	Body *gtk.FlowBox
+	Button *gtk.ToggleButton
+	Body   *gtk.FlowBox
 
-	shiftHeld bool
+	Emojis []discord.Emoji
+	emojis []*gtk.Image
 
-	Emojis  []discord.Emoji
-	emojis  []*gtk.Image
-	loaded  moreatomic.Serial
-	stopped moreatomic.Bool
+	clicked func(string)
+	hide    func()
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	lastLoaded int
+	shiftHeld  bool
 }
 
-func (s *Section) load(onClick func(string), hide func()) {
-	s.stopped.Set(false)
+type sectionLoadState struct {
+	ctx    context.Context
+	loaded int
+}
 
-	// Initialize empty images if we haven't yet.
-	if s.emojis == nil {
-		// Pre-allocate.
-		s.emojis = make([]*gtk.Image, len(s.Emojis))
-
-		// Construct all images first:
-		for i := range s.Emojis {
-			img, _ := gtk.ImageNew()
-			img.Show()
-			img.SetTooltipText(s.Emojis[i].Name)
-
-			s.emojis[i] = img
-
-			// Append the button.
-			s.Body.Add(img)
-		}
-
-		s.Body.Connect("child-activated", func(f *gtk.FlowBox, c *gtk.FlowBoxChild) {
-			onClick(s.Emojis[c.GetIndex()].String())
-			// Is shift being held?
-			if s.shiftHeld {
-				hide()
-			}
-		})
-		// Intercept a button click instead. It's better than listening to
-		// keypresses.
-		s.Body.Connect("button-press-event", func(f *gtk.FlowBox, ev *gdk.Event) bool {
-			evk := gdk.EventButtonNewFromEvent(ev)
-			const shift = uint(gdk.SHIFT_MASK)
-
-			// Is shift being held?
-			s.shiftHeld = evk.State()&shift != shift
-
-			// Pass all events through.
-			return false
-		})
+func newSection(group emoji.Guild) *Section {
+	s := Section{
+		Emojis: group.Emojis,
 	}
 
+	s.Button = newHeaderButton(group.Name, group.IconURL())
+	s.Body = newFlowBox()
+	s.RevealerBox = newRevealerBox(s.Button, s.Body)
+	s.RevealerBox.ConnectUnmap(func() {
+		if s.cancel != nil {
+			s.cancel()
+			s.cancel = nil
+		}
+	})
+
+	s.RevealerBox.Revealer.Connect("notify::reveal-child", func() {
+		if s.Revealer.RevealChild() {
+			if s.cancel == nil {
+				s.ctx, s.cancel = context.WithCancel(context.Background())
+				s.load()
+			}
+		} else {
+			if s.cancel != nil {
+				s.cancel()
+				s.cancel = nil
+			}
+		}
+	})
+
+	return &s
+}
+
+// init initializes empty images if we haven't yet.
+func (s *Section) init() {
+	if s.emojis != nil {
+		return
+	}
+
+	// Pre-allocate.
+	s.emojis = make([]*gtk.Image, len(s.Emojis))
+
+	// Construct all images first:
+	for i := range s.Emojis {
+		img := gtk.NewImage()
+		img.SetTooltipText(s.Emojis[i].Name)
+
+		s.emojis[i] = img
+
+		// Append the button.
+		s.Body.Add(img)
+	}
+
+	s.Body.ShowAll()
+
+	s.Body.Connect("child-activated", func(c *gtk.FlowBoxChild) {
+		s.clicked(s.Emojis[c.Index()].String())
+		if !s.shiftHeld {
+			s.hide()
+		}
+	})
+
+	// Intercept a button click instead. It's better than listening to
+	// keypresses.
+	s.Body.Connect("button-press-event", func(f *gtk.FlowBox, ev *gdk.Event) bool {
+		evk := ev.AsButton()
+		const shift = gdk.ShiftMask
+
+		// Is shift being held?
+		s.shiftHeld = evk.State()&shift == shift
+
+		// Pass all events through.
+		return false
+	})
+}
+
+func (s *Section) load() {
+	s.init()
+
+	ctx := s.ctx
+	lastLoaded := s.lastLoaded
+
 	// Render the rest in a goroutine, sequentially.
+	/* TODO: INSPECT ME */
 	go func() {
-		for i := s.loaded.Get(); i < len(s.Emojis); i = s.loaded.Incr() {
-			// Check if we should stos.
-			if s.stopped.Get() {
-				return
+		for lastLoaded < len(s.Emojis) {
+			select {
+			case <-ctx.Done():
+				break
+			default:
+				// ok
 			}
 
-			// Allocate a timeout context.
-			ctx, cancel := context.WithTimeout(context.TODO(), 7*time.Second)
+			emoji := s.Emojis[lastLoaded]
 
-			// Goroutines will pertain even on tab change. This is intentional.
-			go func(i int) {
-				// Complete the used context.
-				defer cancel()
+			img := s.emojis[lastLoaded]
+			url := md.EmojiURL(emoji.ID.String(), emoji.Animated)
 
-				var emoji = s.Emojis[i]
-				var img = s.emojis[i]
-				var url = md.EmojiURL(emoji.ID.String(), emoji.Animated)
+			cache.SetImageURLScaledContext(ctx, img, url, Size, Size)
 
-				// Set a custom timeout to avoid clogging up other images.
-				if err := cache.SetImageScaledContext(ctx, url, img, Size, Size); err != nil {
-					log.Errorln("Failed to get emoji:", err)
-				}
-			}(i)
+			lastLoaded++
 		}
+
+		glib.IdleAdd(func() {
+			if lastLoaded > s.lastLoaded {
+				s.lastLoaded = lastLoaded
+			}
+		})
 	}()
 }

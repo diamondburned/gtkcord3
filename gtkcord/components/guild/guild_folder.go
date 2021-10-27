@@ -2,15 +2,13 @@ package guild
 
 import (
 	"fmt"
-	"sync"
 
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
-	"github.com/diamondburned/gtkcord3/gtkcord/semaphore"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type GuildFolder struct {
@@ -26,21 +24,20 @@ type GuildFolder struct {
 	Guilds   []*Guild
 	Revealed bool
 
-	classMutex sync.Mutex
 	stateClass string
 }
 
 func newGuildFolder(
-	s *ningen.State, folder gateway.GuildFolder, onSelect func(g *Guild)) (*GuildFolder, error) {
+	s *ningen.State, folder gateway.GuildFolder, onSelect func(g *Guild)) *GuildFolder {
 
 	if folder.Color == 0 {
 		folder.Color = 0x7289DA
 	}
 
-	guildList, _ := gtk.ListBoxNew()
+	guildList := gtk.NewListBox()
 	guildList.SetActivateOnSingleClick(true)
 
-	var Folder = &GuildFolder{
+	f := &GuildFolder{
 		List:   guildList,
 		Name:   folder.Name,
 		Guilds: make([]*Guild, 0, len(folder.GuildIDs)),
@@ -48,81 +45,47 @@ func newGuildFolder(
 
 	// Bind the child list independent of the parent list.
 	guildList.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
-		i := r.GetIndex()
-		Folder.unselectAll(i)
+		i := r.Index()
+		f.unselectAll(i)
 
-		row := Folder.Guilds[i]
+		row := f.Guilds[i]
 		row.Unread.SetActive(true)
 		onSelect(row)
 	})
 
-	// Used to mark read and unread.
-	var unread, pinged bool
-
-	for _, id := range folder.GuildIDs {
-		r, err := newGuildRow(s, id, nil, Folder)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to load guild "+id.String())
-		}
-		r.Parent = Folder
-		Folder.Guilds = append(Folder.Guilds, r)
-
-		// Obvious race condition:
-		// switch r.stateClass {
-		// case "pinged":
-		// 	pinged = true
-		// 	fallthrough
-		// case "unread":
-		// 	unread = true
-		// }
-
-		// r.Row.SetSizeRequest(
-		// 	// We need to mult 4 div 3, since if we do full *2, the child
-		// 	// channels will be too big and expand the left bar.
-		// 	IconSize+IconPadding*4/3,
-		// 	IconSize+IconPadding*2,
-		// )
-
-		// Disable padding.
-		// gtkutils.Margin2(r, IconPadding, 0)
-		// gtkutils.Margin2(r.Event, IconPadding, 0)
-
-		Folder.List.Add(r)
-	}
-
-	// Take care of the icon part.
-	icon := newGuildFolderIcon(Folder.Guilds)
-	Folder.Icon = icon
+	// Take care of the icon part after we've created our guilds.
+	f.Icon = newGuildFolderIcon()
 
 	// On click, toggle revealer.
-	rev := newRevealerRow(icon, guildList, func(reveal bool) {
+	f.RevealerRow = newRevealerRow(f.Icon, guildList, func(reveal bool) {
 		// Expand/collapse the icon
-		icon.setReveal(reveal)
+		f.Icon.setReveal(reveal)
 	})
 
-	Folder.RevealerRow = rev
-	gtkutils.InjectCSSUnsafe(rev, "guild-folder", "")
+	for _, id := range folder.GuildIDs {
+		r := newGuildRow(s, id, f)
+		r.Parent = f
+
+		f.Guilds = append(f.Guilds, r)
+		f.List.Add(r)
+	}
+
+	f.Icon.load(f.Guilds)
+
+	gtkutils.InjectCSS(f.RevealerRow, "guild-folder", "")
 	// Folder.Style, _ = rev.GetStyleContext()
 	// Folder.Style.AddClass("guild-folder")
 
 	// Show name on hover.
-	BindNameDirect(rev.Button, rev.Strip, &Folder.Name)
-
-	// Set the unread status for parent.
-	switch {
-	case pinged:
-		rev.Strip.SetPinged()
-	case unread:
-		rev.Strip.SetUnread()
-	}
+	BindNameDirect(f.RevealerRow.Button, f.RevealerRow.Strip, &f.Name)
 
 	// Color time.
 	color := fmt.Sprintf("#%06X", folder.Color.Uint32())
 
 	// Color the folder icon.
-	gtkutils.InjectCSSUnsafe(icon.Folder, "", `* { color: `+color+`; }`)
+	gtkutils.InjectCSS(f.Icon.Folder, "", `* { color: `+color+`; }`)
 	// Color the collapsed folder background.
-	gtkutils.AddCSSUnsafe(icon.Style, `
+	gtkutils.AddCSS(f.Icon.Style, `
 		*.collapsed {
 			/* We have to use mix because alpha breaks with border-radius */
 			background-color: mix(@theme_bg_color, `+color+`, 0.4);
@@ -130,10 +93,10 @@ func newGuildFolder(
 	`)
 
 	// Add some room:
-	rev.ListBoxRow.SetSizeRequest(IconSize+IconPadding*3, IconSize+IconPadding/2)
-	gtkutils.Margin2(rev, IconPadding/2, 0)
+	f.RevealerRow.ListBoxRow.SetSizeRequest(IconSize+IconPadding*3, IconSize+IconPadding/2)
+	gtkutils.Margin2(f.RevealerRow, IconPadding/2, 0)
 
-	return Folder, nil
+	return f
 }
 
 func (f *GuildFolder) unselectAll(except int) {
@@ -151,9 +114,6 @@ func (f *GuildFolder) setUnread(unread, pinged bool) {
 	// 	pinged = true
 	// }
 
-	f.classMutex.Lock()
-	defer f.classMutex.Unlock()
-
 	// Check all children guilds
 	if !unread || !pinged {
 		for _, g := range f.Guilds {
@@ -167,90 +127,87 @@ func (f *GuildFolder) setUnread(unread, pinged bool) {
 		}
 	}
 
-	semaphore.Async(func() {
-		switch {
-		case pinged:
-			f.Strip.SetPinged()
-		case unread:
-			f.Strip.SetUnread()
-		default:
-			f.Strip.SetRead()
-		}
-	})
+	switch {
+	case pinged:
+		f.Strip.SetPinged()
+	case unread:
+		f.Strip.SetUnread()
+	default:
+		f.Strip.SetRead()
+	}
 }
 
-// func (f *GuildFolder) setClass(class string) {
-// 	gtkutils.DiffClass(&f.stateClass, class, f.Style)
-// }
-
 type GuildFolderIcon struct {
-	folder []*Guild
-
 	// Main stack, switches between "guilds" and "folder"
 	*gtk.Stack
 	Style *gtk.StyleContext
 
-	Guilds *gtk.Grid     // contains 4 images always.
-	Images [4]*gtk.Image // first 4 of folder.Guilds
+	Guilds *gtk.Grid            // contains 4 images always.
+	Images [4]*roundimage.Image // first 4 of folder.Guilds
 
+	folder []*Guild
 	Folder *gtk.Image
 }
 
-func newGuildFolderIcon(guilds []*Guild) *GuildFolderIcon {
-	icon := &GuildFolderIcon{
-		folder: guilds,
+func newGuildFolderIcon() *GuildFolderIcon {
+	i := &GuildFolderIcon{}
+
+	i.Stack = gtk.NewStack()
+	i.Stack.SetTransitionType(gtk.StackTransitionTypeSlideUp) // unsure
+	i.Stack.SetSizeRequest(IconSize, IconSize)
+
+	i.Style = i.Stack.StyleContext()
+	i.Style.AddClass("collapsed") // used for coloring
+
+	i.Folder = gtk.NewImageFromIconName("folder-symbolic", FolderSize)
+	i.Folder.SetPixelSize(FolderSize)
+
+	return i
+}
+
+func (i *GuildFolderIcon) load(guilds []*Guild) {
+	if i.Guilds != nil {
+		panic("GuildFolderIcon.load called twice")
 	}
 
-	icon.Stack, _ = gtk.StackNew()
-	icon.Stack.SetTransitionType(gtk.STACK_TRANSITION_TYPE_SLIDE_UP) // unsure
-	icon.Stack.SetSizeRequest(IconSize, IconSize)
-
-	icon.Style, _ = icon.Stack.GetStyleContext()
-	icon.Style.AddClass("collapsed") // used for coloring
-
-	icon.Folder, _ = gtk.ImageNew()
-	gtkutils.ImageSetIcon(icon.Folder, "folder-symbolic", FolderSize)
-
-	icon.Guilds, _ = gtk.GridNew()
-	icon.Guilds.SetHAlign(gtk.ALIGN_CENTER)
-	icon.Guilds.SetVAlign(gtk.ALIGN_CENTER)
-	icon.Guilds.SetRowSpacing(4) // calculated from Discord
-	icon.Guilds.SetRowHomogeneous(true)
-	icon.Guilds.SetColumnSpacing(4)
-	icon.Guilds.SetColumnHomogeneous(true)
+	i.Guilds = gtk.NewGrid()
+	i.Guilds.SetHAlign(gtk.AlignCenter)
+	i.Guilds.SetVAlign(gtk.AlignCenter)
+	i.Guilds.SetRowSpacing(4) // calculated from Discord
+	i.Guilds.SetRowHomogeneous(true)
+	i.Guilds.SetColumnSpacing(4)
+	i.Guilds.SetColumnHomogeneous(true)
 
 	// Make dummy images.
-	for i := range icon.Images {
-		img, _ := gtk.ImageNew()
+	for ix := range i.Images {
+		img := roundimage.NewImage(0)
 		img.SetSizeRequest(16, 16)
 
-		icon.Images[i] = img
+		i.Images[ix] = img
 	}
 
 	// Set the dummy images in a grid.
 	// [0] [1]
 	// [2] [3]
-	icon.Guilds.Attach(icon.Images[0], 0, 0, 1, 1)
-	icon.Guilds.Attach(icon.Images[1], 1, 0, 1, 1)
-	icon.Guilds.Attach(icon.Images[2], 0, 1, 1, 1)
-	icon.Guilds.Attach(icon.Images[3], 1, 1, 1, 1)
+	i.Guilds.Attach(i.Images[0], 0, 0, 1, 1)
+	i.Guilds.Attach(i.Images[1], 1, 0, 1, 1)
+	i.Guilds.Attach(i.Images[2], 0, 1, 1, 1)
+	i.Guilds.Attach(i.Images[3], 1, 1, 1, 1)
 
 	// Asynchronously fetch the icons.
-	for i := 0; i < len(guilds) && i < 4; i++ {
-		url := guilds[i].IURL
-		if url == "" {
+	for ix := 0; ix < len(guilds) && ix < 4; ix++ {
+		if guilds[ix].IconURL == "" {
+			i.Images[ix].SetInitials(guilds[ix].Name)
 			continue
 		}
-		url += "?size=64" // same as guild.go
 
-		cache.AsyncFetchUnsafe(url, icon.Images[i], 16, 16, cache.Round)
+		url := guilds[ix].IconURL + "?size=64"
+		cache.SetImageURLScaled(i.Images[ix], url, 16, 16)
 	}
 
 	// Add things together.
-	icon.Stack.AddNamed(icon.Guilds, "guilds")
-	icon.Stack.AddNamed(icon.Folder, "folder")
-
-	return icon
+	i.Stack.AddNamed(i.Guilds, "guilds")
+	i.Stack.AddNamed(i.Folder, "folder")
 }
 
 // called with revealer
@@ -273,38 +230,38 @@ type RevealerRow struct {
 	Revealer *gtk.Revealer
 }
 
-func newRevealerRow(button, reveal gtk.IWidget, click func(reveal bool)) *RevealerRow {
-	r, _ := gtk.RevealerNew()
-	r.Show()
-	r.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_UP)
+func newRevealerRow(button, reveal gtk.Widgetter, click func(reveal bool)) *RevealerRow {
+	r := gtk.NewRevealer()
+	r.SetTransitionType(gtk.RevealerTransitionTypeSlideDown)
 	r.SetRevealChild(false)
 	r.Add(reveal)
+	r.Show()
 
-	btn, _ := gtk.ButtonNew()
-	btn.Show()
-	btn.SetHAlign(gtk.ALIGN_CENTER)
-	btn.SetVAlign(gtk.ALIGN_CENTER)
-	btn.SetRelief(gtk.RELIEF_NONE)
+	btn := gtk.NewButton()
+	btn.SetHAlign(gtk.AlignCenter)
+	btn.SetVAlign(gtk.AlignCenter)
+	btn.SetRelief(gtk.ReliefNone)
 	btn.Add(button)
+	btn.Show()
 
 	// Wrap both the widget child and the revealer
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	b.Show()
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.Add(btn)
 	b.Add(r)
+	b.Show()
 
 	// Wrap the stack inside the unread strip overlay.
 	strip := NewUnreadStrip(b)
 
-	row, _ := gtk.ListBoxRowNew()
+	row := gtk.NewListBoxRow()
 	row.Show()
-	row.SetHAlign(gtk.ALIGN_CENTER)
-	row.SetVAlign(gtk.ALIGN_CENTER)
+	row.SetHAlign(gtk.AlignCenter)
+	row.SetVAlign(gtk.AlignCenter)
 	row.SetSelectable(false)
 	row.Add(strip)
 
 	btn.Connect("clicked", func() {
-		reveal := !r.GetRevealChild()
+		reveal := !r.RevealChild()
 		r.SetRevealChild(reveal)
 		click(reveal)
 		strip.SetSuppress(reveal)

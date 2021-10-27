@@ -3,13 +3,13 @@ package gtkcord
 import (
 	"strings"
 
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/preferences"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/config"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 const SettingsFile = "settings.json"
@@ -62,10 +62,10 @@ type Settings struct {
 
 func (s *Settings) initWidgets(a *Application) {
 	// Main window
-	s.PreferencesWindow = handy.PreferencesWindowNew()
+	s.PreferencesWindow = handy.NewPreferencesWindow()
 	s.PreferencesWindow.SetTitle("Preferences")
 	s.PreferencesWindow.SetModal(true)
-	s.PreferencesWindow.SetTransientFor(window.Window)
+	s.PreferencesWindow.SetTransientFor(&window.Window.Window)
 	s.PreferencesWindow.SetDefaultSize(500, 400)
 
 	// Start connecting:
@@ -82,17 +82,17 @@ func (s *Settings) initWidgets(a *Application) {
 	{
 		p := &s.General
 
-		p.PreferencesPage = handy.PreferencesPageNew()
+		p.PreferencesPage = handy.NewPreferencesPage()
 		p.PreferencesPage.SetIconName("preferences-system-symbolic")
 		p.PreferencesPage.SetTitle("General")
 
 		{
 			g := &p.Behavior
 
-			g.PreferencesGroup = handy.PreferencesGroupNew()
+			g.PreferencesGroup = handy.NewPreferencesGroup()
 			g.PreferencesGroup.SetTitle("Behavior")
 
-			ontp, _ := gtk.SwitchNew()
+			ontp := gtk.NewSwitch()
 			preferences.BindSwitch(ontp, &g.OnTyping, func() {
 				// This might be called before Ready, so we should have this
 				// check.
@@ -107,7 +107,7 @@ func (s *Settings) initWidgets(a *Application) {
 				ontp,
 			))
 
-			zwsp, _ := gtk.SwitchNew()
+			zwsp := gtk.NewSwitch()
 			preferences.BindSwitch(zwsp, &g.ZeroWidth, func() {
 				if a.Messages != nil {
 					a.Messages.InputZeroWidth = g.ZeroWidth
@@ -124,10 +124,10 @@ func (s *Settings) initWidgets(a *Application) {
 		{
 			g := &p.Customization
 
-			g.PreferencesGroup = handy.PreferencesGroupNew()
+			g.PreferencesGroup = handy.NewPreferencesGroup()
 			g.PreferencesGroup.SetTitle("Customization")
 
-			cfileW, _ := gtk.FileChooserButtonNew("Select CSS", gtk.FILE_CHOOSER_ACTION_OPEN)
+			cfileW := gtk.NewFileChooserButton("Select CSS", gtk.FileChooserActionOpen)
 			cfileW.AddFilter(preferences.CSSFilter())
 			preferences.BindFileChooser(cfileW, &g.CSSFile, func() {
 				window.FileCSS = s.General.Customization.CSSFile
@@ -141,7 +141,7 @@ func (s *Settings) initWidgets(a *Application) {
 				cfileW,
 			))
 
-			hlEntry, _ := gtk.EntryNew()
+			hlEntry := gtk.NewEntry()
 			hlEntry.SetPlaceholderText("Fallback highlighting")
 			preferences.BindEntry(hlEntry, &g.HighlightStyle, func() {
 				err := md.ChangeStyle(g.HighlightStyle)
@@ -156,7 +156,7 @@ func (s *Settings) initWidgets(a *Application) {
 				hlEntry,
 			))
 
-			szEntry, _ := gtk.EntryNew()
+			szEntry := gtk.NewEntry()
 			preferences.BindNumberEntry(szEntry, &g.MessageWidth, func() {
 				if a.Messages != nil {
 					a.Messages.SetWidth(g.MessageWidth)
@@ -176,18 +176,18 @@ func (s *Settings) initWidgets(a *Application) {
 	{
 		p := &s.Integrations
 
-		p.PreferencesPage = handy.PreferencesPageNew()
+		p.PreferencesPage = handy.NewPreferencesPage()
 		p.PreferencesPage.SetIconName("package-x-generic-symbolic")
 		p.PreferencesPage.SetTitle("Integrations")
 
 		{
 			g := &p.RichPresence
 
-			g.PreferencesGroup = handy.PreferencesGroupNew()
+			g.PreferencesGroup = handy.NewPreferencesGroup()
 			g.PreferencesGroup.SetTitle("Rich Presence")
 
-			mpris, _ := gtk.SwitchNew()
-			mpris.SetHAlign(gtk.ALIGN_END)
+			mpris := gtk.NewSwitch()
+			mpris.SetHAlign(gtk.AlignEnd)
 			preferences.BindSwitch(mpris, &g.MPRIS, func() {
 				a.MPRIS.SetEnabled(g.MPRIS)
 			})
@@ -202,7 +202,7 @@ func (s *Settings) initWidgets(a *Application) {
 		{
 			g := &p.Plugins
 
-			g.PreferencesGroup = handy.PreferencesGroupNew()
+			g.PreferencesGroup = handy.NewPreferencesGroup()
 			g.PreferencesGroup.SetTitle("Plugins")
 			g.PreferencesGroup.SetDescription("Plugins are read from ~/.config/gtkcord/plugins/")
 
@@ -216,7 +216,7 @@ func (s *Settings) initWidgets(a *Application) {
 					desc = `<span color="red">` + err[len(err)-1] + `</span>`
 				}
 
-				remove, _ := gtk.ButtonNewFromIconName("user-trash-symbolic", gtk.ICON_SIZE_MENU)
+				remove := gtk.NewButtonFromIconName("user-trash-symbolic", int(gtk.IconSizeMenu))
 
 				row := preferences.Row(plugin.Name, desc, remove)
 				row.SetTooltipText(plugin.Path)

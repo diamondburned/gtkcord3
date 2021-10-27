@@ -5,10 +5,11 @@ import (
 	"html"
 	"strconv"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 const GuildIconSize = 96
@@ -17,7 +18,7 @@ type GuildInfo struct {
 	*gtk.Box
 
 	// rounded
-	Image *gtk.Image
+	Image *roundimage.Image
 
 	// top guild name, bottom nitro info
 	Info  *gtk.Box
@@ -25,26 +26,27 @@ type GuildInfo struct {
 	Extra *gtk.Label // nillable
 }
 
-func NewGuildInfo(guild discord.Guild) *GuildInfo {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+func NewGuildInfo(guild *discord.Guild) *GuildInfo {
+	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	box.Show()
 
-	img, _ := gtk.ImageNew()
-	img.Show()
+	img := roundimage.NewImage(0)
 	img.SetSizeRequest(GuildIconSize, GuildIconSize)
+	img.SetFromIconName("network-server-symbolic", 0)
+	img.SetPixelSize(GuildIconSize)
 	gtkutils.Margin(img, CommonMargin)
-	gtkutils.ImageSetIcon(img, "network-server-symbolic", GuildIconSize)
+	img.Show()
 
-	info, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	info := gtk.NewBox(gtk.OrientationVertical, 0)
 	info.Show()
 
-	name, _ := gtk.LabelNew(
+	name := gtk.NewLabel(
 		`<span weight="bold" size="xx-large">` + html.EscapeString(guild.Name) + `</span>`)
 	name.Show()
 	name.SetUseMarkup(true)
 	name.SetVExpand(true)
-	name.SetVAlign(gtk.ALIGN_END)
-	name.SetHAlign(gtk.ALIGN_START)
+	name.SetVAlign(gtk.AlignEnd)
+	name.SetHAlign(gtk.AlignStart)
 
 	var lvl string
 
@@ -59,12 +61,12 @@ func NewGuildInfo(guild discord.Guild) *GuildInfo {
 		lvl = "-"
 	}
 
-	extra, _ := gtk.LabelNew(`<span color="#ff73fa">` + lvl + `</span>`)
+	extra := gtk.NewLabel(`<span color="#ff73fa">` + lvl + `</span>`)
 	extra.Show()
 	extra.SetUseMarkup(true)
 	extra.SetVExpand(true)
-	extra.SetVAlign(gtk.ALIGN_START)
-	extra.SetHAlign(gtk.ALIGN_START)
+	extra.SetVAlign(gtk.AlignStart)
+	extra.SetHAlign(gtk.AlignStart)
 
 	box.Add(img)
 	box.Add(info)
@@ -73,10 +75,8 @@ func NewGuildInfo(guild discord.Guild) *GuildInfo {
 	info.Add(extra)
 
 	if guild.Icon != "" {
-		cache.AsyncFetchUnsafe(
-			fmt.Sprintf("%s?size=%d", guild.IconURL(), 256),
-			img, GuildIconSize, GuildIconSize, cache.Round,
-		)
+		url := fmt.Sprintf("%s?size=%d", guild.IconURL(), 256)
+		cache.SetImageURLScaled(img, url, GuildIconSize, GuildIconSize)
 	}
 
 	return &GuildInfo{

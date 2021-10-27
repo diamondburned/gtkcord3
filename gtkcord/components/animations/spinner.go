@@ -1,46 +1,36 @@
 package animations
 
 import (
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 )
 
-func NewSpinner(sz int) (gtk.IWidget, error) {
-	s, err := gtk.SpinnerNew()
-	if err != nil {
-		return nil, err
-	}
+func NewSpinner(sz int) gtk.Widgetter {
+	s := gtk.NewSpinner()
 	s.SetSizeRequest(sz, sz)
-	s.SetVAlign(gtk.ALIGN_CENTER)
-	s.SetHAlign(gtk.ALIGN_CENTER)
+	s.SetVAlign(gtk.AlignCenter)
+	s.SetHAlign(gtk.AlignCenter)
 	s.Start()
-
 	s.ShowAll()
 
-	return s, nil
+	return s
 }
 
-func NewSizedSpinner(sz int) (gtkutils.WidgetSizeRequester, error) {
-	b, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		return nil, err
-	}
-	b.SetHExpand(true)
-	b.SetVAlign(gtk.ALIGN_CENTER)
-	b.SetVAlign(gtk.ALIGN_CENTER)
+func NewSizedSpinner(sz int) gtk.Widgetter {
+	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	box.SetHExpand(true)
+	box.SetVAlign(gtk.AlignCenter)
+	box.SetVAlign(gtk.AlignCenter)
 
-	s, err := gtk.SpinnerNew()
-	if err != nil {
-		return nil, err
-	}
+	s := gtk.NewSpinner()
 	s.SetHExpand(true)
-	s.SetVAlign(gtk.ALIGN_CENTER)
-	s.SetHAlign(gtk.ALIGN_CENTER)
+	s.SetVAlign(gtk.AlignCenter)
+	s.SetHAlign(gtk.AlignCenter)
 	s.SetSizeRequest(sz, sz)
-	s.Start()
 
-	b.Add(s)
-	b.ShowAll()
+	box.Add(s)
+	box.ConnectMap(func() { s.Start() })
+	box.ConnectUnmap(func() { s.Stop() })
+	box.ShowAll()
 
-	return b, nil
+	return box
 }

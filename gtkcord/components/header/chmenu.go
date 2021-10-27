@@ -1,38 +1,35 @@
 package header
 
 import (
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/overview"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/popup"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type ChMenuButton struct {
 	*gtk.Revealer
 	Button  *gtk.MenuButton
 	Popover *popup.Popover
-	spawn   func(p *gtk.Popover) gtkutils.WidgetDestroyer
+	spawn   func(p *gtk.Popover) gtk.Widgetter
 	// Callbacks! AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 }
 
 func NewChMenuButton() *ChMenuButton {
-	r, _ := gtk.RevealerNew()
-	r.Show()
-	r.SetTransitionType(gtk.REVEALER_TRANSITION_TYPE_SLIDE_RIGHT)
+	r := gtk.NewRevealer()
+	r.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
 	r.SetTransitionDuration(150)
 	r.SetRevealChild(false)
+	r.Show()
 
-	b, _ := gtk.MenuButtonNew()
+	b := gtk.NewMenuButton()
 	b.Show()
-	b.SetHAlign(gtk.ALIGN_CENTER)
+	b.SetHAlign(gtk.AlignCenter)
 
-	i, err := gtk.ImageNewFromIconName("open-menu-symbolic", gtk.ICON_SIZE_SMALL_TOOLBAR)
-	if err != nil {
-		log.Fatalln("Failed to create ch menu button:", err)
-	}
+	i := gtk.NewImageFromIconName("open-menu-symbolic", int(gtk.IconSizeSmallToolbar))
 	i.Show()
 
 	r.Add(b)
@@ -42,8 +39,9 @@ func NewChMenuButton() *ChMenuButton {
 		Revealer: r,
 		Button:   b,
 	}
-	btn.Popover = popup.NewDynamicPopover(b, func(p *gtk.Popover) gtkutils.WidgetDestroyer {
+	btn.Popover = popup.NewDynamicPopover(b, func(p *gtk.Popover) gtk.Widgetter {
 		if btn.spawn == nil {
+			log.Errorln("chmenu: missing btn.spawn")
 			return nil
 		}
 		return btn.spawn(p)
@@ -52,7 +50,7 @@ func NewChMenuButton() *ChMenuButton {
 	return btn
 }
 
-func (b *ChMenuButton) SetSpawner(fn func(p *gtk.Popover) gtkutils.WidgetDestroyer) {
+func (b *ChMenuButton) SetSpawner(fn func(p *gtk.Popover) gtk.Widgetter) {
 	b.spawn = fn
 }
 
@@ -60,21 +58,16 @@ func (b *ChMenuButton) Cleanup() {
 	b.SetRevealChild(false)
 }
 
-func NewChMenuBody(p *gtk.Popover, s *ningen.State, gID, chID discord.Snowflake) *gtk.Box {
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+func NewChMenuBody(
+	p *gtk.Popover, s *ningen.State, gID discord.GuildID, chID discord.ChannelID) *gtk.Box {
+
+	b := gtk.NewBox(gtk.OrientationVertical, 0)
 	b.Show()
 	gtkutils.Margin(b, 10)
 
 	details := popup.NewButton("Details", func() {
 		p.Popdown()
-
-		c, err := overview.NewContainer(s, gID, chID)
-		if err != nil {
-			log.Errorln("Failed to spawn container:", err)
-			return
-		}
-
-		overview.SpawnDialog(c)
+		overview.SpawnDialog(overview.NewContainer(s, gID, chID))
 	})
 
 	b.Add(details)

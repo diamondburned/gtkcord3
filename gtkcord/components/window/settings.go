@@ -1,11 +1,11 @@
 package window
 
-import "github.com/gotk3/gotk3/gtk"
+import "github.com/diamondburned/gotk4/pkg/gtk/v3"
 
 func overrideSettings(s *gtk.Settings) {
-	s.SetProperty("gtk-dialogs-use-header", true)
+	s.SetObjectProperty("gtk-dialogs-use-header", true)
 }
 
 func PreferDarkTheme(value bool) {
-	Window.Settings.SetProperty("gtk-application-prefer-dark-theme", value)
+	Window.Settings.SetObjectProperty("gtk-application-prefer-dark-theme", value)
 }

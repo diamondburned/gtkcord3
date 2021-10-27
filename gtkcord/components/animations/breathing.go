@@ -1,36 +1,24 @@
 package animations
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 const breathingChar = "●"
 
-func NewBreathing() (gtk.IWidget, error) {
-	b, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		return nil, err
-	}
+// NewBreathing creates a new breathing animation of 3 fading dots.
+func NewBreathing() gtk.Widgetter {
+	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	c1 := gtk.NewLabel(breathingChar)
+	c2 := gtk.NewLabel(breathingChar)
+	c3 := gtk.NewLabel(breathingChar)
 
-	c1, err := gtk.LabelNew(breathingChar)
-	if err != nil {
-		return nil, err
-	}
-	c2, err := gtk.LabelNew(breathingChar)
-	if err != nil {
-		return nil, err
-	}
-	c3, err := gtk.LabelNew(breathingChar)
-	if err != nil {
-		return nil, err
-	}
+	box.Add(c1)
+	box.Add(c2)
+	box.Add(c3)
 
-	b.Add(c1)
-	b.Add(c2)
-	b.Add(c3)
+	gtkutils.InjectCSS(box, "anim-breathing", "")
 
-	gtkutils.InjectCSSUnsafe(b, "anim-breathing", "")
-
-	return b, nil
+	return box
 }

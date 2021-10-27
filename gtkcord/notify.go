@@ -1,8 +1,9 @@
 package gtkcord
 
 import (
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
@@ -10,61 +11,62 @@ import (
 )
 
 func (a *Application) bindNotifier() {
-	a.State.AddHandler(a.onMessageCreate)
-	a.MPRIS.OnMetadata = a.onMPRISEvent
-	a.MPRIS.OnPlaybackStatus = a.onMPRISEvent
+	a.MPRIS.OnPlayback = a.onMPRISEvent
+	a.State.AddHandler(func(create *gateway.MessageCreateEvent) {
+		// Check if the message should trigger a mention.
+		if !a.State.MessageMentions(create.Message) {
+			return
+		}
+
+		glib.IdleAdd(func() { a.onMessageCreate(create) })
+	})
 }
 
 func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
-	// Check if the message should trigger a mention.
-	if !a.State.MessageMentions(create.Message) {
-		return
-	}
-
 	// Ignore mentions from the current channel.
-	if a.Messages != nil && a.Messages.GetChannelID() == create.ChannelID {
+	if a.Messages != nil && a.Messages.ChannelID() == create.ChannelID {
 		return
 	}
 
-	var (
-		title   = a.State.AuthorDisplayName(create) + " mentioned you"
-		content = humanize.TrimString(create.Content, 256)
-		markup  = md.ParseToSimpleMarkupWithMessage(
-			[]byte(content), a.State.Store, &create.Message,
+	go func() {
+		title := a.State.AuthorDisplayName(create) + " mentioned you"
+		content := humanize.TrimString(create.Content, 256)
+		markup := md.ParseToSimpleMarkupWithMessage(
+			[]byte(content), a.State.Cabinet, &create.Message,
 		)
-	)
 
-	if ch, _ := a.State.Store.Channel(create.ChannelID); ch != nil && ch.Name != "" {
-		var suffix = " (#" + ch.Name + ")"
+		if ch, _ := a.State.Channel(create.ChannelID); ch != nil && ch.Name != "" {
+			suffix := " (#" + ch.Name + ")"
 
-		if create.GuildID.Valid() {
-			if g, _ := a.State.Store.Guild(create.GuildID); g != nil {
-				suffix = " (#" + ch.Name + ", " + g.Name + ")"
+			if create.GuildID.IsValid() {
+				if g, _ := a.State.Guild(create.GuildID); g != nil {
+					suffix = " (#" + ch.Name + ", " + g.Name + ")"
+				}
 			}
+
+			title += suffix
 		}
 
-		title += suffix
-	}
-
-	notification := gdbus.Notification{
-		AppName: "gtkcord3",
-		AppIcon: "user-available",
-		Title:   title + ".",
-		Message: string(markup),
-		Actions: []*gdbus.Action{
-			{
-				ID:    "default",
-				Label: "Open",
-				Callback: func() {
-					a.actionLoadChannel(nil, int64(create.ChannelID))
+		notification := gdbus.Notification{
+			AppName: "gtkcord3",
+			AppIcon: "user-available",
+			Title:   title + ".",
+			Message: string(markup),
+			Actions: []*gdbus.Action{
+				{
+					ID:    "default",
+					Label: "Open",
+					Callback: func() {
+						a.SwitchToID(create.ChannelID, create.GuildID)
+					},
 				},
 			},
-		},
-	}
+		}
 
-	if _, err := a.Notifier.Notify(notification); err != nil {
-		log.Errorln("Failed to notify:", err)
-	}
+		if _, err := a.Notifier.Notify(notification); err != nil {
+			log.Errorln("Failed to notify:", err)
+		}
+	}()
 }
 
 func (a *Application) onMPRISEvent(m gdbus.Metadata, playing bool) {
@@ -72,19 +74,26 @@ func (a *Application) onMPRISEvent(m gdbus.Metadata, playing bool) {
 		return
 	}
 
+	if playing && m.Title == "" {
+		// Incomplete. Wait.
+		return
+	}
+
 	// Are we playing?
-	if !playing || m.Title == "" {
+	if !playing {
+		log.Infof("paused music")
 		a.updateStatus(nil)
 		return // no.
 	}
 
 	// Yes. Update.
+	log.Infof("playing %q by %q", m.Title, m.Artists)
 	a.updateMetadata(m)
 }
 
 func (a *Application) updateMetadata(m gdbus.Metadata) {
-	var artist = humanize.Strings(m.Artists)
-	var state = artist
+	artist := humanize.Strings(m.Artists)
+	state := artist
 	if m.Album != "" {
 		state += " (" + m.Album + ")"
 	}
@@ -98,26 +107,29 @@ func (a *Application) updateMetadata(m gdbus.Metadata) {
 }
 
 func (a *Application) updateStatus(activity *discord.Activity) {
-	var status = discord.OnlineStatus
+	me, _ := a.State.Me()
+	uID := me.ID
 
-	p, err := a.State.Presence(0, a.State.Ready.User.ID)
-	if err == nil {
-		status = p.Status
-	}
+	go func() {
+		status := gateway.OnlineStatus
 
-	data := gateway.UpdateStatusData{
-		Status:     status,
-		AFK:        false,
-		Activities: new([]discord.Activity),
-	}
-	*data.Activities = []discord.Activity{} // This needs to be a [] in the JSON.
+		p, err := a.State.Presence(0, uID)
+		if err == nil {
+			status = p.Status
+		}
 
-	// Because Discord is garbage.
-	if activity != nil {
-		*data.Activities = append(*data.Activities, *activity)
-	}
+		data := gateway.UpdateStatusData{
+			Status:     status,
+			AFK:        false,
+			Activities: []discord.Activity{},
+		}
 
-	if err = a.State.Gateway.UpdateStatus(data); err != nil {
-		log.Errorln("Failed to update status:", err)
-	}
+		if activity != nil {
+			data.Activities = append(data.Activities, *activity)
+		}
+
+		if err = a.State.Gateway.UpdateStatus(data); err != nil {
+			log.Errorln("Failed to update status:", err)
+		}
+	}()
 }

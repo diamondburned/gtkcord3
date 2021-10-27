@@ -3,7 +3,7 @@ package message
 import (
 	"time"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
 )
 
 func injectMessage(m *Messages, w *Message) {
@@ -29,7 +29,7 @@ func shouldCondense(msgs []*Message, msg, lastSameAuthor *Message) bool {
 	return msg.Timestamp.Sub(lastSameAuthor.Timestamp) < 5*time.Minute
 }
 
-func lastMessageFrom(msgs []*Message, author discord.Snowflake) *Message {
+func lastMessageFrom(msgs []*Message, author discord.UserID) *Message {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msg := msgs[i]; msg.AuthorID == author && !msg.Condensed {
 			return msg
@@ -43,10 +43,10 @@ func tryCondense(msgs []*Message, msg *Message) {
 		return
 	}
 
-	var last = lastMessageFrom(msgs, msg.AuthorID)
+	last := lastMessageFrom(msgs, msg.AuthorID)
 
 	if shouldCondense(msgs, msg, last) {
 		msg.setOffset(last)
-		msg.SetCondensedUnsafe(true)
+		msg.SetCondensed(true)
 	}
 }

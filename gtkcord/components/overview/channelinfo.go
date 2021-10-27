@@ -3,11 +3,11 @@ package overview
 import (
 	"html"
 
-	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
 )
 
 type ChannelInfo struct {
@@ -21,37 +21,37 @@ type ChannelInfo struct {
 	Description *gtk.TextView
 }
 
-func NewChannelInfo(ch discord.Channel) *ChannelInfo {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+func NewChannelInfo(ch *discord.Channel) *ChannelInfo {
+	box := gtk.NewBox(gtk.OrientationVertical, 0)
 	box.Show()
 
-	header, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	header := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	header.Show()
 	header.SetMarginTop(CommonMargin)
 	header.SetMarginEnd(CommonMargin)
 	header.SetMarginStart(CommonMargin)
 	header.SetMarginBottom(8)
 
-	hash, _ := gtk.LabelNew(`<span size="xx-large" weight="bold">#</span>`)
+	hash := gtk.NewLabel(`<span size="xx-large" weight="bold">#</span>`)
 	hash.Show()
 	hash.SetUseMarkup(true)
 	hash.SetMarginEnd(8)
-	hash.SetVAlign(gtk.ALIGN_START)
+	hash.SetVAlign(gtk.AlignStart)
 
-	name, _ := gtk.LabelNew(
+	name := gtk.NewLabel(
 		`<span size="x-large" weight="bold">` + html.EscapeString(ch.Name) + `</span>`)
 	name.Show()
 	name.SetUseMarkup(true)
-	name.SetVAlign(gtk.ALIGN_BASELINE)
+	name.SetVAlign(gtk.AlignBaseline)
 	name.SetLineWrap(true)
-	name.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	name.SetLineWrapMode(pango.WrapWordChar)
 
-	desc, _ := gtk.TextViewNew()
+	desc := gtk.NewTextView()
 	desc.Show()
 	desc.SetEditable(false)
 	desc.SetCursorVisible(false)
 	desc.SetHExpand(true)
-	desc.SetWrapMode(gtk.WRAP_WORD_CHAR)
+	desc.SetWrapMode(gtk.WrapWordChar)
 	gtkutils.Margin4(desc, 0, CommonMargin, CommonMargin, CommonMargin)
 
 	// Parse the topic into markup/tags:

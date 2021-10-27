@@ -1,216 +1,51 @@
 package gdbus
 
-/*
-#cgo pkg-config: glib-2.0 gio-2.0
-#include <glib-2.0/glib.h>
-#include <gio/gio.h>
-
-extern void gdbusSignalCallback(
-	GDBusConnection *conn,
-	gchar *sender_name,
-	gchar *object_path,
-	gchar *interface_name,
-	gchar *signal_name,
-	GVariant *parameters,
-	gpointer key
-);
-*/
-import "C"
-
 import (
-	"runtime"
-	"unsafe"
+	"context"
+	"strings"
 
-	"github.com/gotk3/gotk3/glib"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
-//export gdbusSignalCallback
-func gdbusSignalCallback(
-	conn *C.GDBusConnection,
-	senderName, objectPath, interfaceName, signalName *C.gchar,
-	parameters *C.GVariant,
-	key C.gpointer,
-) {
+// SessionBusSync gets the global session bus.
+func SessionBusSync() (*gio.DBusConnection, error) {
+	return gio.BusGetSync(context.Background(), gio.BusTypeSession)
+}
 
-	cb := cbGet(key)
-	if cb == nil {
+type dictEntry struct {
+	typ string
+	fun func(v *glib.Variant)
+}
+
+func readDict(dict *glib.Variant, entries map[string]dictEntry) {
+	if !dict.Type().IsContainer() {
 		return
 	}
 
-	cb.fn.(SignalCallback)(
-		cb.receiver.(*Connection),
-		C.GoString(senderName),
-		C.GoString(objectPath),
-		C.GoString(interfaceName),
-		C.GoString(signalName),
-		glib.TakeVariant(unsafe.Pointer(parameters)),
-	)
-}
-
-type SignalCallback func(
-	conn *Connection,
-	senderName, objectPath, interfaceName, signalName string,
-	parameters *glib.Variant,
-)
-
-type BusType int
-
-const (
-	BUS_TYPE_STARTER BusType = C.G_BUS_TYPE_STARTER
-	BUS_TYPE_NONE    BusType = C.G_BUS_TYPE_NONE
-	BUS_TYPE_SYSTEM  BusType = C.G_BUS_TYPE_SYSTEM
-	BUS_TYPE_SESSION BusType = C.G_BUS_TYPE_SESSION
-)
-
-type CallFlags int
-
-const (
-	DBUS_CALL_FLAGS_NONE                            CallFlags = C.G_DBUS_CALL_FLAGS_NONE
-	DBUS_CALL_FLAGS_NO_AUTO_START                   CallFlags = C.G_DBUS_CALL_FLAGS_NO_AUTO_START
-	DBUS_CALL_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION CallFlags = C.G_DBUS_CALL_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION
-)
-
-type SignalFlags int
-
-const (
-	DBUS_SIGNAL_FLAGS_NONE                 SignalFlags = C.G_DBUS_SIGNAL_FLAGS_NONE
-	DBUS_SIGNAL_FLAGS_NO_MATCH_RULE        SignalFlags = C.G_DBUS_SIGNAL_FLAGS_NO_MATCH_RULE
-	DBUS_SIGNAL_FLAGS_MATCH_ARG0_NAMESPACE SignalFlags = C.G_DBUS_SIGNAL_FLAGS_MATCH_ARG0_NAMESPACE
-	DBUS_SIGNAL_FLAGS_MATCH_ARG0_PATH      SignalFlags = C.G_DBUS_SIGNAL_FLAGS_MATCH_ARG0_PATH
-)
-
-type Connection struct {
-	Native *C.GDBusConnection
-}
-
-func GetSessionBusSync() (*Connection, error) {
-	var err *C.GError
-	v := C.g_bus_get_sync(C.GBusType(BUS_TYPE_SESSION), nil, &err)
-	if err != nil {
-		return nil, errors.New(errorMessage(err))
-	}
-
-	return wrapConnection(v), nil
-}
-
-func FromApplication(app *glib.Application) *Connection {
-	v := C.g_application_get_dbus_connection((*C.GApplication)(unsafe.Pointer(app.Native())))
-	if v == nil {
-		return nil
-	}
-	return wrapConnection(v)
-}
-
-func wrapConnection(v *C.GDBusConnection) *Connection {
-	c := &Connection{Native: v}
-	runtime.SetFinalizer(c, func(c *Connection) {
-		ptr := unsafe.Pointer(c.Native)
-		cbDelete(ptr)
-		C.g_object_unref((C.gpointer)(ptr))
-	})
-	return c
-}
-
-func (c *Connection) CallSync(
-	busName,
-	objectPath,
-	interfaceName,
-	methodName string,
-	parameters glib.IVariant,
-	replyType *glib.VariantType,
-	callFlags CallFlags,
-	timeoutMsec int,
-) (*glib.Variant, error) {
-
-	var err *C.GError
-
-	cbusName := cstringOpt(busName)
-	defer freeNonNil(unsafe.Pointer(cbusName))
-
-	cobjectPath := cstringOpt(objectPath)
-	defer freeNonNil(unsafe.Pointer(cobjectPath))
-
-	cinterfaceName := cstringOpt(interfaceName)
-	defer freeNonNil(unsafe.Pointer(cinterfaceName))
-
-	cmethodName := cstringOpt(methodName)
-	defer freeNonNil(unsafe.Pointer(cmethodName))
-
-	v := C.g_dbus_connection_call_sync(
-		c.Native,
-		cbusName,
-		cobjectPath,
-		cinterfaceName,
-		cmethodName,
-		(*C.GVariant)(parameters.ToGVariant()),
-		(*C.GVariantType)(replyType.GVariantType),
-		C.GDBusCallFlags(callFlags),
-		C.gint(timeoutMsec),
-		nil,
-		&err,
-	)
-
-	if err != nil {
-		return nil, errors.New(errorMessage(err))
-	}
-
-	return glib.TakeVariant(unsafe.Pointer(v)), nil
-}
-
-func (c *Connection) SignalSubscribe(
-	sender,
-	interfaceName,
-	member,
-	objectPath,
-	arg0 string,
-	flags SignalFlags,
-	callback SignalCallback,
-) uint {
-
-	csender := cstringOpt(sender)
-	defer freeNonNil(unsafe.Pointer(csender))
-
-	cinterfaceName := cstringOpt(interfaceName)
-	defer freeNonNil(unsafe.Pointer(cinterfaceName))
-
-	cmember := cstringOpt(member)
-	defer freeNonNil(unsafe.Pointer(cmember))
-
-	cobjectPath := cstringOpt(objectPath)
-	defer freeNonNil(unsafe.Pointer(cobjectPath))
-
-	carg0 := cstringOpt(arg0)
-	defer freeNonNil(unsafe.Pointer(carg0))
-
-	ptr, call := cbAssign(unsafe.Pointer(c.Native), c, callback)
-
-	v := C.g_dbus_connection_signal_subscribe(
-		c.Native,
-		csender,
-		cinterfaceName,
-		cmember,
-		cobjectPath,
-		carg0,
-		C.GDBusSignalFlags(flags),
-		C.GDBusSignalCallback(C.gdbusSignalCallback),
-		ptr, nil,
-	)
-
-	call.id = uint(v)
-	return call.id
-}
-
-func (c *Connection) SignalUnsubscribe(id uint) {
-	cbForEach(func(i int, cb *callback) bool {
-		if cb.id == id {
-			delete(registry, i)
-			return true
+	for k, entry := range entries {
+		var vtype *glib.VariantType
+		if entry.typ != "" {
+			vtype = glib.NewVariantType(entry.typ)
 		}
-		return false
-	})
-	C.g_dbus_connection_signal_unsubscribe(
-		c.Native,
-		C.uint(id),
-	)
+
+		v := dict.LookupValue(k, vtype)
+		if v == nil {
+			v = dict.LookupValue(k, nil)
+			if v == nil {
+				log.Infof("dbus: variant dict missing key %q", k)
+			} else {
+				log.Infof("dbus: key %q missing type %s", k, v.TypeString())
+			}
+			continue
+		}
+
+		if strings.HasPrefix(v.TypeString(), "v") {
+			// Unbox.
+			v = v.Variant()
+		}
+
+		entry.fun(v)
+	}
 }

@@ -6,12 +6,14 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/diamondburned/arikawa/v2/state"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
 	"github.com/diamondburned/gtkcord3/internal/log"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
+	"github.com/diamondburned/ningen/v2"
 	"github.com/pkg/errors"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -34,54 +36,54 @@ type Login struct {
 	finish    func(s *ningen.State)
 }
 
-func NewHeader() gtkutils.ExtendedWidget {
-	h, _ := gtk.HeaderBarNew()
+func NewHeader() *gtk.HeaderBar {
+	h := gtk.NewHeaderBar()
 	h.SetShowCloseButton(true)
-	h.SetTitle("Login to gtkcord")
+	h.SetTitle("Login to gtkcord3")
 
 	return h
 }
 
 func NewLogin(finish func(s *ningen.State)) *Login {
-	main, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	main := gtk.NewBox(gtk.OrientationVertical, 0)
 	main.SetMarginTop(15)
 	main.SetMarginBottom(50)
 	main.SetMarginStart(35)
 	main.SetMarginEnd(35)
 	main.SetSizeRequest(250, -1)
-	main.SetVAlign(gtk.ALIGN_CENTER)
-	gtkutils.InjectCSSUnsafe(main, "login", "")
+	main.SetVAlign(gtk.AlignCenter)
+	gtkutils.InjectCSS(main, "login", "")
 
-	err, _ := gtk.LabelNew("")
+	err := gtk.NewLabel("")
 	err.SetSingleLineMode(false)
 	err.SetLineWrap(true)
-	err.SetLineWrapMode(pango.WRAP_WORD_CHAR)
+	err.SetLineWrapMode(pango.WrapWordChar)
 	err.SetMarginBottom(10)
-	err.SetHAlign(gtk.ALIGN_START)
+	err.SetHAlign(gtk.AlignStart)
 	err.SetMarginStart(2)
 	err.SetMarginEnd(2)
 
-	token, _ := gtk.EntryNew()
+	token := gtk.NewEntry()
 	token.SetMarginBottom(15)
-	token.SetInputPurpose(gtk.INPUT_PURPOSE_PASSWORD)
+	token.SetInputPurpose(gtk.InputPurposePassword)
 	token.SetPlaceholderText("Token")
 	token.SetVisibility(false)
 	token.SetInvisibleChar('●')
 
-	submit, _ := gtk.ButtonNewWithLabel("Login")
+	submit := gtk.NewButtonWithLabel("Login")
 	submit.SetMarginBottom(15)
-	gtkutils.InjectCSSUnsafe(submit, "login", `
+	gtkutils.InjectCSS(submit, "login", `
 		button.login {
 			background-color: #7289da;
 			color: #FFFFFF;
 		}
 	`)
 
-	retry, _ := gtk.ButtonNewWithLabel("Retry")
-	gtkutils.InjectCSSUnsafe(retry, "retry", "")
+	retry := gtk.NewButtonWithLabel("Retry")
+	gtkutils.InjectCSS(retry, "retry", "")
 
-	dlogin, _ := gtk.ButtonNewWithLabel("Use DiscordLogin")
-	gtkutils.InjectCSSUnsafe(dlogin, "discordlogin", "")
+	dlogin := gtk.NewButtonWithLabel("Use DiscordLogin")
+	gtkutils.InjectCSS(dlogin, "discordlogin", "")
 
 	l := &Login{
 		Box:    main,
@@ -97,7 +99,7 @@ func NewLogin(finish func(s *ningen.State)) *Login {
 	submit.Connect("clicked", l.Login)
 	dlogin.Connect("clicked", l.DiscordLogin)
 
-	subbtn, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 15)
+	subbtn := gtk.NewBox(gtk.OrientationHorizontal, 15)
 	subbtn.SetHomogeneous(true)
 	subbtn.Add(retry)
 	subbtn.Add(dlogin)
@@ -118,11 +120,15 @@ func (l *Login) Run() {
 
 	if !l.displayed {
 		window.Resize(500, 200)
-		window.HeaderDisplay(NewHeader())
+		window.SetHeader(NewHeader())
 		window.Display(l)
 		window.ShowAll()
 
 		l.displayed = true
+	}
+
+	if l.LastToken != "" {
+		l.Retry()
 	}
 }
 
@@ -136,75 +142,112 @@ func (l *Login) error(err error) {
 }
 
 func (l *Login) Retry() {
-	if err := l.tryLoggingIn(); err != nil {
-		log.Errorln("Failed to login:", err)
-		l.error(err)
-	}
+	l.login(false)
 }
 
 func (l *Login) Login() {
-	l.Box.SetSensitive(false)
-	defer l.Box.SetSensitive(true)
-
-	if err := l.login(); err != nil {
-		log.Errorln("Failed to login:", err)
-		l.error(err)
-		return
-	}
+	l.login(true)
 }
 
-func (l *Login) login() error {
-	token, err := l.Token.GetText()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get text")
+func (l *Login) login(readForm bool) {
+	window.Blur()
+
+	if readForm {
+		l.LastToken = l.Token.Text()
 	}
 
-	l.LastToken = token
-	return l.tryLoggingIn()
+	l.tryLoggingIn(func(err error) {
+		if err != nil {
+			log.Errorln("failed to login:", err)
+			l.error(err)
+		}
+
+		window.Unblur()
+	})
 }
 
 func (l *Login) DiscordLogin() {
 	window.Blur()
-	defer window.Unblur()
 
-	if err := l.discordLogin(); err != nil {
-		log.Errorln("Failed to login:", err)
-		l.error(err)
-		return
-	}
+	l.discordLogin(func(err error) {
+		if err != nil {
+			log.Errorln("Failed to login:", err)
+			l.error(err)
+		}
+
+		window.Unblur()
+	})
 }
 
-func (l *Login) discordLogin() error {
-	path, err := LookPathExtras("discordlogin")
-	if err != nil {
-		// Open the GitHub page to DiscordLogin in the browser.
-		go openDiscordLoginPage()
+func (l *Login) discordLogin(f func(error)) {
+	go func() {
+		onErr := func(err error) {
+			glib.IdleAdd(func() { f(err) })
+		}
 
-		return ErrDLNotFound
-	}
+		path, err := LookPathExtras("discordlogin")
+		if err != nil {
+			// Open the GitHub page to DiscordLogin in the browser.
+			go openDiscordLoginPage()
 
-	cmd := &exec.Cmd{Path: path}
-	cmd.Stderr = os.Stderr
+			onErr(ErrDLNotFound)
+			return
+		}
 
-	// UI will actually block during this time.
+		cmd := exec.Command(path)
+		cmd.Stderr = os.Stderr
 
-	b, err := cmd.Output()
-	if err != nil {
-		return errors.Wrap(err, "DiscordLogin failed")
-	}
+		// UI will actually block during this time.
 
-	if len(b) == 0 {
-		return errors.New("DiscordLogin returned nothing, check Console.")
-	}
+		b, err := cmd.Output()
+		if err != nil {
+			onErr(errors.Wrap(err, "DiscordLogin failed"))
+			return
+		}
 
-	l.LastToken = string(b)
-	return l.tryLoggingIn()
+		if len(b) == 0 {
+			onErr(errors.New("DiscordLogin returned nothing, check Console."))
+			return
+		}
+
+		glib.IdleAdd(func() {
+			l.LastToken = string(b)
+			l.tryLoggingIn(f)
+		})
+	}()
 }
 
 // endgame function
-func (l *Login) tryLoggingIn() error {
-	_, err := ningen.Connect(l.LastToken, l.finish)
-	return err
+func (l *Login) tryLoggingIn(f func(error)) {
+	token := l.LastToken
+
+	go func() {
+		onErr := func(err error) {
+			glib.IdleAdd(func() { f(err) })
+		}
+
+		s, err := state.New(token)
+		if err != nil {
+			onErr(errors.Wrap(err, "error creating new state"))
+			return
+		}
+
+		n, err := ningen.FromState(s)
+		if err != nil {
+			onErr(errors.Wrap(err, "ningen"))
+			return
+		}
+
+		if err := n.Open(); err != nil {
+			onErr(errors.Wrap(err, "open"))
+			return
+		}
+
+		glib.IdleAdd(func() {
+			f(nil)
+			l.finish(n)
+		})
+	}()
 }
 
 func openDiscordLoginPage() {

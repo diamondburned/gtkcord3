@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
-	"github.com/diamondburned/ningen/md"
+	"github.com/diamondburned/ningen/v2/md"
 	"github.com/yuin/goldmark/ast"
 )
 

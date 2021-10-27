@@ -1,34 +1,30 @@
 package window
 
 import (
+	"github.com/diamondburned/gotk4/pkg/gdk/v3"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/logo"
-	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
 	"github.com/pkg/errors"
 )
 
 const SwitchFade = 200 // 200ms to fade between main view and loading screen.
 
-func newStack() (*gtk.Stack, error) {
-	s, err := gtk.StackNew()
-	if err != nil {
-		return nil, err
-	}
-	s.Show()
+func newStack() *gtk.Stack {
+	s := gtk.NewStack()
 	s.SetTransitionDuration(SwitchFade)
-	s.SetTransitionType(gtk.STACK_TRANSITION_TYPE_CROSSFADE)
-	return s, nil
+	s.SetTransitionType(gtk.StackTransitionTypeCrossfade)
+	s.Show()
+	return s
 }
 
 func stackRemove(s *gtk.Stack, name string) {
-	if w, _ := s.GetChildByName(name); w != nil {
+	if w := s.ChildByName(name); w != nil {
 		s.Remove(w)
 	}
 }
 
-func stackSet(s *gtk.Stack, name string, w gtk.IWidget) {
+func stackSet(s *gtk.Stack, name string, w gtk.Widgetter) {
 	stackRemove(s, name)
 	s.AddNamed(w, name)
 	s.SetVisibleChildName(name)
@@ -45,8 +41,8 @@ type Container struct {
 	Root      *gdk.Window
 	Clipboard *gtk.Clipboard
 
-	Header *Header
 	Main   *gtk.Stack
+	header gtk.Widgetter
 
 	// CursorDefault *gdk.Cursor
 	// CursorPointer *gdk.Cursor
@@ -54,7 +50,7 @@ type Container struct {
 	Settings *gtk.Settings
 
 	// since files can be changed while the application is running:
-	fileCSS *gtk.CssProvider
+	fileCSS *gtk.CSSProvider
 }
 
 func WithApplication(app *gtk.Application) error {
@@ -64,43 +60,26 @@ func WithApplication(app *gtk.Application) error {
 
 	Window = &Container{App: app}
 
-	w, err := gtk.ApplicationWindowNew(app)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create window")
-	}
+	// w := handy.NewApplicationWindow()
+	// w.SetApplication(app)
+	w := gtk.NewApplicationWindow(app)
 	Window.ApplicationWindow = w
 
-	l, err := logo.Pixbuf(64)
-	if err != nil {
-		return errors.Wrap(err, "Failed to load logo")
-	}
+	l := logo.Pixbuf(64)
 	w.SetIcon(l)
-
-	w.Show()
 	w.Connect("destroy", app.Quit)
+	w.Show()
 
-	a, err := gtk.AccelGroupNew()
-	if err != nil {
-		return errors.Wrap(err, "Failed to create accel group")
-	}
+	a := gtk.NewAccelGroup()
 	Window.Accel = a
 	w.AddAccelGroup(a)
 
-	d, err := gdk.DisplayGetDefault()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get default GDK display")
-	}
-	s, err := d.GetDefaultScreen()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get default screen")
-	}
+	d := gdk.DisplayGetDefault()
+	s := d.DefaultScreen()
 	Window.Screen = s
 
-	root, err := s.GetRootWindow()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get root window")
-	}
-	Window.Root = root
+	root := s.RootWindow()
+	Window.Root = root.BaseWindow()
 
 	// Load CSS for the first time.
 	initCSS()
@@ -109,32 +88,19 @@ func WithApplication(app *gtk.Application) error {
 		return errors.Wrap(err, "Failed to load animations CSS")
 	}
 
-	settings, err := gtk.SettingsGetDefault()
-	if err != nil {
-		return errors.Wrap(err, "Failed to get settings")
-	}
-	overrideSettings(settings)
+	settings := gtk.SettingsGetDefault()
 	Window.Settings = settings
+	overrideSettings(settings)
 
-	// w.SetVAlign(gtk.ALIGN_CENTER)
-	// w.SetHAlign(gtk.ALIGN_CENTER)
+	// w.SetVAlign(gtk.AlignCenter)
+	// w.SetHAlign(gtk.AlignCenter)
 	// w.SetDefaultSize(500, 250)
 
-	c, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get clipboard")
-	}
+	c := gtk.ClipboardGetDefault(d)
 	Window.Clipboard = c
 
-	if err := initHeader(); err != nil {
-		return errors.Wrap(err, "Failed to make a headerbar")
-	}
-
 	// Make the main view: the stack.
-	main, err := newStack()
-	if err != nil {
-		return errors.Wrap(err, "Failed to make stack")
-	}
+	main := newStack()
 	Window.Main = main
 
 	// Add the stack into the window:
@@ -155,18 +121,27 @@ func WithApplication(app *gtk.Application) error {
 	return nil
 }
 
-func Notify(id string, notification *glib.Notification) {
-	Window.App.SendNotification(id, notification)
+func SetHeader(h gtk.Widgetter) {
+	Window.header = h
+	Window.SetTitlebar(h)
+}
+
+func HeaderShowAll() {
+	w := Window.Titlebar()
+	w.BaseWidget().ShowAll()
 }
 
 // Destroy closes the application as well.
 func Destroy() {
-	Window.Window.Destroy()
+	Window.Window.Close()
 }
 
+// Blur disables the window.
 func Blur() {
 	Window.SetSensitive(false)
 }
+
+// Unblur enables the window.
 func Unblur() {
 	Window.SetSensitive(true)
 }
@@ -182,10 +157,9 @@ func Resize(w, h int) {
 	Window.Window.Resize(w, h)
 }
 
-func Display(w gtk.IWidget) {
-	// Check if loading:
-	if Window.Main.GetVisibleChildName() == "loading" {
-		defer stackRemove(Window.Main, "loading")
+func Display(w gtk.Widgetter) {
+	if wasLoading && Window.header != nil {
+		Window.SetTitlebar(Window.header)
 	}
 	stackSet(Window.Main, "main", w)
 }
@@ -198,5 +172,11 @@ func ShowAll() {
 }
 
 func SetTitle(title string) {
+	if title == "" {
+		title = "gtkcord3"
+	} else {
+		title += " — gtkcord3"
+	}
+
 	Window.ApplicationWindow.SetTitle(title)
 }

@@ -3,26 +3,26 @@ package header
 import (
 	"html"
 
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/handy"
-	"github.com/gotk3/gotk3/gtk"
-	"github.com/gotk3/gotk3/pango"
-	"github.com/pkg/errors"
 )
 
 type Header struct {
-	*handy.Leaflet
+	*handy.HeaderBar
+	Body *handy.Leaflet
 
 	// Left: hamburger and guild name:
-	LeftSide  *gtk.HeaderBar
+	LeftSide  *gtk.Box
 	Hamburger *MainHamburger
 	GuildName *gtk.Label
 
 	Separator *gtk.Separator
 
 	// Right: channel name only.
-	RightSide   *gtk.HeaderBar
+	RightSide   *gtk.Box
 	Back        *Back
 	ChannelName *gtk.Label
 	ChMenuBtn   *ChMenuButton
@@ -31,100 +31,83 @@ type Header struct {
 	// Controller  *controller.Container
 }
 
-func NewHeader() (*Header, error) {
-	l := handy.LeafletNew()
-	l.SetTransitionType(handy.LEAFLET_TRANSITION_TYPE_SLIDE)
+func NewHeader() *Header {
+	l := handy.NewLeaflet()
+	l.SetTransitionType(handy.LeafletTransitionTypeSlide)
 	l.SetModeTransitionDuration(150)
-	l.SetHExpand(true)
-	l.Show()
+	l.Container.SetHExpand(true)
+	l.Container.Show()
+
+	header := handy.NewHeaderBar()
+	header.SetShowCloseButton(true)
+	header.SetObjectProperty("spacing", 0)
+	header.SetCustomTitle(empty())
+	header.Add(&l.Container)
+	header.Show()
 
 	/*
 	 * Left side
 	 */
 
-	left, _ := gtk.HeaderBarNew()
-	left.SetShowCloseButton(false)
-	left.SetProperty("spacing", 0)
+	left := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	left.Show()
-	left.SetCustomTitle(empty())
 	l.Add(left)
 
-	hamburger, err := newMainHamburger()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create hamburger")
-	}
-	left.Add(hamburger)
+	hamburger := newMainHamburger()
+	left.PackStart(hamburger, false, false, 0)
 
-	hamseparator, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create ham separator")
-	}
+	hamseparator := gtk.NewSeparator(gtk.OrientationVertical)
 	hamseparator.Show()
-	left.Add(hamseparator)
+	left.PackStart(hamseparator, false, false, 0)
 
 	// Calculate width for both:
 	width := channel.ChannelsWidth - 15
 
-	label, err := gtk.LabelNew("gtkcord3")
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create guild name label")
-	}
+	label := gtk.NewLabel("gtkcord3")
 	label.Show()
 	label.SetXAlign(0.0)
 	label.SetMarginStart(15)
 	label.SetSizeRequest(width, -1)
 	label.SetLines(1)
 	label.SetLineWrap(false)
-	label.SetEllipsize(pango.ELLIPSIZE_END)
-	left.Add(label)
+	label.SetEllipsize(pango.EllipsizeEnd)
+	left.PackStart(label, true, true, 0)
 
-	lblseparator, err := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create ham separator")
-	}
+	lblseparator := gtk.NewSeparator(gtk.OrientationVertical)
 	lblseparator.Show()
-	left.Add(lblseparator)
+	left.PackStart(lblseparator, false, false, 0)
 
 	/*
 	 * Right side
 	 */
 
-	right, _ := gtk.HeaderBarNew()
+	right := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	right.Show()
-	right.SetHExpand(true)
-	right.SetSizeRequest(width, -1)
-	right.SetShowCloseButton(true)
-	right.SetProperty("spacing", 0)
 	l.Add(right)
-
-	body, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	body.Show()
-	body.SetHExpand(true)
-	right.SetCustomTitle(body)
 
 	// Back button:
 	back := NewBack()
 
 	// Channel name:
-	chname, _ := gtk.LabelNew("")
-	chname.Show()
+	chname := gtk.NewLabel("")
 	chname.SetLines(1)
 	chname.SetLineWrap(false)
-	chname.SetEllipsize(pango.ELLIPSIZE_END)
+	chname.SetEllipsize(pango.EllipsizeEnd)
 	chname.SetHExpand(true)
 	chname.SetXAlign(0.0)
+	chname.Show()
 
 	// Channel menu button:
 	btn := NewChMenuButton()
 
-	rsep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	rsep := gtk.NewSeparator(gtk.OrientationVertical)
 	rsep.Show()
 	gtkutils.Margin2(rsep, 0, 4)
 
-	body.Add(back)
-	body.Add(chname)
-	body.Add(btn)
-	body.Add(rsep)
+	right.PackStart(back, false, false, 0)
+	right.PackStart(chname, true, true, 0)
+	right.PackStart(btn, false, false, 0)
+	right.PackStart(rsep, false, false, 0)
 
 	/*
 	 * Grid 4
@@ -134,8 +117,9 @@ func NewHeader() (*Header, error) {
 	// cont := controller.New()
 	// right.Add(cont)
 
-	h := &Header{
-		Leaflet:     l,
+	return &Header{
+		HeaderBar:   header,
+		Body:        l,
 		LeftSide:    left,
 		Hamburger:   hamburger,
 		GuildName:   label,
@@ -146,23 +130,18 @@ func NewHeader() (*Header, error) {
 		ChMenuBtn:   btn,
 		// Controller:  cont,
 	}
-
-	return h, nil
 }
 
 func (h *Header) Fold(folded bool) {
 	// If folded, we reveal the back button.
 	h.Back.SetRevealChild(folded)
+	h.Separator.SetVisible(!folded)
 
 	// Fold the title:
 	if folded {
 		h.GuildName.SetSizeRequest(-1, -1)
-		h.Separator.Hide()
-		h.LeftSide.SetShowCloseButton(true)
 	} else {
 		h.GuildName.SetSizeRequest(channel.ChannelsWidth-15, -1)
-		h.Separator.Show()
-		h.LeftSide.SetShowCloseButton(false)
 	}
 }
 
@@ -179,6 +158,6 @@ func (h *Header) UpdateChannel(name string) {
 }
 
 func empty() *gtk.Box {
-	b, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	b := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	return b
 }

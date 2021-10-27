@@ -3,18 +3,18 @@ package channel
 import (
 	"sort"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/ningen"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/ningen/v2"
 )
 
-type _sortStructure struct {
+type sortStructure struct {
 	parent   discord.Channel
 	children []discord.Channel
 }
 
 func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 	filtered := make([]discord.Channel, 0, len(chs))
-	u := s.Ready.User
+	u, _ := s.Me()
 
 	for _, ch := range chs {
 		p, err := s.Permissions(ch.ID, u.ID)
@@ -43,7 +43,7 @@ func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 }
 
 func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
-	var tree = map[discord.Snowflake]*_sortStructure{}
+	tree := map[discord.ChannelID]*sortStructure{}
 
 	for _, ch := range chs {
 		if ch.Type == discord.GuildCategory {
@@ -51,7 +51,7 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 			if ok {
 				v.parent = ch
 			} else {
-				tree[ch.ID] = &_sortStructure{
+				tree[ch.ID] = &sortStructure{
 					parent: ch,
 				}
 			}
@@ -59,12 +59,12 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 			continue
 		}
 
-		if ch.CategoryID.Valid() {
+		if ch.CategoryID.IsValid() {
 			v, ok := tree[ch.CategoryID]
 			if ok {
 				v.children = append(v.children, ch)
 			} else {
-				tree[ch.CategoryID] = &_sortStructure{
+				tree[ch.CategoryID] = &sortStructure{
 					children: []discord.Channel{ch},
 				}
 			}
@@ -72,12 +72,12 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 			continue
 		}
 
-		tree[ch.ID] = &_sortStructure{
+		tree[ch.ID] = &sortStructure{
 			parent: ch,
 		}
 	}
 
-	var list = make([]*_sortStructure, 0, len(tree))
+	list := make([]*sortStructure, 0, len(tree))
 
 	for _, v := range tree {
 		if v.children != nil {
@@ -97,12 +97,12 @@ func transformChannels(s *ningen.State, chs []discord.Channel) []*Channel {
 		return list[i].children == nil
 	})
 
-	var channels = make([]*Channel, 0, len(chs))
+	channels := make([]*Channel, 0, len(chs))
 
 	for i := range list {
 		sch := list[i]
 
-		if sch.parent.ID.Valid() {
+		if sch.parent.ID.IsValid() {
 			channels = append(channels, createChannelRead(&sch.parent, s))
 		}
 
