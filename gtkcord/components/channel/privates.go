@@ -140,7 +140,17 @@ func (pcs *PrivateChannels) Load() {
 			pcs.List.InvalidateSort()
 		})
 
+		ScanUnreadDMs(pcs.state, channels, func(ch *discord.Channel) {
+			glib.IdleAdd(func() {
+				ch := pcs.Channels[ch.ID]
+				ch.setUnread(true)
+			})
+		})
 		for _, channel := range channels {
+			if pcs.state.MutedState.Channel(channel.ID) {
+				continue
+			}
+
 			rs := pcs.state.ReadState.FindLast(channel.ID)
 			if rs == nil {
 				continue
@@ -156,6 +166,24 @@ func (pcs *PrivateChannels) Load() {
 			}
 		}
 	}()
+}
+
+func ScanUnreadDMs(n *ningen.State, channels []discord.Channel, fn func(ch *discord.Channel)) {
+	for i, channel := range channels {
+		if n.MutedState.Channel(channel.ID) {
+			continue
+		}
+
+		rs := n.ReadState.FindLast(channel.ID)
+		if rs == nil {
+			continue
+		}
+
+		// Snowflakes have timestamps, which allow us to do this:
+		if channel.LastMessageID.Time().After(rs.LastMessageID.Time()) {
+			fn(&channels[i])
+		}
+	}
 }
 
 func (pcs *PrivateChannels) Selected() *PrivateChannel {
@@ -232,18 +260,12 @@ func (pcs *PrivateChannels) filter(r *gtk.ListBoxRow) bool {
 }
 
 func (pcs *PrivateChannels) TraverseReadState(rs *read.UpdateEvent) {
-	if len(pcs.Channels) == 0 {
-		return
-	}
-
 	pc, ok := pcs.Channels[rs.ChannelID]
 	if !ok {
 		return
 	}
 
-	// Prepend/move to top.
-	pcs.List.Remove(pc)
-	pcs.List.Prepend(pc)
+	pcs.List.InvalidateSort()
 
 	pc.setUnread(rs.Unread)
 }

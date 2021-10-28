@@ -126,16 +126,15 @@ func NewMessages(s *ningen.State, opts Opts) *Messages {
 	m.Viewport.SetShadowType(gtk.ShadowNone)
 	m.Viewport.Add(m.Column) // add col instead of list
 
-	// Scroll to the bottom if we have more things.
-	m.Viewport.Connect("size-allocate", func() {
+	// Fractal does this, but Go is superior.
+	adj := m.Scroll.VAdjustment()
+	adj.Connect("value-changed", m.onScroll)
+	adj.Connect("notify::upper", func() {
+		// Scroll to the bottom if we have more things.
 		if m.bottomed {
 			m.ScrollToBottom()
 		}
 	})
-
-	// Fractal does this, but Go is superior.
-	adj := m.Scroll.VAdjustment()
-	adj.Connect("value-changed", m.onScroll)
 
 	m.Scroll.Add(m.Viewport)
 
@@ -327,7 +326,7 @@ func (m *Messages) ScrollToBottom() {
 	glib.IdleAdd(func() {
 		// Set scroll:
 		vAdj := m.Scroll.VAdjustment()
-		vAdj.SetValue(vAdj.Upper() - vAdj.PageSize() - 1)
+		vAdj.SetValue(vAdj.Upper())
 	})
 }
 

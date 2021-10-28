@@ -133,6 +133,7 @@ func (a *Application) prepChannelSwitch() {
 		a.Channels,
 		a.Privates,
 		a.Messages,
+		a.Header,
 		a.Header.ChMenuBtn,
 	}
 
@@ -183,9 +184,12 @@ func (a *Application) SwitchChannel(ch ChannelContainer) {
 	a.setLastAccess(ch.GuildID(), ch.ChannelID())
 
 	name, _ := ch.ChannelInfo()
+	if ch.GuildID().IsValid() {
+		name = "#" + name
+	}
 
 	a.Header.UpdateChannel(name)
-	window.SetTitle("#" + name + " - gtkcord")
+	window.SetTitle(name + " - gtkcord")
 
 	// Show the channel menu if we're in a guild:
 	if ch.GuildID().IsValid() {

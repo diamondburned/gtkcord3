@@ -1,8 +1,10 @@
 package guild
 
 import (
+	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -74,17 +76,8 @@ func (dm *DMButton) resetRead(s *ningen.State) {
 			return
 		}
 
-		for _, ch := range chs {
-			rs := s.ReadState.FindLast(ch.ID)
-			if rs == nil {
-				continue
-			}
-
-			// Snowflakes have timestamps, which allow us to do this:
-			if ch.LastMessageID.Time().After(rs.LastMessageID.Time()) {
-				glib.IdleAdd(func() { dm.setUnread(true) })
-				break
-			}
-		}
+		channel.ScanUnreadDMs(s, chs, func(ch *discord.Channel) {
+			glib.IdleAdd(func() { dm.setUnread(true) })
+		})
 	}()
 }

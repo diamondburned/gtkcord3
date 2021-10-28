@@ -48,8 +48,8 @@ github.com/diamondburned/gotk4-handy/pkg v0.0.0-20211024231549-ab5feddde699/go.m
 github.com/diamondburned/gotk4/pkg v0.0.0-20211022031617-dd5e83cfdbee/go.mod h1:dJ2gfR0gvBsGg4IteP8aMBq/U5Q9boDw0DP7kAjXTwM=
 github.com/diamondburned/gotk4/pkg v0.0.0-20211027215233-15634c96cea1 h1:M2P+huZVgqdGhWXBKs4+ilqLO19RDSLA1F3bak7saXo=
 github.com/diamondburned/gotk4/pkg v0.0.0-20211027215233-15634c96cea1/go.mod h1:dJ2gfR0gvBsGg4IteP8aMBq/U5Q9boDw0DP7kAjXTwM=
-github.com/diamondburned/ningen/v2 v2.0.0-20211025232310-9d96e6b9a198 h1:8mpV/Kl/FjcfdoRX6LA0eT/94SknJqxRPXv3AnOjOUA=
-github.com/diamondburned/ningen/v2 v2.0.0-20211025232310-9d96e6b9a198/go.mod h1:Kd+7q08iCoEIO0qpFiz10jcQkAgfYK+z8UB7t9m63VE=
+github.com/diamondburned/ningen/v2 v2.0.0-20211028060605-d121a03cbec1 h1:/bBersd3ci2wCw3Bzjd5iXSTnMnv8XEyyV88OoCEfFE=
+github.com/diamondburned/ningen/v2 v2.0.0-20211028060605-d121a03cbec1/go.mod h1:Kd+7q08iCoEIO0qpFiz10jcQkAgfYK+z8UB7t9m63VE=
 github.com/dlclark/regexp2 v1.1.6 h1:CqB4MjHw0MFCDj+PHHjiESmHX+N7t0tJzKvC6M97BRg=
 github.com/dlclark/regexp2 v1.1.6/go.mod h1:2pZnwuY/m+8K6iRw6wQdMtk+rH5tNGR1i55kozfMjCc=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=

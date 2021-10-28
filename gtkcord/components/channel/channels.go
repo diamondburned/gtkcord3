@@ -116,7 +116,7 @@ func (chs *Channels) LoadGuild(guildID discord.GuildID) { // async
 			onErr(err, "failed to get guild channels")
 			return
 		}
-		channels = filterChannels(chs.state, channels)
+		channels = FilterChannels(chs.state, channels)
 
 		var bannerURL string
 

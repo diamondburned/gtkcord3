@@ -12,9 +12,23 @@ type sortStructure struct {
 	children []discord.Channel
 }
 
-func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
+func FilterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 	filtered := make([]discord.Channel, 0, len(chs))
 	u, _ := s.Me()
+
+	hiddenCats := make(map[discord.ChannelID]bool)
+	for _, ch := range chs {
+		if ch.Type == discord.GuildCategory {
+			p, err := s.Permissions(ch.ID, u.ID)
+			if err != nil {
+				continue
+			}
+
+			if !p.Has(discord.PermissionViewChannel) {
+				hiddenCats[ch.ID] = true
+			}
+		}
+	}
 
 	for _, ch := range chs {
 		p, err := s.Permissions(ch.ID, u.ID)
@@ -22,7 +36,7 @@ func filterChannels(s *ningen.State, chs []discord.Channel) []discord.Channel {
 			continue
 		}
 
-		if !p.Has(discord.PermissionReadMessageHistory) {
+		if !p.Has(discord.PermissionViewChannel) || hiddenCats[ch.CategoryID] {
 			continue
 		}
 

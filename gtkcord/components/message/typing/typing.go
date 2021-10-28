@@ -154,7 +154,7 @@ func (t *State) render() {
 		text.WriteString("Several people are typing...")
 	}
 
-	t.Label.SetText(text.String())
+	t.Label.SetMarkup(text.String())
 
 	// Show or hide the breathing animation as well:
 	if text.Len() == 0 {

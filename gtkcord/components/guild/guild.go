@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
@@ -106,6 +107,7 @@ func newGuildRow(s *ningen.State, guildID discord.GuildID, parent *GuildFolder) 
 	}
 
 	if rs := guild.containsUnreadChannel(s); rs != nil {
+		log.Printf("for guild %s found unread %#v", g.Name, rs)
 		pinged := rs.MentionCount > 0
 		guild.setUnread(true, pinged)
 	}
@@ -134,6 +136,9 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 		return nil
 	}
 
+	// A bit slow is ok.
+	channels = channel.FilterChannels(s, channels)
+
 	guild.unreadChs = map[discord.ChannelID]bool{}
 	var found *gateway.ReadState
 
@@ -143,12 +148,17 @@ func (guild *Guild) containsUnreadChannel(s *ningen.State) *gateway.ReadState {
 			continue
 		}
 
-		if s.MutedState.Category(ch.ID) {
+		if s.MutedState.Channel(ch.ID) || s.MutedState.Category(ch.ID) {
 			continue
 		}
 
 		if rs := s.ReadState.FindLast(ch.ID); rs != nil {
-			if ch.LastMessageID == rs.LastMessageID {
+			unread := true &&
+				rs.LastMessageID.IsValid() &&
+				ch.LastMessageID.IsValid() &&
+				ch.LastMessageID > rs.LastMessageID
+
+			if !unread {
 				continue
 			}
 

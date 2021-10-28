@@ -1,8 +1,6 @@
 package header
 
 import (
-	"html"
-
 	"github.com/diamondburned/gotk4-handy/pkg/handy"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gotk4/pkg/pango"
@@ -71,6 +69,9 @@ func NewHeader() *Header {
 	label.SetLines(1)
 	label.SetLineWrap(false)
 	label.SetEllipsize(pango.EllipsizeEnd)
+	label.SetAttributes(gtkutils.PangoAttrs(
+		pango.NewAttrWeight(pango.WeightSemibold),
+	))
 	left.PackStart(label, true, true, 0)
 
 	lblseparator := gtk.NewSeparator(gtk.OrientationVertical)
@@ -95,6 +96,9 @@ func NewHeader() *Header {
 	chname.SetEllipsize(pango.EllipsizeEnd)
 	chname.SetHExpand(true)
 	chname.SetXAlign(0.0)
+	chname.SetAttributes(gtkutils.PangoAttrs(
+		pango.NewAttrWeight(pango.WeightSemibold),
+	))
 	chname.Show()
 
 	// Channel menu button:
@@ -145,16 +149,17 @@ func (h *Header) Fold(folded bool) {
 	}
 }
 
+func (h *Header) Cleanup() {
+	h.GuildName.SetText("")
+	h.ChannelName.SetText("")
+}
+
 func (h *Header) UpdateGuild(name string) {
-	h.GuildName.SetMarkup(`<span weight="bold">` + html.EscapeString(name) + `</span>`)
+	h.GuildName.SetText(name)
 }
 
 func (h *Header) UpdateChannel(name string) {
-	if name != "" {
-		name = `<span weight="bold">` + "#" + html.EscapeString(name) + `</span>`
-	}
-
-	h.ChannelName.SetMarkup(name)
+	h.ChannelName.SetText(name)
 }
 
 func empty() *gtk.Box {
