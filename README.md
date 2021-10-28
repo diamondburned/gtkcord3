@@ -34,3 +34,7 @@ go install -v github.com/diamondburned/gtkcord3@latest
 2. Go to the Network tab then press F5 to refresh the page.
 3. Search `api library` then look for the "Authorization" header in the right column.
 5. Copy this token into the Token field, then click Login.
+
+## License
+
+GNU General Public License v3 or any later version.
