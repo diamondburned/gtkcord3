@@ -11,7 +11,6 @@ require (
 	github.com/diamondburned/ningen/v2 v2.0.0-20211025232310-9d96e6b9a198
 	github.com/goodsign/monday v1.0.0
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
-	github.com/markbates/pkger v0.15.1
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/sergi/go-diff v1.1.0 // indirect
@@ -28,7 +27,6 @@ require (
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/dlclark/regexp2 v1.1.6 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
-	github.com/gobuffalo/here v0.6.0 // indirect
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
