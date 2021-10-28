@@ -19,14 +19,14 @@ minimal level just to ensure that it's usable on my computer. Crashed will still
 be fixed as I use the application, but that's about it.
 
 ## Build gtkcord3
-**Required:** `go` (1.13+), `gtk`, `libhandy`, `pkgconfig` (refer to `shell.nix`)
+**Required:** `go` (1.17+), `gtk+-3.0`, `libhandy-1`, `pkg-config` (refer to `.nix/shell.nix`)
 
 ```sh
-go get github.com/diamondburned/gtkcord3 # auto updates
+go install -v github.com/diamondburned/gtkcord3@latest
 ~/go/bin/gtkcord3 # $GOPATH/bin/gtkcord3 or $GOBIN/gtkcord3
 ```
 
-## Logging in
+## Logging In
 
 ![Login screen](.readme-resources/images/login.png)
 
