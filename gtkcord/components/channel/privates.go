@@ -29,6 +29,8 @@ type PrivateChannels struct {
 	state *ningen.State
 
 	OnSelect func(pm *PrivateChannel)
+
+	lastSelected discord.ChannelID
 }
 
 func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs *PrivateChannels) {
@@ -80,6 +82,7 @@ func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs
 			return
 		}
 
+		pcs.lastSelected = rw.ID
 		pcs.OnSelect(rw)
 	})
 
@@ -137,6 +140,13 @@ func (pcs *PrivateChannels) Load() {
 				pcs.List.Insert(w, -1)
 			}
 
+			if pcs.lastSelected.IsValid() {
+				if ch, ok := pcs.Channels[pcs.lastSelected]; ok {
+					pcs.List.SelectRow(ch.ListBoxRow)
+					ch.Activate()
+				}
+			}
+
 			pcs.List.InvalidateSort()
 		})
 
@@ -146,6 +156,7 @@ func (pcs *PrivateChannels) Load() {
 				ch.setUnread(true)
 			})
 		})
+
 		for _, channel := range channels {
 			if pcs.state.MutedState.Channel(channel.ID) {
 				continue

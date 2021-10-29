@@ -36,7 +36,7 @@ func NewImage(radius float64) *Image {
 	}
 
 	// Connect to the draw callback and clip the context.
-	image.Connect("draw", image.drawer)
+	image.Connect("draw", image.draw)
 
 	return image
 }
@@ -50,17 +50,22 @@ func (i *Image) SetRadius(r float64) {
 	i.QueueDraw()
 }
 
-func (i *Image) drawer(image *gtk.Image, cc *cairo.Context) bool {
+// Clip clips the image from the Cairo context.
+func (i *Image) Clip(cc *cairo.Context) {
+	i.draw(&i.Image, cc)
+}
+
+func (i *Image) draw(image *gtk.Image, cc *cairo.Context) {
 	// Draw the initials if we haven't already.
 	if i.useInitials && !i.initialsDrawn {
 		rect := image.Allocation()
 		i.drawInitials(rect.Width(), rect.Height())
-		return false
+		return
 	}
 
 	if i.StorageType() == gtk.ImageIconName {
 		// Don't round if we're displaying a stock icon.
-		return false
+		return
 	}
 
 	rect := image.Allocation()
@@ -76,7 +81,7 @@ func (i *Image) drawer(image *gtk.Image, cc *cairo.Context) bool {
 	switch {
 	// If radius is less than 0, then don't round.
 	case i.Radius < 0:
-		return false
+		return
 
 	// If radius is 0, then we have to calculate our own radius.:This only
 	// works if the image is a square.
@@ -124,8 +129,6 @@ func (i *Image) drawer(image *gtk.Image, cc *cairo.Context) bool {
 
 	// Paint the changes.
 	cc.Paint()
-
-	return false
 }
 
 func (i *Image) Clear() {
@@ -148,6 +151,10 @@ func (i *Image) SetFromSurface(s *cairo.Surface) {
 	i.Image.SetFromSurface(s)
 	i.initialsDrawn = false
 	i.useInitials = s == nil
+}
+
+func (i *Image) Initials() string {
+	return i.initials
 }
 
 func (i *Image) SetInitials(initials string) {

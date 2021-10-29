@@ -53,6 +53,10 @@ type Container struct {
 	fileCSS *gtk.CSSProvider
 }
 
+func GDKWindow() gdk.Windower {
+	return Window.ApplicationWindow.Window.Window()
+}
+
 func WithApplication(app *gtk.Application) error {
 	if Window != nil {
 		return nil
@@ -79,7 +83,7 @@ func WithApplication(app *gtk.Application) error {
 	Window.Screen = s
 
 	root := s.RootWindow()
-	Window.Root = root.BaseWindow()
+	Window.Root = gdk.BaseWindow(root)
 
 	// Load CSS for the first time.
 	initCSS()
@@ -128,7 +132,7 @@ func SetHeader(h gtk.Widgetter) {
 
 func HeaderShowAll() {
 	w := Window.Titlebar()
-	w.BaseWidget().ShowAll()
+	gtk.BaseWidget(w).ShowAll()
 }
 
 // Destroy closes the application as well.

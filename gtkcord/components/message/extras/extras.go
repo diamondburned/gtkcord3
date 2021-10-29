@@ -124,7 +124,7 @@ func newExtraImage(proxy, url string, w, h int) *gtk.EventBox {
 }
 
 func embedSetMargin(widget gtk.Widgetter) {
-	w := widget.BaseWidget()
+	w := gtk.BaseWidget(widget)
 	w.SetMarginStart(variables.EmbedMargin)
 	w.SetMarginEnd(variables.EmbedMargin)
 	w.SetMarginBottom(variables.EmbedMargin / 2)

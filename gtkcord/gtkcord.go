@@ -69,8 +69,9 @@ type Application struct {
 	*gtk.Application
 	Window *window.Container
 
-	Notifier *gdbus.Notifier
-	MPRIS    *gdbus.MPRISWatcher
+	Notifier   *gdbus.Notifier
+	MPRIS      *gdbus.MPRISWatcher
+	mprisState *mprisState
 
 	Plugins []*Plugin
 
@@ -98,9 +99,6 @@ type Application struct {
 	Privates *channel.PrivateChannels
 	Channels *channel.Channels
 	Messages *message.Messages
-
-	// if GuildID == 0 then DM
-	lastAccess map[discord.GuildID]discord.ChannelID
 }
 
 // New is not thread-safe.
@@ -131,14 +129,13 @@ func (a *Application) Activate() {
 	conn := a.DBusConnection()
 	a.Notifier = gdbus.NewNotifier(conn)
 	a.MPRIS = gdbus.NewMPRISWatcher(conn) // notify.go
+	a.mprisState = newMPRISState()
 
 	// Activate the window singleton:
 	if err := window.WithApplication(a.Application); err != nil {
 		log.Fatalln("Failed to initialize the window:", err)
 	}
 	a.Window = window.Window
-
-	a.lastAccess = map[discord.GuildID]discord.ChannelID{}
 
 	// Set the window specs:
 	window.Resize(1000, 800)
@@ -244,14 +241,8 @@ func (a *Application) Ready(s *ningen.State) error {
 	// Guilds
 
 	a.Guilds = guild.NewGuilds(s)
-	a.Guilds.OnSelect = func(g *guild.Guild) {
-		a.SwitchGuild(g)
-		a.SwitchLastChannel(g)
-	}
-	a.Guilds.DMButton.OnClick = func() {
-		a.SwitchDM()
-		a.SwitchLastChannel(nil)
-	}
+	a.Guilds.OnSelect = a.SwitchGuild
+	a.Guilds.DMButton.OnClick = a.SwitchDM
 
 	a.Channels = channel.NewChannels(s, func(ch *channel.Channel) {
 		a.SwitchChannel(ch)
@@ -296,7 +287,7 @@ func (a *Application) Ready(s *ningen.State) error {
 	// 	if w == nil {
 	// 		return
 	// 	}
-	// 	switch w.BaseWidget().Name() {
+	// 	switch gtk.BaseWidget(w).Name() {
 	// 	case "left":
 	// 		a.Main.SetVisibleChild(a.LeftGrid)
 	// 		a.Header.Body.SetVisibleChild(a.Header.LeftSide)
@@ -407,16 +398,6 @@ func (a *Application) ShowLogin(lastToken string) {
 	})
 	l.LastToken = lastToken
 	l.Run()
-}
-
-// LastAccessed gets the last accessed channel of a guild, or if the guild ID is
-// 0, then of all direct messaging channels.
-func (a *Application) LastAccessed(guildID discord.GuildID) discord.ChannelID {
-	return a.lastAccess[guildID]
-}
-
-func (a *Application) setLastAccess(guildID discord.GuildID, chID discord.ChannelID) {
-	a.lastAccess[guildID] = chID
 }
 
 func newSeparator() *gtk.Separator {

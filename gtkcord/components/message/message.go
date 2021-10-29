@@ -6,19 +6,18 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message/extras"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/message/reactions"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
-	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
-	"github.com/diamondburned/gtkcord3/gtkcord/md"
-	"github.com/diamondburned/ningen/v2"
-
 	"github.com/diamondburned/gotk4/pkg/gdk/v3"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gotk4/pkg/pango"
+	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/avatar"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/extras"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/message/reactions"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
+	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/gtkcord/variables"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type Message struct {
@@ -39,7 +38,7 @@ type Message struct {
 
 	// Left side, nil everything if compact mode
 	avatarEv *gtk.EventBox
-	avatar   *roundimage.Image
+	avatar   *avatar.Image
 
 	// Right container:
 	right *gtk.Box
@@ -130,7 +129,7 @@ func NewMessageCustom(message *discord.Message) *Message {
 
 		main:        gtk.NewBox(gtk.OrientationHorizontal, 0),
 		avatarEv:    gtk.NewEventBox(),
-		avatar:      roundimage.NewImage(0),
+		avatar:      avatar.NewUnwrapped(variables.AvatarSize),
 		right:       gtk.NewBox(gtk.OrientationVertical, 0),
 		rightTop:    gtk.NewBox(gtk.OrientationHorizontal, 0),
 		rightBottom: gtk.NewBox(gtk.OrientationVertical, 0),
@@ -146,13 +145,15 @@ func NewMessageCustom(message *discord.Message) *Message {
 	m.style = m.main.StyleContext()
 	m.style.AddClass("message")
 
-	m.avatar.SetFromIconName("user-info", 0)
-	m.avatar.SetPixelSize(variables.AvatarSize)
-
 	m.main.SetHExpand(true)
 
 	// Wrap main around an event box
 	mainEv := gtk.NewEventBox()
+	mainEv.AddEvents(int(0 |
+		gdk.ButtonPressMask |
+		gdk.EnterNotifyMask |
+		gdk.LeaveNotifyMask,
+	))
 	mainEv.Add(m.main)
 	m.ListBoxRow.Add(mainEv)
 
@@ -166,6 +167,13 @@ func NewMessageCustom(message *discord.Message) *Message {
 		m.OnRightClick(&m, btn)
 		return true
 	})
+
+	m.avatar.SetFromIconName("user-info", 0)
+	m.avatar.SetInitials(message.Author.Username)
+
+	// On message hover, play the avatar animation.
+	mainEv.Connect("enter-notify-event", func() { m.avatar.SetPlayAnimation(true) })
+	mainEv.Connect("leave-notify-event", func() { m.avatar.SetPlayAnimation(false) })
 
 	gtkutils.InjectCSS(m.avatar, "avatar", "")
 
@@ -183,7 +191,7 @@ func NewMessageCustom(message *discord.Message) *Message {
 	m.avatarEv.SetMarginEnd(variables.AvatarPadding)
 	m.avatarEv.AddEvents(int(gdk.ButtonPressMask))
 	m.avatarEv.Add(m.avatar)
-	m.avatarEv.Connect("button_press_event", func(ev *gdk.Event) {
+	m.avatarEv.Connect("button-press-event", func(ev *gdk.Event) {
 		btn := ev.AsButton()
 		if btn.Button() != gdk.BUTTON_PRIMARY {
 			return

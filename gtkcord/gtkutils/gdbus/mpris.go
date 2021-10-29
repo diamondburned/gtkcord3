@@ -17,14 +17,25 @@ type MPRISWatcher struct {
 	enabled bool
 
 	// Last states
-	metadata Metadata
-	playing  bool
-	changed  bool
+	state   state
+	changed bool
 
 	debounce     time.Time
 	bounceHandle glib.SourceHandle
 
 	OnPlayback func(m Metadata, playing bool)
+}
+
+type state struct {
+	metadata Metadata
+	playing  bool
+}
+
+func (s state) Equal(other state) bool {
+	return s.playing == other.playing &&
+		s.metadata.Title == other.metadata.Title &&
+		s.metadata.Album == other.metadata.Album &&
+		strsliceEq(s.metadata.Artists, other.metadata.Artists)
 }
 
 // Metadata maps some fields from
@@ -33,6 +44,18 @@ type Metadata struct {
 	Title   string
 	Artists []string
 	Album   string
+}
+
+func strsliceEq(s1, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	for i := range s1 {
+		if s1[i] != s2[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // NewMPRISWatcher creates a new MPRIS watcher instance.
@@ -73,11 +96,17 @@ func NewMPRISWatcher(c *gio.DBusConnection) *MPRISWatcher {
 				if !w.IsEnabled() {
 					return
 				}
+
+				oldState := w.state
+
 				readDict(v, map[string]dictEntry{
 					"PlaybackStatus": {"s", w.onPlaybackStatusChange},
 					"Metadata":       {"", w.onMetadataChange},
 				})
-				w.update()
+
+				if !oldState.Equal(w.state) {
+					w.update()
+				}
 			})
 		},
 	)
@@ -100,9 +129,9 @@ func (w *MPRISWatcher) SetEnabled(enabled bool) {
 	w.enabled = enabled
 
 	// Force pause if we're disabling:
-	if !w.IsEnabled() && w.playing {
-		w.playing = false
-		w.OnPlayback(w.metadata, false)
+	if !w.IsEnabled() && w.state.playing {
+		w.state.playing = false
+		w.OnPlayback(w.state.metadata, false)
 	}
 }
 
@@ -113,33 +142,33 @@ func (w *MPRISWatcher) IsEnabled() bool {
 func (w *MPRISWatcher) onPlaybackStatusChange(v *glib.Variant) {
 	playing := v.String() == "Playing"
 
-	w.playing = playing
+	w.state.playing = playing
 	w.changed = true
 
 	// Don't update a zero-value
-	if w.metadata.Title == "" {
+	if w.state.metadata.Title == "" {
 		return
 	}
 }
 
 func (w *MPRISWatcher) onMetadataChange(dict *glib.Variant) {
 	// Clear
-	w.metadata.Title = ""
-	w.metadata.Album = ""
-	w.metadata.Artists = w.metadata.Artists[:0]
+	w.state.metadata.Title = ""
+	w.state.metadata.Album = ""
+	w.state.metadata.Artists = w.state.metadata.Artists[:0]
 
-	w.playing = true
+	w.state.playing = true
 	w.changed = true
 
 	readDict(dict, map[string]dictEntry{
-		"xesam:title": {"s", func(v *glib.Variant) { w.metadata.Title = v.String() }},
-		"xesam:album": {"s", func(v *glib.Variant) { w.metadata.Album = v.String() }},
+		"xesam:title": {"s", func(v *glib.Variant) { w.state.metadata.Title = v.String() }},
+		"xesam:album": {"s", func(v *glib.Variant) { w.state.metadata.Album = v.String() }},
 		"xesam:artist": {"", func(v *glib.Variant) {
 			switch v.TypeString() {
 			case "s":
-				w.metadata.Artists = []string{v.String()}
+				w.state.metadata.Artists = []string{v.String()}
 			case "as":
-				w.metadata.Artists = v.Strv()
+				w.state.metadata.Artists = v.Strv()
 			}
 		}},
 	})
@@ -170,5 +199,5 @@ func (w *MPRISWatcher) update() {
 }
 
 func (w *MPRISWatcher) mustUpdate() {
-	w.OnPlayback(w.metadata, w.playing)
+	w.OnPlayback(w.state.metadata, w.state.playing)
 }

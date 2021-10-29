@@ -6,7 +6,6 @@ import (
 
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
-	"github.com/diamondburned/gtkcord3/internal/log"
 )
 
 // SessionBusSync gets the global session bus.
@@ -32,12 +31,12 @@ func readDict(dict *glib.Variant, entries map[string]dictEntry) {
 
 		v := dict.LookupValue(k, vtype)
 		if v == nil {
-			v = dict.LookupValue(k, nil)
-			if v == nil {
-				log.Infof("dbus: variant dict missing key %q", k)
-			} else {
-				log.Infof("dbus: key %q missing type %s", k, v.TypeString())
-			}
+			// v = dict.LookupValue(k, nil)
+			// if v == nil {
+			// 	log.Infof("dbus: variant dict missing key %q", k)
+			// } else {
+			// 	log.Infof("dbus: key %q missing type %s", k, v.TypeString())
+			// }
 			continue
 		}
 

@@ -15,7 +15,7 @@ import (
 )
 
 func Margin4(widget gtk.Widgetter, top, bottom, left, right int) {
-	w := widget.BaseWidget()
+	w := gtk.BaseWidget(widget)
 	w.SetMarginTop(top)
 	w.SetMarginBottom(bottom)
 	w.SetMarginStart(left)
@@ -31,8 +31,8 @@ func Margin(widget gtk.Widgetter, sz int) {
 }
 
 func TransferMargin(dst, src gtk.Widgetter) {
-	d := dst.BaseWidget()
-	s := src.BaseWidget()
+	d := gtk.BaseWidget(dst)
+	s := gtk.BaseWidget(src)
 
 	d.SetMarginBottom(s.MarginBottom())
 	d.SetMarginEnd(s.MarginEnd())
@@ -47,11 +47,11 @@ func AsContainer(w gtk.Widgetter) *gtk.Container {
 	if !ok {
 		return nil
 	}
-	return container.BaseContainer()
+	return gtk.BaseContainer(container)
 }
 
 func NthChildren(container gtk.Containerer, i int) gtk.Widgetter {
-	list := container.BaseContainer().Children()
+	list := gtk.BaseContainer(container).Children()
 	if list == nil {
 		return nil
 	}
@@ -65,7 +65,7 @@ func HasProperty(obj glib.Objector, name string) bool {
 
 // fn() == true => break
 func TraverseWidget(container gtk.Containerer, fn func(gtk.Widgetter)) {
-	for _, wd := range container.BaseContainer().Children() {
+	for _, wd := range gtk.BaseContainer(container).Children() {
 		fn(wd)
 
 		// Recurse
@@ -85,7 +85,7 @@ func WrapBox(orient gtk.Orientation, widgets ...gtk.Widgetter) *gtk.Box {
 }
 
 func InjectCSS(w gtk.Widgetter, class, CSS string) {
-	style := w.BaseWidget().StyleContext()
+	style := gtk.BaseWidget(w).StyleContext()
 
 	if class != "" {
 		style.AddClass(class)
@@ -114,7 +114,7 @@ func CSSAdder(CSS string) func(style *gtk.StyleContext) {
 
 // OnMap binds f to w's mapping signals.
 func OnMap(w gtk.Widgetter, f func() func()) {
-	widget := w.BaseWidget()
+	widget := gtk.BaseWidget(w)
 	if widget.Mapped() {
 		panic("OnMap: called with mapped widget")
 	}

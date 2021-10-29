@@ -326,8 +326,8 @@ func (c *State) addCompletionEntry(w gtk.Widgetter, text string) bool {
 		Text:  text,
 	}
 
-	w.BaseWidget().SetMarginStart(20)
-	w.BaseWidget().SetMarginEnd(20)
+	gtk.BaseWidget(w).SetMarginStart(20)
+	gtk.BaseWidget(w).SetMarginEnd(20)
 
 	entry.ListBoxRow = gtk.NewListBoxRow()
 	entry.ListBoxRow.Add(w)

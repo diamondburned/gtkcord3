@@ -5,7 +5,6 @@ import (
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen/v2"
@@ -26,17 +25,16 @@ func NewPMButton(s *ningen.State) (dm *DMButton) {
 	r.SetHAlign(gtk.AlignFill)
 	r.SetVAlign(gtk.AlignCenter)
 	r.SetActivatable(true)
+	marginate(r)
 	r.Show()
 	gtkutils.InjectCSS(r, "dmbutton", "")
 
 	i := gtk.NewImageFromIconName("system-users-symbolic", 0)
+	i.SetSizeRequest(IconSize, IconSize)
 	i.SetPixelSize(IconSize / 3 * 2)
 	i.SetHAlign(gtk.AlignCenter)
 	i.SetVAlign(gtk.AlignCenter)
 	i.Show()
-
-	// hax
-	marginate(r, &roundimage.Image{Image: *i})
 
 	ov := NewUnreadStrip(i)
 	r.Add(ov)

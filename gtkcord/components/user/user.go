@@ -8,8 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gotk4/pkg/pango"
-	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/avatar"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 )
 
@@ -19,7 +18,7 @@ const AvatarSizeGtk = gtk.IconSizeDND
 type Container struct {
 	*gtk.Box
 
-	Avatar *roundimage.Image
+	Avatar *avatar.WithStatus
 	AStyle *gtk.StyleContext
 
 	// Right side Box is not here
@@ -28,8 +27,6 @@ type Container struct {
 	Activity *gtk.Label
 
 	NameValue string
-
-	lastStatusClass string
 }
 
 func New() *Container {
@@ -46,9 +43,8 @@ func New() *Container {
 	l.SetHAlign(gtk.AlignStart)
 	labelBox.Add(l)
 
-	a := roundimage.NewImage(0)
+	a := avatar.NewWithStatus(AvatarSize)
 	a.SetFromIconName("avatar-default-symbolic", 0)
-	a.SetPixelSize(AvatarSize)
 	a.SetVAlign(gtk.AlignCenter)
 	a.SetHAlign(gtk.AlignCenter)
 	gtkutils.Margin4(a, 2, 2, 8, 0)
@@ -69,12 +65,7 @@ func New() *Container {
 		LabelBox: labelBox,
 		Name:     l,
 	}
-	c.setStatusClass("offline")
 	return c
-}
-
-func (c *Container) setStatusClass(class string) {
-	gtkutils.DiffClass(&c.lastStatusClass, class, c.AStyle)
 }
 
 func (c *Container) UpdateActivity(ac *discord.Activity) {
@@ -125,20 +116,12 @@ func (c *Container) UpdateActivity(ac *discord.Activity) {
 }
 
 func (c *Container) UpdateStatus(status gateway.Status) {
-	switch status {
-	case gateway.OnlineStatus:
-		c.setStatusClass("online")
-	case gateway.DoNotDisturbStatus:
-		c.setStatusClass("busy")
-	case gateway.IdleStatus:
-		c.setStatusClass("idle")
-	case gateway.InvisibleStatus, gateway.OfflineStatus, gateway.UnknownStatus:
-		c.setStatusClass("offline")
-	}
+	c.Avatar.SetStatus(status)
 }
 
 func (c *Container) UpdateUser(u discord.User) {
 	c.NameValue = u.Username
+	c.Avatar.SetInitials(c.NameValue)
 	c.Name.SetText(c.NameValue)
 	c.Name.SetTooltipText(u.Username + "#" + u.Discriminator)
 	c.Name.SetUseMarkup(false)
@@ -162,10 +145,11 @@ func (c *Container) UpdateMember(m discord.Member, guild discord.Guild) {
 	}
 
 	// Set name
+	c.Avatar.SetInitials(c.NameValue)
 	c.Name.SetMarkup(colored)
 	c.Name.SetTooltipText(name)
 }
 
 func (c *Container) UpdateAvatar(url discord.URL) {
-	cache.SetImageURLScaled(c.Avatar, url+"?size=64", AvatarSize, AvatarSize)
+	c.Avatar.SetURL(url + "?size=64")
 }

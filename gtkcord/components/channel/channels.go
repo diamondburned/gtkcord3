@@ -37,6 +37,8 @@ type Channels struct {
 
 	OnSelect func(ch *Channel)
 	GuildID  discord.GuildID
+
+	lastSelected discord.ChannelID
 }
 
 func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels) {
@@ -73,6 +75,7 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 		}
 
 		chs.Selected = chs.Channels[r.Index()]
+		chs.lastSelected = chs.Selected.ID
 		chs.OnSelect(chs.Selected)
 	})
 
@@ -131,6 +134,15 @@ func (chs *Channels) LoadGuild(guildID discord.GuildID) { // async
 
 			for _, ch := range chs.Channels {
 				chs.ChList.Insert(ch, -1)
+			}
+
+			if chs.lastSelected.IsValid() {
+				lastCh := chs.FindByID(chs.lastSelected)
+				if lastCh != nil {
+					// Restore the last accessed channel.
+					chs.ChList.SelectRow(lastCh.Row)
+					lastCh.Row.Activate()
+				}
 			}
 
 			if bannerURL != "" {

@@ -279,7 +279,7 @@ func SetImageStreamed(img Imager, url string, w, h int) {
 
 // SetImageStreamedContext is the ctx variant of SetImageStreamed.
 func SetImageStreamedContext(ctx context.Context, img Imager, url string, w, h int) {
-	widget := img.BaseWidget()
+	widget := gtk.BaseWidget(img)
 
 	baseCtx := ctx
 
@@ -304,7 +304,7 @@ func setImageStreamedContext(ctx context.Context, img Imager, url string, maxW, 
 			log.Printf("cannot stream image %s: %v", url, err)
 			glib.IdleAdd(func() {
 				img.SetFromIconName("image-missing", 0)
-				w := img.BaseWidget()
+				w := gtk.BaseWidget(img)
 				w.SetTooltipText(err.Error())
 			})
 		}

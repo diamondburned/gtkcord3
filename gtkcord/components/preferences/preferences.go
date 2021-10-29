@@ -39,7 +39,7 @@ func Row(title, subtitle string, w gtk.Widgetter) *handy.ActionRow {
 	r.Add(w)
 
 	// Properly align the children:
-	base := w.BaseWidget()
+	base := gtk.BaseWidget(w)
 	base.SetVAlign(gtk.AlignCenter)
 	base.SetMarginEnd(12)
 

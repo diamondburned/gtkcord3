@@ -24,6 +24,8 @@ type UnreadStrip struct {
 	Strip    *gtk.Box // width IconPadding
 	Style    *gtk.StyleContext
 
+	onHover func(bool)
+
 	// interact states
 	intrclass string
 	suppress  bool
@@ -41,7 +43,7 @@ var stripCSS = gtkutils.CSSAdder(`
 
 	.read-indicator {
 		padding: 6px 3px; /* Always show, use revealer to hide */
-		transition: 70ms linear;
+		transition: 100ms linear;
 		border-radius: 0 99px 99px 0;
 		background-color: @theme_fg_color;
 	}
@@ -85,6 +87,7 @@ func NewUnreadStrip(child gtk.Widgetter) *UnreadStrip {
 
 	revealer.Add(strip)
 	overlay.AddOverlay(revealer)
+	overlay.SetOverlayPassThrough(revealer, true)
 
 	return &UnreadStrip{
 		Overlay:  overlay,
@@ -143,6 +146,9 @@ func (r *UnreadStrip) SetUnread() {
 
 func (r *UnreadStrip) SetHovered(hovered bool) {
 	r.hover = hovered
+	if r.onHover != nil {
+		r.onHover(hovered)
+	}
 	r.updateState()
 }
 

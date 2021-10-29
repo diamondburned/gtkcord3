@@ -55,7 +55,7 @@ func NewPopover(relative gtk.Widgetter) *Popover {
 			return
 		}
 
-		popover.Children.BaseWidget().Destroy()
+		gtk.BaseWidget(popover.Children).Destroy()
 		popover.Children = nil
 	})
 

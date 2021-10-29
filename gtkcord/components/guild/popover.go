@@ -9,7 +9,12 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 )
 
-func newNamePopover(name string, relative gtk.Widgetter) *gtk.Popover {
+type namePopover struct {
+	*gtk.Popover
+	label *gtk.Label
+}
+
+func newNamePopover(name string, relative gtk.Widgetter) *namePopover {
 	label := gtk.NewLabel("<b>" + html.EscapeString(name) + "</b>")
 	label.SetUseMarkup(true)
 	label.SetMarginStart(5)
@@ -20,12 +25,11 @@ func newNamePopover(name string, relative gtk.Widgetter) *gtk.Popover {
 	label.Show()
 
 	popover := gtk.NewPopover(relative)
-	popover.Add(label)
 	popover.SetPosition(gtk.PosRight)
+	popover.Add(label)
 	popover.SetModal(false)
-	popover.Popup()
 
-	return popover
+	return &namePopover{popover, label}
 }
 
 func BindName(c gtk.Containerer, w gtk.Widgetter, name *string) *gtk.EventBox {
@@ -35,14 +39,18 @@ func BindName(c gtk.Containerer, w gtk.Widgetter, name *string) *gtk.EventBox {
 	evb.Show()
 
 	// shared state
-	var popover *gtk.Popover
+	var popover *namePopover
 
 	// shitty hack to not pass anything down further
 	hoverer, ok := w.(Hoverable)
 
 	evb.Connect("enter-notify-event", func() bool {
 		if text := *name; text != "" {
-			popover = newNamePopover(text, evb)
+			if popover == nil {
+				popover = newNamePopover(text, evb)
+			}
+			popover.label.SetText(text)
+			popover.Popup()
 		}
 		if ok {
 			hoverer.SetHovered(true)
@@ -52,7 +60,6 @@ func BindName(c gtk.Containerer, w gtk.Widgetter, name *string) *gtk.EventBox {
 	evb.Connect("leave-notify-event", func() bool {
 		if popover != nil {
 			popover.Popdown()
-			popover = nil
 		}
 		if ok {
 			hoverer.SetHovered(false)
@@ -61,7 +68,7 @@ func BindName(c gtk.Containerer, w gtk.Widgetter, name *string) *gtk.EventBox {
 	})
 
 	// Wrap.
-	container := c.BaseContainer()
+	container := gtk.BaseContainer(c)
 	container.Remove(w)
 	evb.Add(w)
 	container.Add(evb)
@@ -74,22 +81,25 @@ func BindName(c gtk.Containerer, w gtk.Widgetter, name *string) *gtk.EventBox {
 
 func BindNameDirect(w gtk.Widgetter, hoverer Hoverable, name *string) {
 	// shared state
-	var popover *gtk.Popover
+	var popover *namePopover
 
-	conn := w.BaseWidget()
+	conn := gtk.BaseWidget(w)
 	conn.SetEvents(int(gdk.EnterNotifyMask | gdk.LeaveNotifyMask))
 
 	conn.Connect("enter-notify-event", func() bool {
 		if text := *name; text != "" {
-			popover = newNamePopover(text, conn)
+			if popover == nil {
+				popover = newNamePopover(text, conn)
+			}
+			popover.label.SetText(text)
+			popover.Popup()
 		}
 		hoverer.SetHovered(true)
 		return false
 	})
 	conn.Connect("leave-notify-event", func() bool {
 		if popover != nil {
-			popover.Hide()
-			popover = nil
+			popover.Popdown()
 		}
 		hoverer.SetHovered(false)
 		return false

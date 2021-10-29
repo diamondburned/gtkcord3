@@ -5,8 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
-	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/avatar"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/ningen/v2"
 )
@@ -71,6 +70,9 @@ func newGuildFolder(
 	}
 
 	f.Icon.load(f.Guilds)
+
+	f.RevealerRow.Button.Connect("enter-notify-event", func() { f.Icon.SetPlayAnimation(true) })
+	f.RevealerRow.Button.Connect("leave-notify-event", func() { f.Icon.SetPlayAnimation(false) })
 
 	gtkutils.InjectCSS(f.RevealerRow, "guild-folder", "")
 	// Folder.Style, _ = rev.GetStyleContext()
@@ -142,8 +144,8 @@ type GuildFolderIcon struct {
 	*gtk.Stack
 	Style *gtk.StyleContext
 
-	Guilds *gtk.Grid            // contains 4 images always.
-	Images [4]*roundimage.Image // first 4 of folder.Guilds
+	Guilds *gtk.Grid        // contains 4 images always.
+	Images [4]*avatar.Image // first 4 of folder.Guilds
 
 	folder []*Guild
 	Folder *gtk.Image
@@ -165,6 +167,15 @@ func newGuildFolderIcon() *GuildFolderIcon {
 	return i
 }
 
+var guildFolderIconMatrix = [4][2]int{
+	// [0] [1]
+	// [2] [3]
+	{0, 0},
+	{1, 0},
+	{0, 1},
+	{1, 1},
+}
+
 func (i *GuildFolderIcon) load(guilds []*Guild) {
 	if i.Guilds != nil {
 		panic("GuildFolderIcon.load called twice")
@@ -179,30 +190,21 @@ func (i *GuildFolderIcon) load(guilds []*Guild) {
 	i.Guilds.SetColumnHomogeneous(true)
 
 	// Make dummy images.
-	for ix := range i.Images {
-		img := roundimage.NewImage(0)
-		img.SetSizeRequest(16, 16)
+	for ix := 0; ix < len(i.Images) && ix < len(guilds); ix++ {
+		i.Images[ix] = avatar.NewUnwrapped(16)
 
-		i.Images[ix] = img
+		gridPos := guildFolderIconMatrix[ix]
+		i.Guilds.Attach(i.Images[ix], gridPos[0], gridPos[1], 1, 1)
 	}
 
-	// Set the dummy images in a grid.
-	// [0] [1]
-	// [2] [3]
-	i.Guilds.Attach(i.Images[0], 0, 0, 1, 1)
-	i.Guilds.Attach(i.Images[1], 1, 0, 1, 1)
-	i.Guilds.Attach(i.Images[2], 0, 1, 1, 1)
-	i.Guilds.Attach(i.Images[3], 1, 1, 1, 1)
-
 	// Asynchronously fetch the icons.
-	for ix := 0; ix < len(guilds) && ix < 4; ix++ {
+	for ix := 0; ix < len(guilds) && ix < 4 && i.Images[ix] != nil; ix++ {
 		if guilds[ix].IconURL == "" {
 			i.Images[ix].SetInitials(guilds[ix].Name)
 			continue
 		}
 
-		url := guilds[ix].IconURL + "?size=64"
-		cache.SetImageURLScaled(i.Images[ix], url, 16, 16)
+		i.Images[ix].SetURL(guilds[ix].IconURL + "?size=64")
 	}
 
 	// Add things together.
@@ -220,6 +222,12 @@ func (i *GuildFolderIcon) setReveal(reveal bool) {
 		// show the guilds
 		i.Stack.SetVisibleChildName("guilds")
 		i.Style.AddClass("collapsed")
+	}
+}
+
+func (i *GuildFolderIcon) SetPlayAnimation(play bool) {
+	for ix := 0; ix < len(i.Images) && i.Images[ix] != nil; ix++ {
+		i.Images[ix].SetPlayAnimation(play)
 	}
 }
 

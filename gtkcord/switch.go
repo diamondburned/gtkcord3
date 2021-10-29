@@ -50,33 +50,6 @@ func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID
 	return false
 }
 
-// SwitchLastChannel, nil for DM.
-func (a *Application) SwitchLastChannel(g *guild.Guild) {
-	if g == nil {
-		c, ok := a.Privates.Channels[a.LastAccessed(0)]
-		if ok {
-			a.Privates.List.SelectRow(c.ListBoxRow)
-			a.SwitchChannel(c)
-		}
-
-		return
-	}
-
-	var lastCh *channel.Channel
-
-	var chID = a.LastAccessed(g.ID)
-	if !chID.IsValid() {
-		lastCh = a.Channels.First()
-	} else {
-		lastCh = a.Channels.FindByID(chID)
-	}
-
-	if lastCh != nil {
-		a.Channels.ChList.SelectRow(lastCh.Row)
-		a.SwitchChannel(lastCh)
-	}
-}
-
 func (a *Application) FocusMessages() {
 	// Set the default visible widget to the right container:
 	a.Main.SetVisibleChild(a.Right)
@@ -181,7 +154,6 @@ func (a *Application) SwitchChannel(ch ChannelContainer) {
 	a.Messages.Load(ch.ChannelID())
 
 	a.Right.SetChild(a.Messages)
-	a.setLastAccess(ch.GuildID(), ch.ChannelID())
 
 	name, _ := ch.ChannelInfo()
 	if ch.GuildID().IsValid() {

@@ -8,7 +8,7 @@ import (
 )
 
 func (m *Messages) menuAddAdmin(msg *Message, menuContainer gtk.Containerer) {
-	menu := menuContainer.BaseContainer()
+	menu := gtk.BaseContainer(menuContainer)
 	me, _ := m.c.Me()
 
 	var canDelete = msg.AuthorID == me.ID
@@ -46,7 +46,7 @@ func (m *Messages) menuAddAdmin(msg *Message, menuContainer gtk.Containerer) {
 }
 
 func (m *Messages) menuAddDebug(msg *Message, menuContainer gtk.Containerer) {
-	menu := menuContainer.BaseContainer()
+	menu := gtk.BaseContainer(menuContainer)
 
 	cpmsgID := gtk.NewMenuItemWithLabel("Copy Message ID")
 	cpmsgID.Connect("activate", func() {

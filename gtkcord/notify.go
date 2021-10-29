@@ -1,6 +1,8 @@
 package gtkcord
 
 import (
+	"context"
+
 	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -69,8 +71,28 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 	}()
 }
 
+type mprisState struct {
+	cancel context.CancelFunc
+}
+
+func newMPRISState() *mprisState {
+	return &mprisState{}
+}
+
+func (s *mprisState) newContext() context.Context {
+	if s.cancel != nil {
+		s.cancel()
+		s.cancel = nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+
+	return ctx
+}
+
 func (a *Application) onMPRISEvent(m gdbus.Metadata, playing bool) {
-	if a.State == nil {
+	if a.State == nil || a.MPRIS == nil || a.mprisState == nil {
 		return
 	}
 
@@ -109,11 +131,12 @@ func (a *Application) updateMetadata(m gdbus.Metadata) {
 func (a *Application) updateStatus(activity *discord.Activity) {
 	me, _ := a.State.Me()
 	uID := me.ID
+	ctx := a.mprisState.newContext()
 
 	go func() {
 		status := gateway.OnlineStatus
 
-		p, err := a.State.Presence(0, uID)
+		p, err := a.State.WithContext(ctx).Presence(0, uID)
 		if err == nil {
 			status = p.Status
 		}
@@ -128,7 +151,7 @@ func (a *Application) updateStatus(activity *discord.Activity) {
 			data.Activities = append(data.Activities, *activity)
 		}
 
-		if err = a.State.Gateway.UpdateStatus(data); err != nil {
+		if err = a.State.Gateway.UpdateStatusCtx(ctx, data); err != nil {
 			log.Errorln("Failed to update status:", err)
 		}
 	}()

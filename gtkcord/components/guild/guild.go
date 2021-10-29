@@ -6,9 +6,8 @@ import (
 	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
-	"github.com/diamondburned/gtkcord3/gtkcord/cache"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/avatar"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen/v2"
@@ -27,7 +26,7 @@ type Guild struct {
 	Unread *UnreadStrip
 
 	Event *gtk.EventBox
-	Image *roundimage.Image
+	Image *avatar.Image
 
 	IconURL   string
 	BannerURL string
@@ -39,13 +38,9 @@ type Guild struct {
 	muted     bool
 }
 
-func marginate(r *gtk.ListBoxRow, i *roundimage.Image) {
+func marginate(r *gtk.ListBoxRow) {
 	// Set paddings (height is less, width is WIDE):
 	r.SetSizeRequest(TotalWidth, IconSize+IconPadding)
-
-	if i != nil {
-		i.SetSizeRequest(IconSize, IconSize)
-	}
 }
 
 func newGuildRow(s *ningen.State, guildID discord.GuildID, parent *GuildFolder) *Guild {
@@ -61,15 +56,14 @@ func newGuildRow(s *ningen.State, guildID discord.GuildID, parent *GuildFolder) 
 	var guild *Guild
 
 	r := gtk.NewListBoxRow()
-	i := roundimage.NewImage(0)
-	marginate(r, i)
-
 	r.SetHAlign(gtk.AlignCenter)
 	r.SetVAlign(gtk.AlignCenter)
 	r.SetSensitive(err == nil)
 	r.SetActivatable(true)
+	marginate(r)
 	gtkutils.InjectCSS(r, "guild", "")
 
+	i := avatar.NewUnwrapped(IconSize)
 	i.SetInitials(g.Name)
 	i.SetHAlign(gtk.AlignCenter)
 	i.SetVAlign(gtk.AlignCenter)
@@ -86,6 +80,11 @@ func newGuildRow(s *ningen.State, guildID discord.GuildID, parent *GuildFolder) 
 		IconURL:    g.IconURL(),
 		BannerURL:  g.BannerURL(),
 		unreadChs:  map[discord.ChannelID]bool{},
+	}
+
+	guild.Unread.onHover = func(hovered bool) {
+		// Play animation on hover.
+		guild.Image.SetPlayAnimation(hovered)
 	}
 
 	// Bind the name popup.
@@ -121,11 +120,11 @@ func (g *Guild) SetUnavailable(unavailable bool) {
 
 func (g *Guild) UpdateImage() {
 	if g.IconURL == "" {
-		g.Image.Clear()
+		g.Image.SetFromPixbuf(nil)
 		return
 	}
 
-	cache.SetImageURLScaled(g.Image, g.IconURL+"?size=64", IconSize, IconSize)
+	g.Image.SetURL(g.IconURL + "?size=64")
 }
 
 // nil == none

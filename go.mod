@@ -6,8 +6,8 @@ require (
 	github.com/Xuanwo/go-locale v0.1.0
 	github.com/alecthomas/chroma v0.7.1
 	github.com/diamondburned/arikawa/v2 v2.1.1-0.20211028031603-34a7c3ba2eea
-	github.com/diamondburned/gotk4-handy/pkg v0.0.0-20211024231549-ab5feddde699
-	github.com/diamondburned/gotk4/pkg v0.0.0-20211027215233-15634c96cea1
+	github.com/diamondburned/gotk4-handy/pkg v0.0.0-20211029023249-a3b874bfc014
+	github.com/diamondburned/gotk4/pkg v0.0.0-20211029022411-ad571a40956f
 	github.com/diamondburned/ningen/v2 v2.0.0-20211028060605-d121a03cbec1
 	github.com/goodsign/monday v1.0.0
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
