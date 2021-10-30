@@ -7,14 +7,14 @@ import (
 
 const LoadingTitle = "Connecting to Discord — gtkcord3"
 
-var wasLoading bool
+var previousLoadingChild gtk.Widgetter
 
 // NowLoading fades the internal stack view to show a spinning circle.
 func NowLoading() {
 	// Use a spinner:
 	s := animations.NewSpinner(75)
 
-	wasLoading = true
+	previousLoadingChild = Window.header
 
 	// Use a custom header instead of the actual Header:
 	h := gtk.NewHeaderBar()
@@ -24,5 +24,5 @@ func NowLoading() {
 
 	// Set the loading animation:
 	stackSet(Window.Main, "loading", s)
-	Window.SetTitlebar(h)
+	SetHeader(h)
 }

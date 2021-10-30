@@ -42,6 +42,7 @@ type Container struct {
 	Clipboard *gtk.Clipboard
 
 	Main   *gtk.Stack
+	Header *gtk.Box
 	header gtk.Widgetter
 
 	// CursorDefault *gdk.Cursor
@@ -68,6 +69,9 @@ func WithApplication(app *gtk.Application) error {
 	// w.SetApplication(app)
 	w := gtk.NewApplicationWindow(app)
 	Window.ApplicationWindow = w
+
+	Window.Header = gtk.NewBox(gtk.OrientationVertical, 0)
+	w.SetTitlebar(Window.Header)
 
 	l := logo.Pixbuf(64)
 	w.SetIcon(l)
@@ -126,8 +130,11 @@ func WithApplication(app *gtk.Application) error {
 }
 
 func SetHeader(h gtk.Widgetter) {
+	if Window.header != nil {
+		Window.Header.Remove(Window.header)
+	}
 	Window.header = h
-	Window.SetTitlebar(h)
+	Window.Header.PackStart(h, true, true, 0)
 }
 
 func HeaderShowAll() {
@@ -162,8 +169,9 @@ func Resize(w, h int) {
 }
 
 func Display(w gtk.Widgetter) {
-	if wasLoading && Window.header != nil {
-		Window.SetTitlebar(Window.header)
+	if previousLoadingChild != nil {
+		SetHeader(previousLoadingChild)
+		previousLoadingChild = nil
 	}
 	stackSet(Window.Main, "main", w)
 }
