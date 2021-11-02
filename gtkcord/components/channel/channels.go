@@ -38,7 +38,7 @@ type Channels struct {
 	OnSelect func(ch *Channel)
 	GuildID  discord.GuildID
 
-	lastSelected discord.ChannelID
+	lastSelected map[discord.GuildID]discord.ChannelID
 }
 
 func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels) {
@@ -61,12 +61,13 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 	page.SetChild(cs)
 
 	chs = &Channels{
-		Page:     page,
-		Scroll:   cs,
-		Main:     main,
-		ChList:   cl,
-		state:    state,
-		OnSelect: onSelect,
+		Page:         page,
+		Scroll:       cs,
+		Main:         main,
+		ChList:       cl,
+		state:        state,
+		OnSelect:     onSelect,
+		lastSelected: make(map[discord.GuildID]discord.ChannelID),
 	}
 
 	cl.Connect("row-activated", func(l *gtk.ListBox, r *gtk.ListBoxRow) {
@@ -75,7 +76,7 @@ func NewChannels(state *ningen.State, onSelect func(ch *Channel)) (chs *Channels
 		}
 
 		chs.Selected = chs.Channels[r.Index()]
-		chs.lastSelected = chs.Selected.ID
+		chs.lastSelected[chs.GuildID] = chs.Selected.ID
 		chs.OnSelect(chs.Selected)
 	})
 
@@ -129,6 +130,12 @@ func (chs *Channels) LoadGuild(guildID discord.GuildID) { // async
 		}
 
 		glib.IdleAdd(func() {
+			// Ensure that the guild ID is still the same, in that the user
+			// hasn't clicked away while we were loading.
+			if guildID != chs.GuildID {
+				return
+			}
+
 			chs.SetDone()
 			chs.Channels = transformChannels(chs.state, channels)
 
@@ -136,8 +143,8 @@ func (chs *Channels) LoadGuild(guildID discord.GuildID) { // async
 				chs.ChList.Insert(ch, -1)
 			}
 
-			if chs.lastSelected.IsValid() {
-				lastCh := chs.FindByID(chs.lastSelected)
+			if lastChID := chs.lastSelected[guildID]; lastChID.IsValid() {
+				lastCh := chs.FindByID(lastChID)
 				if lastCh != nil {
 					// Restore the last accessed channel.
 					chs.ChList.SelectRow(lastCh.Row)

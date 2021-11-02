@@ -444,6 +444,8 @@ func (i *Input) send(content string) {
 				}
 			})
 		}()
+
+		return
 	}
 
 	// If the content is empty but we're not editing, don't send.

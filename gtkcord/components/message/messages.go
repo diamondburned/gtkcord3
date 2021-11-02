@@ -269,8 +269,14 @@ func (m *Messages) Load(channelID discord.ChannelID) {
 		})
 
 		glib.IdleAdd(func() {
-			// Allocate a new empty slice. This is a trade-off to re-using the old
-			// slice to re-use messages.
+			// Ensure that the channel ID is still the same, in that the user
+			// hasn't clicked away while we were loading.
+			if m.channelID != channelID {
+				return
+			}
+
+			// Allocate a new empty slice. This is a trade-off to re-using the
+			// old slice to re-use messages.
 			m.messages = make([]*Message, 0, m.fetch)
 
 			// Iterate from earliest to latest, in a thread-safe function.
