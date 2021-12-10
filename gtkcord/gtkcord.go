@@ -82,7 +82,7 @@ type Application struct {
 	Settings *Settings
 
 	// Main Grid, left is always LeftGrid - *gtk.Grid
-	Main       *handy.Leaflet // LeftGrid -- Right
+	Main       *handy.Flap // LeftGrid -- Right
 	RightWhole *gtk.Box
 	Right      *singlebox.Box // Stack of Messages or full screen server details TODO
 	// <grid>        <item>       <item>
@@ -150,13 +150,16 @@ func (a *Application) Activate() {
 
 func (a *Application) init() {
 	// Pre-make the leaflet but don't use it:
-	l := handy.NewLeaflet()
-	l.SetModeTransitionDuration(150)
-	l.SetTransitionType(handy.LeafletTransitionTypeSlide)
-	l.SetInterpolateSize(true)
-	l.SetCanSwipeBack(true)
+	l := handy.NewFlap()
+	l.SetRevealDuration(150)
+	l.SetTransitionType(handy.FlapTransitionTypeOver)
+	l.SetFoldPolicy(handy.FlapFoldPolicyAuto)
+	l.SetSwipeToClose(true)
+	l.SetSwipeToOpen(true)
+	l.SetModal(true)
 	l.Container.Show()
 	gtkutils.InjectCSS(l, "main-leaflet", "")
+	gtkutils.InjectCSS(l, "main-fold", "")
 	a.Main = l
 
 	l.Connect("notify::folded", func() {
@@ -264,7 +267,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Bind OnClick to trigger below callback:
 	a.Header.Back.OnClick = func() {
-		a.Main.SetFocusChild(a.LeftWhole)
+		a.Main.SetRevealFlap(true)
 	}
 
 	// Bind the channel menu button:
@@ -320,10 +323,7 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.setLeftGridCol(newSeparator(), separatorColumn2)
 
 	// Set the left grid to the main leaflet:
-	a.Main.Add(a.LeftWhole)
-
-	// Make left grid the default view:
-	a.Main.SetVisibleChild(a.LeftWhole)
+	a.Main.SetFlap(a.LeftWhole)
 
 	// Message widget container, which will hold *Messages:
 	a.Right = singlebox.NewBox(gtk.OrientationHorizontal, 0)
@@ -340,7 +340,7 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.RightWhole.Show()
 
 	// Set the message container to the main container:
-	a.Main.Add(a.RightWhole)
+	a.Main.SetContent(a.RightWhole)
 
 	// Display the grid and header
 	a.displayMain()

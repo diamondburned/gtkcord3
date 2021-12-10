@@ -28,7 +28,7 @@ func NewBack() *Back {
 	mb.SetSizeRequest(variables.AvatarSize, -1)
 	r.Add(mb)
 
-	i := gtk.NewImageFromIconName("go-previous-symbolic", int(gtk.IconSizeLargeToolbar))
+	i := gtk.NewImageFromIconName("go-next-symbolic", int(gtk.IconSizeLargeToolbar))
 	i.Show()
 	mb.Add(i)
 

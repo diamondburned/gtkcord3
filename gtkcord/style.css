@@ -16,6 +16,10 @@ preferencesgroup row {
 	padding: 6px 8px;
 }
 
+.left-whole {
+	background-color: @theme_bg_color;
+}
+
 .left-whole > headerbar {
 	border-top-right-radius: 0;
 }
