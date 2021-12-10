@@ -51,8 +51,10 @@ func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID
 }
 
 func (a *Application) FocusMessages() {
-	// Set the default visible widget to the right container:
-	a.Main.SetRevealFlap(false)
+	if a.Main.Folded() {
+		// unreveal the flap if we're folded
+		a.Main.SetRevealFlap(false)
+	}
 
 	// Grab the message input's focus:
 	a.Messages.Focus()

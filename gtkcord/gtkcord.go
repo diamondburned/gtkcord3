@@ -157,6 +157,7 @@ func (a *Application) init() {
 	l.SetSwipeToClose(true)
 	l.SetSwipeToOpen(true)
 	l.SetModal(true)
+	l.SetLocked(true)
 	l.Container.Show()
 	gtkutils.InjectCSS(l, "main-leaflet", "")
 	gtkutils.InjectCSS(l, "main-fold", "")
@@ -169,6 +170,11 @@ func (a *Application) init() {
 		}
 
 		folded := l.Folded()
+		if !folded {
+			// Always show channel sidebar if we're not folded.
+			l.SetRevealFlap(true)
+		}
+
 		a.Header.Fold(folded)
 		// If folded, we expand those panels:
 		a.Channels.SetHExpand(folded)
