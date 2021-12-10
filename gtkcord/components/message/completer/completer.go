@@ -21,7 +21,6 @@ type State struct {
 
 	Scroll  *gtk.ScrolledWindow
 	ListBox *gtk.ListBox
-	Entries []*Entry
 
 	// state is offline
 	state *ningen.State
@@ -40,6 +39,7 @@ type State struct {
 
 	lastWord string
 
+	entries  []*Entry
 	channels []discord.Channel
 	members  []discord.Member
 	users    []discord.User
@@ -138,11 +138,11 @@ func (c *State) KeyDown(state gdk.ModifierType, key uint) bool {
 }
 
 func (c *State) IsEmpty() bool {
-	return len(c.Entries) == 0
+	return len(c.entries) == 0
 }
 
 func (c *State) Select(index int) {
-	c.ListBox.SelectRow(c.Entries[index].ListBoxRow)
+	c.ListBox.SelectRow(c.entries[index].ListBoxRow)
 }
 
 func (c *State) Index() int {
@@ -161,7 +161,7 @@ func (c *State) Index() int {
 func (c *State) Down() {
 	i := c.Index()
 	i++
-	if i >= len(c.Entries) {
+	if i >= len(c.entries) {
 		i = 0
 	}
 	c.Select(i)
@@ -171,7 +171,7 @@ func (c *State) Up() {
 	i := c.Index()
 	i--
 	if i < 0 {
-		i = len(c.Entries) - 1
+		i = len(c.entries) - 1
 	}
 	c.Select(i)
 }
@@ -217,7 +217,7 @@ func (c *State) execute() {
 		return
 	}
 
-	if !c.IsEmpty() && len(c.Entries) > 0 {
+	if !c.IsEmpty() && len(c.entries) > 0 {
 		// Clear completion without hiding:
 		c.clearCompletion()
 	}
@@ -225,11 +225,11 @@ func (c *State) execute() {
 	c.loadCompletion(word)
 
 	// Reveal (true) if c.Entries is not empty.
-	c.SetRevealChild(len(c.Entries) > 0)
+	c.SetRevealChild(len(c.entries) > 0)
 }
 
 func (c *State) ClearCompletion() {
-	if len(c.Entries) == 0 {
+	if len(c.entries) == 0 {
 		return
 	}
 
@@ -238,10 +238,10 @@ func (c *State) ClearCompletion() {
 }
 
 func (c *State) clearCompletion() {
-	for _, entry := range c.Entries {
+	for _, entry := range c.entries {
 		c.ListBox.Remove(entry)
 	}
-	c.Entries = nil
+	c.entries = nil
 
 	c.channels = nil
 	c.members = nil
@@ -255,7 +255,7 @@ func (c *State) clearCompletion() {
 func (c *State) applyCompletion() {
 	r := c.ListBox.SelectedRow()
 	i := r.Index()
-	if i < 0 || i >= len(c.Entries) {
+	if i < 0 || i >= len(c.entries) {
 		log.Errorln("Index out of bounds:", i)
 		return
 	}
@@ -265,8 +265,12 @@ func (c *State) applyCompletion() {
 		return
 	}
 
+	// Copy this, because Delete has a side-effect of triggering the changed
+	// signal in the input buffer and wiping our entries.
+	entry := c.entries[i]
+
 	c.InputBuf.Delete(c.start, c.end)
-	c.InputBuf.Insert(c.start, c.Entries[i].Text+" ")
+	c.InputBuf.Insert(c.start, entry.Text+" ")
 
 	c.clearCompletion()
 	c.SetRevealChild(false)
@@ -317,7 +321,7 @@ func completerRightLabel(text string) *gtk.Label {
 }
 
 func (c *State) addCompletionEntry(w gtk.Widgetter, text string) bool {
-	if len(c.Entries) > MaxCompletionEntries {
+	if len(c.entries) > MaxCompletionEntries {
 		return false
 	}
 
@@ -336,11 +340,12 @@ func (c *State) addCompletionEntry(w gtk.Widgetter, text string) bool {
 	c.ListBox.Insert(entry, -1)
 	entry.ShowAll()
 
-	if len(c.Entries) == 0 {
+	if len(c.entries) == 0 {
 		c.ListBox.SelectRow(entry.ListBoxRow)
 	}
 
-	c.Entries = append(c.Entries, entry)
+	log.Println("entries appended")
+	c.entries = append(c.entries, entry)
 	return true
 }
 

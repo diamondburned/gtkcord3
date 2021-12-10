@@ -24,6 +24,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/components/quickswitcher"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/singlebox"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
+	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils/gdbus"
 	"github.com/diamondburned/ningen/v2"
 
@@ -81,15 +82,17 @@ type Application struct {
 	Settings *Settings
 
 	// Main Grid, left is always LeftGrid - *gtk.Grid
-	Main  *handy.Leaflet // LeftGrid -- Right
-	Right *singlebox.Box // Stack of Messages or full screen server details TODO
+	Main       *handy.Leaflet // LeftGrid -- Right
+	RightWhole *gtk.Box
+	Right      *singlebox.Box // Stack of Messages or full screen server details TODO
 	// <grid>        <item>       <item>
 	// | Left        | Right    |
 	// | Left Grid   | Messages |
 
 	// Left Grid
-	LeftGrid *gtk.Grid
-	leftCols [maxLeftGridColumn]gtk.Widgetter
+	LeftWhole *gtk.Box
+	LeftGrid  *gtk.Grid
+	leftCols  [maxLeftGridColumn]gtk.Widgetter
 	// <item>     <item>
 	// | Guilds   | Channels
 
@@ -138,7 +141,6 @@ func (a *Application) Activate() {
 	a.Window = window.Window
 
 	// Set the window specs:
-	window.Resize(1000, 800)
 	window.SetTitle("gtkcord")
 
 	// Create the preferences/settings window, which applies settings as a side
@@ -154,6 +156,7 @@ func (a *Application) init() {
 	l.SetInterpolateSize(true)
 	l.SetCanSwipeBack(true)
 	l.Container.Show()
+	gtkutils.InjectCSS(l, "main-leaflet", "")
 	a.Main = l
 
 	l.Connect("notify::folded", func() {
@@ -162,12 +165,8 @@ func (a *Application) init() {
 			return
 		}
 
-		// Avoid repeating:
 		folded := l.Folded()
-
-		// Fold the header too:
 		a.Header.Fold(folded)
-
 		// If folded, we expand those panels:
 		a.Channels.SetHExpand(folded)
 		a.Privates.SetHExpand(folded)
@@ -215,8 +214,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Make the main widgets:
 	a.init()
-	window.SetHeader(a.Header.HeaderBar) // restore header post login.
-	window.Resize(1200, 900)
+	window.SetHeader(nil)
 
 	if ready := s.Ready(); ready.UserSettings != nil {
 		switch ready.UserSettings.Theme {
@@ -266,7 +264,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Bind OnClick to trigger below callback:
 	a.Header.Back.OnClick = func() {
-		a.Main.SetFocusChild(a.LeftGrid)
+		a.Main.SetFocusChild(a.LeftWhole)
 	}
 
 	// Bind the channel menu button:
@@ -309,9 +307,12 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.LeftGrid.SetRowHomogeneous(true)
 	a.LeftGrid.Show()
 
-	leftGroup := gtk.NewSizeGroup(gtk.SizeGroupHorizontal)
-	leftGroup.AddWidget(a.LeftGrid)
-	leftGroup.AddWidget(a.Header.LeftSide)
+	a.LeftWhole = gtk.NewBox(gtk.OrientationVertical, 0)
+	a.LeftWhole.SetHExpand(false)
+	a.LeftWhole.PackStart(a.Header.Left, false, false, 0)
+	a.LeftWhole.PackStart(a.LeftGrid, true, true, 0)
+	gtkutils.InjectCSS(a.LeftWhole, "left-whole", "")
+	a.LeftWhole.Show()
 
 	// Add the guilds and the separator right and left of channels:
 	a.setLeftGridCol(a.Guilds, guildsColumn)
@@ -319,10 +320,10 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.setLeftGridCol(newSeparator(), separatorColumn2)
 
 	// Set the left grid to the main leaflet:
-	a.Main.Add(a.LeftGrid)
+	a.Main.Add(a.LeftWhole)
 
 	// Make left grid the default view:
-	a.Main.SetVisibleChild(a.LeftGrid)
+	a.Main.SetVisibleChild(a.LeftWhole)
 
 	// Message widget container, which will hold *Messages:
 	a.Right = singlebox.NewBox(gtk.OrientationHorizontal, 0)
@@ -331,12 +332,15 @@ func (a *Application) Ready(s *ningen.State) error {
 	a.Right.SetVExpand(true)
 	a.Right.Show()
 
-	rightGroup := gtk.NewSizeGroup(gtk.SizeGroupHorizontal)
-	rightGroup.AddWidget(a.Right)
-	rightGroup.AddWidget(a.Header.RightSide)
+	a.RightWhole = gtk.NewBox(gtk.OrientationVertical, 0)
+	a.RightWhole.SetHExpand(true)
+	a.RightWhole.PackStart(a.Header.Right, false, false, 0)
+	a.RightWhole.PackStart(a.Right, true, true, 0)
+	gtkutils.InjectCSS(a.RightWhole, "right-whole", "")
+	a.RightWhole.Show()
 
 	// Set the message container to the main container:
-	a.Main.Add(a.Right)
+	a.Main.Add(a.RightWhole)
 
 	// Display the grid and header
 	a.displayMain()

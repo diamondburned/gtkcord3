@@ -7,29 +7,42 @@ import (
 )
 
 func (m *Messages) injectHandlers() {
-	m.c.AddHandler(func(v interface{}) {
-		glib.IdleAdd(func() {
-			switch v := v.(type) {
-			case *gateway.TypingStartEvent:
-				m.onTypingStart(v)
-			case *gateway.MessageCreateEvent:
-				m.onMessageCreate(v)
-			case *gateway.MessageUpdateEvent:
-				m.onMessageUpdate(v)
-			case *gateway.MessageDeleteEvent:
-				m.onMessageDelete(v)
-			case *gateway.MessageDeleteBulkEvent:
-				m.onMessageDeleteBulk(v)
-			case *gateway.GuildMembersChunkEvent:
-				m.onGuildMembersChunk(v)
-			case *gateway.MessageReactionAddEvent:
-				m.react(v)
-			case *gateway.MessageReactionRemoveEvent:
-				m.unreact(v)
-			case *gateway.MessageReactionRemoveAllEvent:
-				m.unreactAll(v)
-			}
+	if m.Realized() {
+		panic("injectHandler call on realized")
+	}
+
+	var cancel func()
+	m.ConnectRealize(func() {
+		cancel = m.c.AddHandler(func(v interface{}) {
+			glib.IdleAdd(func() {
+				switch v := v.(type) {
+				case *gateway.TypingStartEvent:
+					m.onTypingStart(v)
+				case *gateway.MessageCreateEvent:
+					m.onMessageCreate(v)
+				case *gateway.MessageUpdateEvent:
+					m.onMessageUpdate(v)
+				case *gateway.MessageDeleteEvent:
+					m.onMessageDelete(v)
+				case *gateway.MessageDeleteBulkEvent:
+					m.onMessageDeleteBulk(v)
+				case *gateway.GuildMemberAddEvent:
+					m.onGuildMemberAdd(v)
+				case *gateway.GuildMembersChunkEvent:
+					m.onGuildMembersChunk(v)
+				case *gateway.MessageReactionAddEvent:
+					m.react(v)
+				case *gateway.MessageReactionRemoveEvent:
+					m.unreact(v)
+				case *gateway.MessageReactionRemoveAllEvent:
+					m.unreactAll(v)
+				}
+			})
 		})
+	})
+	m.ConnectUnrealize(func() {
+		cancel()
+		cancel = nil
 	})
 }
 
@@ -86,6 +99,19 @@ func (m *Messages) onMessageDeleteBulk(d *gateway.MessageDeleteBulkEvent) {
 	}
 
 	m.Delete(d.IDs...)
+}
+
+func (m *Messages) onGuildMemberAdd(a *gateway.GuildMemberAddEvent) {
+	if m.guildID != a.GuildID {
+		return
+	}
+
+	for _, message := range m.messages {
+		if message.AuthorID != a.User.ID {
+			continue
+		}
+		message.UpdateMember(m.c, m.guildID, a.Member)
+	}
 }
 
 func (m *Messages) onGuildMembersChunk(c *gateway.GuildMembersChunkEvent) {

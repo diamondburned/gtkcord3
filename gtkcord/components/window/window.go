@@ -1,6 +1,7 @@
 package window
 
 import (
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
 	"github.com/diamondburned/gotk4/pkg/gdk/v3"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/animations"
@@ -33,7 +34,7 @@ func stackSet(s *gtk.Stack, name string, w gtk.Widgetter) {
 var Window *Container
 
 type Container struct {
-	*gtk.ApplicationWindow
+	*handy.ApplicationWindow
 	App   *gtk.Application
 	Accel *gtk.AccelGroup
 
@@ -41,9 +42,10 @@ type Container struct {
 	Root      *gdk.Window
 	Clipboard *gtk.Clipboard
 
-	Main   *gtk.Stack
-	Header *gtk.Box
-	header gtk.Widgetter
+	main    *gtk.Stack
+	body    *gtk.Box
+	header  gtk.Widgetter
+	content gtk.Widgetter
 
 	// CursorDefault *gdk.Cursor
 	// CursorPointer *gdk.Cursor
@@ -65,13 +67,17 @@ func WithApplication(app *gtk.Application) error {
 
 	Window = &Container{App: app}
 
-	// w := handy.NewApplicationWindow()
-	// w.SetApplication(app)
-	w := gtk.NewApplicationWindow(app)
+	w := handy.NewApplicationWindow()
+	w.SetApplication(app)
+	w.SetDefaultSize(850, 650)
 	Window.ApplicationWindow = w
 
-	Window.Header = gtk.NewBox(gtk.OrientationVertical, 0)
-	w.SetTitlebar(Window.Header)
+	Window.body = gtk.NewBox(gtk.OrientationVertical, 0)
+	Window.body.SetHExpand(true)
+	Window.body.SetVExpand(true)
+	Window.ApplicationWindow.Add(Window.body)
+
+	// Window.Header = gtk.NewBox(gtk.OrientationVertical, 0)
 
 	l := logo.Pixbuf(64)
 	w.SetIcon(l)
@@ -102,14 +108,14 @@ func WithApplication(app *gtk.Application) error {
 
 	// w.SetVAlign(gtk.AlignCenter)
 	// w.SetHAlign(gtk.AlignCenter)
-	// w.SetDefaultSize(500, 250)
 
 	c := gtk.ClipboardGetDefault(d)
 	Window.Clipboard = c
 
 	// Make the main view: the stack.
 	main := newStack()
-	Window.Main = main
+	main.AddNamed(Window.body, "main")
+	Window.main = main
 
 	// Add the stack into the window:
 	w.Add(main)
@@ -117,24 +123,17 @@ func WithApplication(app *gtk.Application) error {
 	// Play the loading animation:
 	NowLoading()
 
-	// Window.CursorDefault, err = gdk.CursorNewFromName(d, "default")
-	// if err != nil {
-	// 	return errors.Wrap(err, "Failed to create a default cursor")
-	// }
-	// Window.CursorPointer, err = gdk.CursorNewFromName(d, "pointer")
-	// if err != nil {
-	// 	return errors.Wrap(err, "Failed to create a pointer cursor")
-	// }
-
 	return nil
 }
 
 func SetHeader(h gtk.Widgetter) {
 	if Window.header != nil {
-		Window.Header.Remove(Window.header)
+		Window.body.Remove(Window.header)
 	}
 	Window.header = h
-	Window.Header.PackStart(h, true, true, 0)
+	if h != nil {
+		Window.body.PackStart(h, false, false, 0)
+	}
 }
 
 func HeaderShowAll() {
@@ -173,7 +172,15 @@ func Display(w gtk.Widgetter) {
 		SetHeader(previousLoadingChild)
 		previousLoadingChild = nil
 	}
-	stackSet(Window.Main, "main", w)
+
+	if Window.content != nil {
+		Window.body.Remove(Window.content)
+	}
+
+	Window.content = w
+	Window.body.PackEnd(Window.content, true, true, 0)
+
+	Window.main.SetVisibleChildName("main")
 }
 
 func Show() {

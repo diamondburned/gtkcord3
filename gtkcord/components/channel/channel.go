@@ -26,8 +26,8 @@ type Channel struct {
 	Topic    string
 	Category bool
 
-	unread     bool
 	stateClass string
+	unread     bool
 }
 
 func createChannelRead(ch *discord.Channel, s *ningen.State) (w *Channel) {

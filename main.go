@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord"
@@ -59,7 +60,10 @@ func main() {
 	a := gtk.NewApplication("com.github.diamondburned.gtkcord3", 0)
 	g := gtkcord.New(a)
 
-	a.Connect("activate", func() {
+	a.ConnectStartup(func() {
+		handy.Init()
+	})
+	a.ConnectActivate(func() {
 		g.Activate()
 		g.ShowLogin(LoadKeyring())
 	})

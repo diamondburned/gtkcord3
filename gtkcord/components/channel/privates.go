@@ -31,6 +31,7 @@ type PrivateChannels struct {
 	OnSelect func(pm *PrivateChannel)
 
 	lastSelected discord.ChannelID
+	mustRefresh  bool
 }
 
 func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs *PrivateChannels) {
@@ -94,16 +95,14 @@ func NewPrivateChannels(s *ningen.State, onSelect func(pm *PrivateChannel)) (pcs
 }
 
 func (pcs *PrivateChannels) Cleanup() {
-	if pcs.Channels != nil {
-		for _, ch := range pcs.Channels {
-			pcs.List.Remove(ch)
-		}
-
-		pcs.Channels = nil
+	for _, ch := range pcs.Channels {
+		pcs.List.Remove(ch)
 	}
+	pcs.Channels = nil
 }
 
 func (pcs *PrivateChannels) Load() {
+	pcs.Cleanup()
 	pcs.SetLoading()
 
 	go func() {

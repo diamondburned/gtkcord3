@@ -23,6 +23,6 @@ func NowLoading() {
 	h.ShowAll()
 
 	// Set the loading animation:
-	stackSet(Window.Main, "loading", s)
+	stackSet(Window.main, "loading", s)
 	SetHeader(h)
 }

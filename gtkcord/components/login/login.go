@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/diamondburned/arikawa/v2/state"
+	"github.com/diamondburned/gotk4-handy/pkg/handy"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gotk4/pkg/pango"
@@ -36,10 +37,10 @@ type Login struct {
 	finish    func(s *ningen.State)
 }
 
-func NewHeader() *gtk.HeaderBar {
-	h := gtk.NewHeaderBar()
+func NewHeader() *handy.HeaderBar {
+	h := handy.NewHeaderBar()
 	h.SetShowCloseButton(true)
-	h.SetTitle("Login to gtkcord3")
+	h.SetTitle("Log into gtkcord3")
 
 	return h
 }
@@ -52,6 +53,7 @@ func NewLogin(finish func(s *ningen.State)) *Login {
 	main.SetMarginEnd(35)
 	main.SetSizeRequest(250, -1)
 	main.SetVAlign(gtk.AlignCenter)
+	main.SetHAlign(gtk.AlignCenter)
 	gtkutils.InjectCSS(main, "login", "")
 
 	err := gtk.NewLabel("")
@@ -119,7 +121,6 @@ func (l *Login) Run() {
 	}
 
 	if !l.displayed {
-		window.Resize(500, 200)
 		window.SetHeader(NewHeader())
 		window.Display(l)
 		window.ShowAll()

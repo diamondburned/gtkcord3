@@ -107,6 +107,7 @@ func (chs *Channels) onError(err error) {
 }
 
 func (chs *Channels) LoadGuild(guildID discord.GuildID) { // async
+	chs.Cleanup()
 	chs.SetLoading()
 	chs.GuildID = guildID
 

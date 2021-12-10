@@ -360,8 +360,9 @@ func (m *Message) UpdateMember(s *ningen.State, gID discord.GuildID, n discord.M
 	m.author.SetTooltipMarkup(name)
 
 	if gID.IsValid() {
-		if g, err := s.Cabinet.Guild(gID); err == nil {
-			if color := discord.MemberColor(*g, n); color > 0 {
+		if roles, err := s.Cabinet.Roles(gID); err == nil {
+			guild := discord.Guild{ID: gID, Roles: roles}
+			if color := discord.MemberColor(guild, n); color > 0 {
 				name = fmt.Sprintf(`<span fgcolor="#%06X">%s</span>`, color, name)
 			}
 		}

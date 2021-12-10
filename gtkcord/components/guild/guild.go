@@ -53,6 +53,8 @@ func newGuildRow(s *ningen.State, guildID discord.GuildID, parent *GuildFolder) 
 		}
 	}
 
+	s.Gateway.Sub
+
 	var guild *Guild
 
 	r := gtk.NewListBoxRow()

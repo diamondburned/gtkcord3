@@ -18,7 +18,7 @@ import (
 	"github.com/diamondburned/ningen/v2"
 )
 
-const TypingTimeout = 10 * time.Second
+const TypingTimeout = 12 * time.Second
 
 type State struct {
 	*gtk.Box

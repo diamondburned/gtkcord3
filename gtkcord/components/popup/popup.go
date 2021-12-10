@@ -7,14 +7,14 @@ import (
 
 	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v3"
+	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen/v2"
-
-	"github.com/diamondburned/gotk4/pkg/gtk/v3"
-	"github.com/diamondburned/gotk4/pkg/pango"
 )
 
 const (
@@ -320,8 +320,12 @@ type UserPopupRoles struct {
 	Header *gtk.Label
 
 	// can be nil
-	Main  *gtk.FlowBox
-	Roles []UserPopupRole
+	main  *gtk.FlowBox
+	roles []UserPopupRole
+
+	state   *ningen.State
+	guildID discord.GuildID
+	userID  discord.UserID
 }
 
 type UserPopupRole struct {
@@ -330,11 +334,9 @@ type UserPopupRole struct {
 }
 
 func NewUserPopupRoles(s *ningen.State, guildID discord.GuildID, uID discord.UserID) *UserPopupRoles {
-	s = s.Offline()
-
 	roleLabel := gtk.NewLabel("Roles")
 	roleLabel.SetMarginTop(SectionPadding)
-	roleLabel.SetMarginBottom(0)
+	roleLabel.SetMarginBottom(SectionPadding)
 	roleLabel.SetMarginLeft(SectionPadding)
 	roleLabel.SetMarginRight(SectionPadding)
 	roleLabel.SetHAlign(gtk.AlignStart)
@@ -342,38 +344,82 @@ func NewUserPopupRoles(s *ningen.State, guildID discord.GuildID, uID discord.Use
 	box := gtk.NewBox(gtk.OrientationVertical, 0)
 	box.Add(roleLabel)
 
-	popup := &UserPopupRoles{
-		Box:    box,
-		Header: roleLabel,
+	p := &UserPopupRoles{
+		state:   s,
+		guildID: guildID,
+		userID:  uID,
+		Box:     box,
+		Header:  roleLabel,
+	}
+
+	if !guildID.IsValid() {
+		p.setRoles(nil)
+		return p
 	}
 
 	// TODO: optimize this
-	member, _ := s.Member(guildID, uID)
-	if member == nil {
-		roleLabel.SetLabel("Unknown member")
-		roleLabel.SetMarginBottom(SectionPadding)
-		return popup
+	member, _ := s.Offline().Member(guildID, uID)
+	if member != nil {
+		_, err := s.Offline().Roles(guildID)
+		if err == nil {
+			p.setRoles(member.RoleIDs)
+			return p
+		}
 	}
 
-	if len(member.RoleIDs) == 0 {
-		roleLabel.SetLabel("No Roles")
-		roleLabel.SetMarginBottom(SectionPadding)
-		return popup
+	roleLabel.SetLabel("Fetching...")
+	p.state.MemberState.RequestMember(guildID, uID)
+	p.update()
+
+	return p
+}
+
+func (p *UserPopupRoles) update() {
+	onErr := func(err error) {
+		glib.IdleAdd(func() {
+			p.Header.SetText("Cannot fetch roles.")
+			p.Header.SetTooltipText(err.Error())
+		})
 	}
 
-	fb := gtk.NewFlowBox()
-	fb.SetSelectionMode(gtk.SelectionNone)
-	fb.SetHAlign(gtk.AlignFill)
-	fb.SetHAlign(gtk.AlignStart)
-	gtkutils.Margin(fb, SectionPadding)
+	go func() {
+		m, err := p.state.Member(p.guildID, p.userID)
+		if err != nil {
+			onErr(err)
+			return
+		}
 
-	box.Add(fb)
+		// Ensure we have our stuff.
+		_, err = p.state.Roles(p.guildID)
+		if err != nil {
+			onErr(err)
+			return
+		}
 
-	popup.Main = fb
-	popup.Roles = make([]UserPopupRole, 0, len(member.RoleIDs))
+		glib.IdleAdd(func() { p.setRoles(m.RoleIDs) })
+	}()
+}
 
-	for _, id := range member.RoleIDs {
-		r, err := s.Role(guildID, id)
+func (p *UserPopupRoles) setRoles(roleIDs []discord.RoleID) {
+	if len(roleIDs) == 0 {
+		p.Header.SetText("No Roles")
+		return
+	}
+
+	p.Header.SetMarginBottom(0)
+
+	p.main = gtk.NewFlowBox()
+	p.main.SetSelectionMode(gtk.SelectionNone)
+	p.main.SetHAlign(gtk.AlignFill)
+	p.main.SetHAlign(gtk.AlignStart)
+	gtkutils.Margin(p.main, SectionPadding)
+
+	p.Box.Add(p.main)
+
+	p.roles = make([]UserPopupRole, 0, len(roleIDs))
+
+	for _, id := range roleIDs {
+		r, err := p.state.Cabinet.Role(p.guildID, id)
 		if err != nil {
 			log.Errorln("failed to get role for popup:", err)
 			continue
@@ -402,13 +448,12 @@ func NewUserPopupRoles(s *ningen.State, guildID discord.GuildID, uID discord.Use
 
 		c := gtk.NewFlowBoxChild()
 		c.Add(l)
-		fb.Insert(c, -1)
+		p.main.Insert(c, -1)
 
-		popup.Roles = append(popup.Roles, UserPopupRole{
+		p.roles = append(p.roles, UserPopupRole{
 			FlowBoxChild: c,
 			Main:         l,
 		})
 	}
 
-	return popup
 }

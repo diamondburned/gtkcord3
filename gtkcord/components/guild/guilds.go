@@ -229,6 +229,11 @@ func (guilds *Guilds) TraverseReadState(rs *read.UpdateEvent) {
 		guilds.DMButton.setUnread(rs.Unread)
 		return
 	}
+	// Ignore if this isn't a DM channel and not a guild text channel either.
+	// It's probably something we don't support.
+	if ch.Type != discord.GuildText {
+		return
+	}
 
 	guild, _ := guilds.FindByID(ch.GuildID)
 	if guild == nil {

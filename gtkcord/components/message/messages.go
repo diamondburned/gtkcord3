@@ -65,7 +65,7 @@ func NewMessages(s *ningen.State, opts Opts) *Messages {
 	m := Messages{
 		Opts:  opts,
 		c:     s,
-		fetch: s.Cabinet.MaxMessages(),
+		fetch: s.Cabinet.MaxMessages() / 2,
 	}
 
 	m.Main = gtk.NewBox(gtk.OrientationVertical, 0)

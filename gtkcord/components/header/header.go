@@ -9,18 +9,15 @@ import (
 )
 
 type Header struct {
-	*handy.HeaderBar
-	Body *handy.Leaflet
-
 	// Left: hamburger and guild name:
-	LeftSide  *gtk.Box
+	Left      *handy.HeaderBar
 	Hamburger *MainHamburger
 	GuildName *gtk.Label
 
 	Separator *gtk.Separator
 
 	// Right: channel name only.
-	RightSide   *gtk.Box
+	Right       *handy.HeaderBar
 	Back        *Back
 	ChannelName *gtk.Label
 	ChMenuBtn   *ChMenuButton
@@ -30,33 +27,27 @@ type Header struct {
 }
 
 func NewHeader() *Header {
-	l := handy.NewLeaflet()
-	l.SetTransitionType(handy.LeafletTransitionTypeSlide)
-	l.SetModeTransitionDuration(150)
-	l.Container.SetHExpand(true)
-	l.Container.Show()
+	// l := handy.NewLeaflet()
+	// l.SetTransitionType(handy.LeafletTransitionTypeSlide)
+	// l.SetModeTransitionDuration(150)
+	// l.Container.SetHExpand(true)
+	// l.Container.Show()
 
-	header := handy.NewHeaderBar()
-	header.SetShowCloseButton(true)
-	header.SetObjectProperty("spacing", 0)
-	header.SetCustomTitle(empty())
-	header.Add(&l.Container)
-	header.Show()
+	// header := handy.NewHeaderBar()
+	// header.SetShowCloseButton(true)
+	// header.SetObjectProperty("spacing", 0)
+	// header.SetCustomTitle(empty())
+	// header.Add(&l.Container)
+	// header.Show()
 
 	/*
 	 * Left side
 	 */
 
-	left := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	left.Show()
-	l.Add(left)
-
 	hamburger := newMainHamburger()
-	left.PackStart(hamburger, false, false, 0)
 
 	hamseparator := gtk.NewSeparator(gtk.OrientationVertical)
 	hamseparator.Show()
-	left.PackStart(hamseparator, false, false, 0)
 
 	// Calculate width for both:
 	width := channel.ChannelsWidth - 15
@@ -72,19 +63,26 @@ func NewHeader() *Header {
 	label.SetAttributes(gtkutils.PangoAttrs(
 		pango.NewAttrWeight(pango.WeightSemibold),
 	))
-	left.PackStart(label, true, true, 0)
 
 	lblseparator := gtk.NewSeparator(gtk.OrientationVertical)
 	lblseparator.Show()
-	left.PackStart(lblseparator, false, false, 0)
+
+	left := handy.NewHeaderBar()
+	left.SetCustomTitle(empty())
+	left.SetObjectProperty("spacing", 0)
+	left.PackStart(hamburger)
+	left.PackStart(hamseparator)
+	left.PackStart(label)
+	left.PackEnd(lblseparator)
+	left.Show()
 
 	/*
 	 * Right side
 	 */
 
-	right := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	right.Show()
-	l.Add(right)
+	// rightBox := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	// rightBox.SetHExpand(true)
+	// rightBox.Show()
 
 	// Back button:
 	back := NewBack()
@@ -104,14 +102,15 @@ func NewHeader() *Header {
 	// Channel menu button:
 	btn := NewChMenuButton()
 
-	rsep := gtk.NewSeparator(gtk.OrientationVertical)
-	rsep.Show()
-	gtkutils.Margin2(rsep, 0, 4)
-
-	right.PackStart(back, false, false, 0)
-	right.PackStart(chname, true, true, 0)
-	right.PackStart(btn, false, false, 0)
-	right.PackStart(rsep, false, false, 0)
+	right := handy.NewHeaderBar()
+	right.SetCustomTitle(empty())
+	right.SetObjectProperty("spacing", 0)
+	right.SetShowCloseButton(true)
+	right.SetHExpand(true)
+	right.PackStart(back)
+	right.PackStart(chname)
+	right.PackEnd(btn)
+	right.Show()
 
 	/*
 	 * Grid 4
@@ -122,13 +121,12 @@ func NewHeader() *Header {
 	// right.Add(cont)
 
 	return &Header{
-		HeaderBar:   header,
-		Body:        l,
-		LeftSide:    left,
-		Hamburger:   hamburger,
-		GuildName:   label,
-		Separator:   lblseparator,
-		RightSide:   right,
+		Left:      left,
+		Hamburger: hamburger,
+		GuildName: label,
+		Separator: lblseparator,
+
+		Right:       right,
 		Back:        back,
 		ChannelName: chname,
 		ChMenuBtn:   btn,
@@ -139,6 +137,7 @@ func NewHeader() *Header {
 func (h *Header) Fold(folded bool) {
 	// If folded, we reveal the back button.
 	h.Back.SetRevealChild(folded)
+	h.Left.SetShowCloseButton(folded)
 	h.Separator.SetVisible(!folded)
 
 	// Fold the title:

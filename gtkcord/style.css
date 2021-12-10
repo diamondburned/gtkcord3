@@ -8,6 +8,22 @@ button.flat {
 	min-height: 0;
 }
 
+preferencesgroup {
+	padding: 12px 10px;
+}
+
+preferencesgroup row {
+	padding: 6px 8px;
+}
+
+.left-whole > headerbar {
+	border-top-right-radius: 0;
+}
+
+.right-whole > headerbar {
+	border-top-left-radius: 0;
+}
+
 .codeblock {
 	background-color: alpha(@theme_bg_color, 0.25);
 	padding: 8px;

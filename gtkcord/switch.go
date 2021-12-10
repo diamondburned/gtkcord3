@@ -52,8 +52,7 @@ func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID
 
 func (a *Application) FocusMessages() {
 	// Set the default visible widget to the right container:
-	a.Main.SetVisibleChild(a.Right)
-	a.Header.Body.SetVisibleChild(a.Header.RightSide)
+	a.Main.SetVisibleChild(a.RightWhole)
 
 	// Grab the message input's focus:
 	a.Messages.Focus()
