@@ -121,8 +121,9 @@ func (l *Login) Run() {
 	}
 
 	if !l.displayed {
-		window.SetHeader(NewHeader())
-		window.Display(l)
+		p := window.SwitchToPage("login")
+		p.SetHeader(NewHeader())
+		p.SetChild(l)
 		window.ShowAll()
 
 		l.displayed = true

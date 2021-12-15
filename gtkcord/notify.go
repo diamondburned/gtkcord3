@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gtkcord3/gtkcord/md"
 	"github.com/diamondburned/gtkcord3/internal/humanize"
 	"github.com/diamondburned/gtkcord3/internal/log"
+	"github.com/diamondburned/ningen/v2"
 )
 
 func (a *Application) bindNotifier() {
@@ -30,18 +31,29 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 		return
 	}
 
+	state := a.State
 	go func() {
-		title := a.State.AuthorDisplayName(create) + " mentioned you"
-		content := humanize.TrimString(create.Content, 256)
+		if !shouldPing(state) {
+			return
+		}
+
+		title := state.AuthorDisplayName(create)
+		if !create.GuildID.IsValid() {
+			title += " sent you a message"
+		} else {
+			title += " mentioned you"
+		}
+
 		markup := md.ParseToSimpleMarkupWithMessage(
-			[]byte(content), a.State.Cabinet, &create.Message,
+			[]byte(humanize.TrimString(create.Content, 256)),
+			state.Cabinet, &create.Message,
 		)
 
-		if ch, _ := a.State.Channel(create.ChannelID); ch != nil && ch.Name != "" {
+		if ch, _ := state.Channel(create.ChannelID); ch != nil && ch.Name != "" {
 			suffix := " (#" + ch.Name + ")"
 
 			if create.GuildID.IsValid() {
-				if g, _ := a.State.Guild(create.GuildID); g != nil {
+				if g, _ := state.Guild(create.GuildID); g != nil {
 					suffix = " (#" + ch.Name + ", " + g.Name + ")"
 				}
 			}
@@ -56,11 +68,9 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 			Message: string(markup),
 			Actions: []*gdbus.Action{
 				{
-					ID:    "default",
-					Label: "Open",
-					Callback: func() {
-						a.SwitchToID(create.ChannelID, create.GuildID)
-					},
+					ID:       "default",
+					Label:    "Open",
+					Callback: func() { a.SwitchToID(create.ChannelID, create.GuildID) },
 				},
 			},
 		}
@@ -69,6 +79,20 @@ func (a *Application) onMessageCreate(create *gateway.MessageCreateEvent) {
 			log.Errorln("Failed to notify:", err)
 		}
 	}()
+}
+
+func shouldPing(s *ningen.State) bool {
+	u, err := s.Me()
+	if err != nil {
+		return false
+	}
+
+	p, err := s.Presence(0, u.ID)
+	if err != nil {
+		return true // assume online
+	}
+
+	return p.Status == gateway.OnlineStatus || p.Status == gateway.IdleStatus
 }
 
 type mprisState struct {

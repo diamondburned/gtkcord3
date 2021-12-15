@@ -186,11 +186,15 @@ func (a *Application) init() {
 }
 
 func (a *Application) displayMain() {
-	window.Display(&a.Main.Container)
+	p := window.SwitchToPage("main")
+	p.SetHeader(nil)
+	p.SetChild(a.Main)
 }
 
 func (a *Application) Ready(s *ningen.State) error {
 	a.State = s
+
+	var reconnecting glib.SourceHandle
 
 	// When the websocket closes, the screen must be changed to a busy one. The
 	// websocket may close if it's disconnected unexpectedly.
@@ -202,18 +206,32 @@ func (a *Application) Ready(s *ningen.State) error {
 
 		// Run this asynchronously. This guarantees that the UI thread would
 		// never be hardlocked.
-		glib.IdleAdd(func() { window.NowLoading() })
+		reconnecting = glib.TimeoutSecondsAdd(3, func() {
+			window.NowLoading()
+			reconnecting = 0
+		})
 	}
 
 	// Show the main screen once everything is resumed. See above NowLoading
 	// call.
 	s.AddHandler(func(c *ningen.Connected) {
-		glib.IdleAdd(func() { a.displayMain() })
+		glib.IdleAdd(func() {
+			if reconnecting == 0 {
+				a.displayMain()
+				return
+			}
+
+			// We reconnected before 3 seconds, so skip the loading screen
+			// entirely.
+			glib.SourceRemove(reconnecting)
+			reconnecting = 0
+		})
 	})
 
 	// Store the token:
 	go func() {
 		keyring.Set(s.Token)
+		log.Println("saved token")
 	}()
 
 	// Set gateway error functions to our own:
@@ -223,7 +241,7 @@ func (a *Application) Ready(s *ningen.State) error {
 
 	// Make the main widgets:
 	a.init()
-	window.SetHeader(nil)
+	a.displayMain()
 
 	if ready := s.Ready(); ready.UserSettings != nil {
 		switch ready.UserSettings.Theme {

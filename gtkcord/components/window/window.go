@@ -19,17 +19,17 @@ func newStack() *gtk.Stack {
 	return s
 }
 
-func stackRemove(s *gtk.Stack, name string) {
-	if w := s.ChildByName(name); w != nil {
-		s.Remove(w)
-	}
-}
+// func stackRemove(s *gtk.Stack, name string) {
+// 	if w := s.ChildByName(name); w != nil {
+// 		s.Remove(w)
+// 	}
+// }
 
-func stackSet(s *gtk.Stack, name string, w gtk.Widgetter) {
-	stackRemove(s, name)
-	s.AddNamed(w, name)
-	s.SetVisibleChildName(name)
-}
+// func stackSet(s *gtk.Stack, name string, w gtk.Widgetter) {
+// 	stackRemove(s, name)
+// 	s.AddNamed(w, name)
+// 	s.SetVisibleChildName(name)
+// }
 
 var Window *Container
 
@@ -42,10 +42,8 @@ type Container struct {
 	Root      *gdk.Window
 	Clipboard *gtk.Clipboard
 
-	main    *gtk.Stack
-	body    *gtk.Box
-	header  gtk.Widgetter
-	content gtk.Widgetter
+	main  *gtk.Stack
+	pages map[string]*Page
 
 	// CursorDefault *gdk.Cursor
 	// CursorPointer *gdk.Cursor
@@ -65,19 +63,15 @@ func WithApplication(app *gtk.Application) error {
 		return nil
 	}
 
-	Window = &Container{App: app}
+	Window = &Container{
+		App:   app,
+		pages: make(map[string]*Page),
+	}
 
 	w := handy.NewApplicationWindow()
 	w.SetApplication(app)
 	w.SetDefaultSize(850, 650)
 	Window.ApplicationWindow = w
-
-	Window.body = gtk.NewBox(gtk.OrientationVertical, 0)
-	Window.body.SetHExpand(true)
-	Window.body.SetVExpand(true)
-	Window.ApplicationWindow.Add(Window.body)
-
-	// Window.Header = gtk.NewBox(gtk.OrientationVertical, 0)
 
 	l := logo.Pixbuf(64)
 	w.SetIcon(l)
@@ -114,7 +108,6 @@ func WithApplication(app *gtk.Application) error {
 
 	// Make the main view: the stack.
 	main := newStack()
-	main.AddNamed(Window.body, "main")
 	Window.main = main
 
 	// Add the stack into the window:
@@ -124,16 +117,6 @@ func WithApplication(app *gtk.Application) error {
 	NowLoading()
 
 	return nil
-}
-
-func SetHeader(h gtk.Widgetter) {
-	if Window.header != nil {
-		Window.body.Remove(Window.header)
-	}
-	Window.header = h
-	if h != nil {
-		Window.body.PackStart(h, false, false, 0)
-	}
 }
 
 func HeaderShowAll() {
@@ -167,20 +150,50 @@ func Resize(w, h int) {
 	Window.Window.Resize(w, h)
 }
 
-func Display(w gtk.Widgetter) {
-	if previousLoadingChild != nil {
-		SetHeader(previousLoadingChild)
-		previousLoadingChild = nil
+type Page struct {
+	body    *gtk.Box
+	header  gtk.Widgetter
+	content gtk.Widgetter
+}
+
+func SwitchToPage(name string) *Page {
+	p, ok := Window.pages[name]
+	if ok {
+		Window.main.SetVisibleChild(p.body)
+		return p
 	}
 
-	if Window.content != nil {
-		Window.body.Remove(Window.content)
+	p = &Page{}
+	p.body = gtk.NewBox(gtk.OrientationVertical, 0)
+	p.body.SetHExpand(true)
+	p.body.SetVExpand(true)
+	p.body.Show()
+
+	Window.main.AddNamed(p.body, name)
+	Window.main.SetVisibleChild(p.body)
+	Window.pages[name] = p
+
+	return p
+}
+
+func (p *Page) SetHeader(h gtk.Widgetter) {
+	if p.header != nil {
+		p.body.Remove(p.header)
 	}
+	p.header = h
+	if h != nil {
+		p.body.PackStart(h, false, false, 0)
+	}
+}
 
-	Window.content = w
-	Window.body.PackEnd(Window.content, true, true, 0)
-
-	Window.main.SetVisibleChildName("main")
+func (p *Page) SetChild(w gtk.Widgetter) {
+	if p.content != nil {
+		p.body.Remove(p.content)
+	}
+	p.content = w
+	if w != nil {
+		p.body.PackEnd(w, true, true, 0)
+	}
 }
 
 func Show() {

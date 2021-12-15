@@ -2,7 +2,6 @@ package gtkcord
 
 import (
 	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/channel"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/guild"
 	"github.com/diamondburned/gtkcord3/gtkcord/components/window"
@@ -11,8 +10,6 @@ import (
 
 // SwitchToID returns true if it can find the channel.
 func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID) bool {
-	var row *gtk.ListBoxRow
-
 	guild, folder := a.Guilds.FindByID(guildID)
 
 	switch {
@@ -27,7 +24,8 @@ func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID
 
 		// Find the destination channel:
 		if channel := a.Channels.FindByID((chID)); channel != nil {
-			row = channel.Row
+			a.Channels.ChList.SelectRow(channel.Row)
+			return true
 		}
 
 	default:
@@ -38,13 +36,9 @@ func (a *Application) SwitchToID(chID discord.ChannelID, guildID discord.GuildID
 
 		// Find the destination channel:
 		if channel := a.Privates.FindByID(chID); channel != nil {
-			row = channel.ListBoxRow
+			a.Privates.List.SelectRow(channel.ListBoxRow)
+			return true
 		}
-	}
-
-	if row != nil {
-		row.Activate()
-		return true
 	}
 
 	return false

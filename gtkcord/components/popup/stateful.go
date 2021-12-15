@@ -143,7 +143,7 @@ func (s *StatefulPopupBody) injectHandlers() {
 }
 
 func (s *StatefulPopupBody) asyncUpdatePresence(thread bool) {
-	p, _ := s.state.Presence(s.GuildID, s.UserID)
+	p, _ := s.state.PresenceStore.Presence(s.GuildID, s.UserID)
 	if p == nil {
 		return
 	}

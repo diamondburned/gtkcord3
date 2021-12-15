@@ -105,7 +105,8 @@ func (r *UnreadStrip) updateState() {
 	// Change the interaction state:
 	switch {
 	case r.hover:
-		gtkutils.DiffClass(&r.intrclass, "hover", r.Style)
+		// This is ugly.
+		// gtkutils.DiffClass(&r.intrclass, "hover", r.Style)
 	case r.active:
 		gtkutils.DiffClass(&r.intrclass, "active", r.Style)
 	default:

@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v3"
 	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/diamondburned/gtkcord3/gtkcord/cache"
-	"github.com/diamondburned/gtkcord3/gtkcord/components/roundimage"
+	"github.com/diamondburned/gtkcord3/gtkcord/components/avatar"
 	"github.com/diamondburned/gtkcord3/gtkcord/gtkutils"
 	"github.com/diamondburned/gtkcord3/internal/log"
 	"github.com/diamondburned/ningen/v2"
@@ -126,7 +126,7 @@ type UserPopupBody struct {
 	*gtk.Grid
 	GridMax int
 
-	Avatar      *roundimage.Image
+	Avatar      *avatar.WithStatus
 	AvatarStyle *gtk.StyleContext // .avatar
 	// check window/css.go header for status_* colors
 	lastAvatarClass string
@@ -193,10 +193,9 @@ func NewUserPopupBody() *UserPopupBody {
 	gtkutils.InjectCSS(b, "popup-user", "")
 	main.Attach(b, 0, 0, 1, 1)
 
-	iAvatar := roundimage.NewImage(0)
+	iAvatar := avatar.NewWithStatus(PopupAvatarSize)
 	iAvatar.SetFromIconName("user-info", int(gtk.IconSizeLargeToolbar))
 	iAvatar.SetHAlign(gtk.AlignCenter)
-	iAvatar.SetSizeRequest(PopupAvatarSize, PopupAvatarSize)
 	iAvatar.SetMarginTop(10)
 	iAvatar.SetMarginBottom(7)
 	b.Add(iAvatar)
@@ -297,18 +296,16 @@ func (b *UserPopupBody) UpdateActivity(a *discord.Activity) {
 }
 
 func (b *UserPopupBody) UpdateStatus(status gateway.Status) {
+	b.Avatar.SetStatus(status)
+
 	switch status {
 	case gateway.OnlineStatus:
-		b.Avatar.SetTooltipText("Online")
 		b.setAvatarClass("online")
 	case gateway.DoNotDisturbStatus:
-		b.Avatar.SetTooltipText("Busy")
 		b.setAvatarClass("busy")
 	case gateway.IdleStatus:
-		b.Avatar.SetTooltipText("Idle")
 		b.setAvatarClass("idle")
 	case gateway.InvisibleStatus, gateway.OfflineStatus:
-		b.Avatar.SetTooltipText("Offline")
 		b.setAvatarClass("offline")
 	case gateway.UnknownStatus:
 		b.setAvatarClass("unknown")

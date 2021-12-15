@@ -9,8 +9,9 @@ func NewSpinner(sz int) gtk.Widgetter {
 	s.SetSizeRequest(sz, sz)
 	s.SetVAlign(gtk.AlignCenter)
 	s.SetHAlign(gtk.AlignCenter)
-	s.Start()
 	s.ShowAll()
+	s.ConnectMap(s.Start)
+	s.ConnectUnmap(s.Stop)
 
 	return s
 }
