@@ -1,3 +1,10 @@
+# Hey!!!
+
+[**gtkcord4**](https://github.com/diamondburned/gtkcord4) is now out. Naturally,
+that means gtkcord3 will not be maintained anymore.
+
+---
+
 <p align="center">
 	
 <img width="128" src="logo.png" />
